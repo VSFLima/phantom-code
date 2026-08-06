@@ -37,11 +37,12 @@
 
 ## 🟠 FASE 2 — EDITOR + EXPLORER
 
-- [ ] **T11. Explorer de arquivos do workspace**
-  - Árvore, long-press (novo/renomear/excluir/copiar caminho/abrir no terminal), FAB, SAF
-- [ ] **T12. Editor CodeMirror 6 (WebView)**
-  - Abas, syntax neon, autocomplete básico, números de linha
-- [ ] **T13. Auto-save + restaurar sessão (D18)**
+- [x] **T11. Explorer de arquivos do workspace** ✅
+  - Árvore real (`filesDir/workspace`), long-press (abrir/renomear/excluir/copiar caminho), FAB (arquivo/pasta), import SAF
+- [x] **T12. Editor CodeMirror 6 (WebView)** ✅
+  - Syntax por extensão (JS/Py/HTML/CSS/JSON/MD), números de linha, tema Cyber-Phantom, ponte JS↔Kotlin
+- [x] **T13. Auto-save + restaurar sessão (D18)** ✅
+  - Auto-save com debounce 800ms + salvar ao fechar + "Continuar de" na Home
 
 ## 🟠 FASE 3 — TERMINAL + VM LINUX (coração do app)
 

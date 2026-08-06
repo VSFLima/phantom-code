@@ -1,0 +1,19 @@
+{
+  "name": "phantom-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gera o bundle do CodeMirror 6 (tema Cyber-Phantom) usado pelo WebView do app",
+  "scripts": {
+    "build": "esbuild src/editor.js --bundle --minify --format=iife --platform=browser --outfile=../app/src/main/assets/editor/editor.js"
+  },
+  "dependencies": {
+    "@codemirror/lang-css": "^6.3.0",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/lang-python": "^6.1.6",
+    "codemirror": "^6.0.1",
+    "esbuild": "^0.24.2"
+  }
+}

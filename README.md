@@ -48,6 +48,7 @@ Um **IDE Android completo** que une, em um único app:
 | Integração IDE | Não existe | **Editor + Terminal + Git na mesma pasta** |
 
 > Detalhes técnicos completos no [Documento Mestre](Phantom-Code-Documento-Mestre-3.md) (v4.4).
+> Notas de implementação: [docs/arquitetura-fase-2.md](docs/arquitetura-fase-2.md)
 
 ---
 
@@ -57,7 +58,7 @@ Um **IDE Android completo** que une, em um único app:
 |------|:------:|--------------|
 | **0 — Fundação** | ✅ | Projeto Android (Kotlin + Compose), tema Cyber-Phantom, CI no GitHub Actions |
 | **1 — Shell da UI** | ✅ | Bottom Nav (5 itens), Home, Activity Bar, Settings com temas, Terminal dock |
-| **2 — Editor + Explorer** | ⏳ | CodeMirror 6, explorer do workspace (SAF), autosave |
+| **2 — Editor + Explorer** | ✅ | CodeMirror 6, explorer real do workspace, autosave + sessão |
 | **3 — VM + Terminal** | ⬜ | QEMU arm64, Phantom Base, virtio-9p/serial, terminal jackpal |
 | **4 — Git + Toolbox** | ⬜ | JGit, Toolbox + API Keys, backup local/cloud |
 | **5 — Polish** | ⬜ | Foreground Service, onboarding, testes no device, distribuição |
@@ -165,7 +166,7 @@ git push -u origin main
 
 - ✅ **T1–T5** — Fase 0: Fundação (estrutura, Gradle, tema, CI, APK)
 - ✅ **T6–T10** — Fase 1: Shell da UI (navegação completa, temas)
-- ⏳ **T11–T13** — Fase 2: Explorer real + Editor CodeMirror 6
+- ✅ **T11–T13** — Fase 2: Explorer real + Editor CodeMirror 6 + auto-save/sessão
 - ⬜ **T14–T18** — Fase 3: VM QEMU + Terminal (coração do app)
 - ⬜ **T19–T22** — Fase 4: Git (JGit) + Toolbox + Backup
 - ⬜ **T23–T26** — Fase 5: Polish + distribuição

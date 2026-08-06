@@ -12,6 +12,10 @@ android/.cxx/
 *.keystore
 *.jks
 
+# Editor npm (o bundle gerado já fica em assets)
+android/editor/node_modules/
+android/editor/package-lock.json
+
 # ── Pastas de runtime (não versionar) ────────────
 /linux/*
 !/linux/.gitkeep

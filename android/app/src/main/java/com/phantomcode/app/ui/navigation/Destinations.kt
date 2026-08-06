@@ -1,5 +1,6 @@
 package com.phantomcode.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GitHub
@@ -15,6 +16,11 @@ object Routes {
     const val GIT = "git"
     const val TOOLBOX = "toolbox"
     const val SETTINGS = "settings"
+
+    const val EDITOR = "editor/{path}"
+
+    /** Monta a rota do editor com o caminho do arquivo (URL-encoded). */
+    fun editorRoute(relPath: String): String = "editor/${Uri.encode(relPath)}"
 }
 
 data class NavItem(
