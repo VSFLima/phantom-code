@@ -75,10 +75,13 @@
 
 ## 🟡 FASE 5 — POLISH + DISTRIBUIÇÃO
 
-- [ ] **T23. Foreground Service p/ VM em background (§12.3)**
-  - FGS + notificação persistente "Phantom-Code · ambiente Linux ativo"
-- [ ] **T24. Onboarding + Command Palette (D14)**
-  - 1º uso claro (instalar Phantom Base + iniciar Linux, D20)
+- [x] **T23. Foreground Service p/ VM em background (§12.3)** ✅
+  - `VmForegroundService`: notificação persistente "Phantom-Code · ambiente Linux ativo", canal API 26+, `specialUse` (API 34+), START_STICKY
+  - Manifest: `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` + `POST_NOTIFICATIONS` (Android 13+)
+  - `QemuManager` inicia/para o FGS junto com a VM (start/watcher/stop)
+- [x] **T24. Onboarding + Command Palette (D14)** ✅
+  - `OnboardingScreen` (D20): 3 passos — armazenamento · instalar Phantom Base · iniciar Linux; flag `onboardingDone` (só 1ª vez)
+  - `CommandPalette` (D14): overlay estilo VS Code com busca, aberta pelo ícone de menu no topo; comandos: Home/Explorer/Terminal/Iniciar-Parar Linux/Git/Toolbox/Settings
 - [ ] **T25. Testes em device (Galaxy Note 10 Plus)**
   - Performance TCG, permutações de tema, corrigir o que quebrar
 - [ ] **T26. Distribuição (D6)**

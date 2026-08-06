@@ -30,7 +30,8 @@ class QemuManager(
     private val distros: DistroManager,
 ) {
 
-    private val qemuDir: File = File(context.filesDir, "qemu").apply { mkdirs() }
+    private val appContext: Context = context.applicationContext
+    private val qemuDir: File = File(appContext.filesDir, "qemu").apply { mkdirs() }
     private val scope = CoroutineScope(Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -146,10 +147,19 @@ class QemuManager(
             val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
             process = p
             terminal.attach(p)
-            onMain { running = true; statusText = "RUNNING" }
+            onMain {
+                running = true
+                statusText = "RUNNING"
+                // FGS (T23): mantém a VM viva em background + notificação persistente
+                VmForegroundService.start(appContext)
+            }
             watcher = scope.launch {
                 p.waitFor()
-                onMain { running = false; statusText = "STOPPED" }
+                onMain {
+                    running = false
+                    statusText = "STOPPED"
+                    VmForegroundService.stop(appContext)
+                }
                 terminal.stop()
             }
             true
@@ -165,5 +175,6 @@ class QemuManager(
         terminal.stop()
         running = false
         statusText = "STOPPED"
+        VmForegroundService.stop(appContext)
     }
 }

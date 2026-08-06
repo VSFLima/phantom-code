@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Foreground Service da VM (T23) + notificações (Android 13+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Armazenamento: leitura/escrita (Android ≤ 10) -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -34,6 +39,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- FGS da VM: mantém o Linux ativo em background (T23 · §12.3) -->
+        <service
+            android:name=".data.vm.VmForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Linux virtual machine (QEMU) running in background" />
+        </service>
     </application>
 
 </manifest>

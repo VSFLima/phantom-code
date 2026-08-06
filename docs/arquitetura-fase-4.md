@@ -1,6 +1,6 @@
 # Arquitetura — Fase 4 (Git + Toolbox + Backup)
 
-> Status: T19 ✅ (Git JGit) · T20 🔶 (API Keys ✅ · scanner pendente) · T21 ✅ (Backup local) · T22 pendente
+> Status: T19 ✅ · T20 🔶 (API Keys ✅ · scanner pendente) · T21 ✅ (Backup) · T22 pendente · T23 ✅ (FGS) · T24 ✅ (Onboarding/Palette)
 
 ## T19 — Git nativo (JGit)
 

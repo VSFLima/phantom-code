@@ -54,6 +54,7 @@ fun PhantomScaffold(
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
     onOpenTerminal: () -> Unit,
+    onOpenPalette: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -64,7 +65,7 @@ fun PhantomScaffold(
             .background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        PhantomTopBar(onHome = onHome)
+        PhantomTopBar(onHome = onHome, onOpenPalette = onOpenPalette)
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             ActivityBar(
                 currentRoute = currentRoute,
@@ -81,7 +82,7 @@ fun PhantomScaffold(
 }
 
 @Composable
-private fun PhantomTopBar(onHome: () -> Unit) {
+private fun PhantomTopBar(onHome: () -> Unit, onOpenPalette: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
     Row(
         modifier = Modifier
@@ -113,9 +114,13 @@ private fun PhantomTopBar(onHome: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Icon(
             imageVector = Icons.Filled.Menu,
-            contentDescription = "Menu",
+            contentDescription = "Command Palette (⌘⇧P)",
             tint = palette.textSecondary,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .clickable(onClick = onOpenPalette)
+                .padding(6.dp),
         )
     }
 }
