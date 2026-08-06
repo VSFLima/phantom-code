@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Terminal
@@ -31,10 +30,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +41,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.animateContentSize
 import com.phantomcode.app.ui.navigation.BottomNavItems
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.theme.LocalThemeController
@@ -59,10 +53,10 @@ fun PhantomScaffold(
     currentRoute: String,
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
+    onOpenTerminal: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
-    var terminalExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -81,10 +75,7 @@ fun PhantomScaffold(
                 content()
             }
         }
-        TerminalDock(
-            expanded = terminalExpanded,
-            onToggle = { terminalExpanded = !terminalExpanded },
-        )
+        TerminalDock(onOpen = onOpenTerminal)
         PhantomBottomBar(currentRoute = currentRoute, onNavigate = onNavigate)
     }
 }
@@ -307,14 +298,11 @@ fun PhantomBottomBar(
     }
 }
 
-/** Terminal dock no rodapé — abas múltiplas (D11), prompt no projeto ativo (D4). */
+/** Terminal dock no rodapé — toque abre o terminal (D4/D11). */
 @Composable
-fun TerminalDock(
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
+fun TerminalDock(onOpen: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(palette.surface)
@@ -326,59 +314,34 @@ fun TerminalDock(
                     strokeWidth = 1.dp.toPx(),
                 )
             }
-            .animateContentSize(),
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Terminal,
-                contentDescription = null,
-                tint = palette.accentSecondary,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            TermTab("Terminal 1", active = true)
-            TermTab("Terminal 2", active = false)
-            TermTab("Run", active = false)
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "root@phantom:~/workspace",
-                color = palette.textSecondary,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-            )
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                imageVector = if (expanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
-                contentDescription = if (expanded) "Recolher terminal" else "Expandir terminal",
-                tint = palette.textSecondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        if (expanded) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .background(palette.background)
-                    .padding(12.dp),
-            ) {
-                Text(
-                    text = "\$ root@phantom:~/workspace\n" +
-                        "\$ apt update && apt install nodejs python3\n" +
-                        "Fetched 12.4 MB in 3s (4.1 MB/s)\n" +
-                        "\$ ▊",
-                    color = palette.success,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                )
-            }
-        }
+        Icon(
+            imageVector = Icons.Filled.Terminal,
+            contentDescription = null,
+            tint = palette.accentSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        TermTab("Terminal 1", active = true)
+        TermTab("Terminal 2", active = false)
+        TermTab("Run", active = false)
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = "root@phantom:~/workspace",
+            color = palette.textSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+        )
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowUp,
+            contentDescription = "Abrir terminal",
+            tint = palette.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

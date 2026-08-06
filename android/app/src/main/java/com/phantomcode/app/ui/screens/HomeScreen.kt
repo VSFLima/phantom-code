@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
+import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomDialog
 import com.phantomcode.app.ui.components.PhantomLogo
@@ -113,7 +114,7 @@ fun HomeScreen(
             Text("PHANTOM-CODE", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary, letterSpacing = 4.sp)
             Text("IDE · TERMINAL LINUX · GIT · IA", fontSize = 11.sp, color = palette.textSecondary, letterSpacing = 2.sp)
             Spacer(Modifier.height(14.dp))
-            QemuStatusPill(running = false)
+            QemuStatusPill(running = LocalVm.current.qemu.running)
             Spacer(Modifier.height(22.dp))
 
             // Continuar sessão (D18)

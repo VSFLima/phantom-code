@@ -26,19 +26,26 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.QemuPresets
 import com.phantomcode.app.ui.components.PhantomCard
+import com.phantomcode.app.ui.components.PhantomOutlinedButton
+import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.components.SettingsRow
 import com.phantomcode.app.ui.components.SwatchRow
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.PhantomPreset
+import kotlinx.coroutines.launch
 
 private data class CustomField(val key: String, val label: String)
 
@@ -134,6 +141,9 @@ fun SettingsScreen() {
         Spacer(Modifier.height(20.dp))
 
         // ── Ambiente VM (D13) ───────────────────────────────────
+        val vm = LocalVm.current
+        val qemu = vm.qemu
+        val scope = rememberCoroutineScope()
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Memory, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -141,10 +151,71 @@ fun SettingsScreen() {
         }
         Spacer(Modifier.height(8.dp))
         PhantomCard(modifier = Modifier.fillMaxWidth()) {
-            SettingsRow(label = "Iniciar Linux na abertura (D20)", value = "Off")
-            SettingsRow(label = "Presets CPU / RAM", value = "2G · 4 cores")
-            SettingsRow(label = "Usar todo o poder do aparelho (D13)", value = "Off")
-            SettingsRow(label = "Baixar / trocar distro", value = "—")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(if (qemu.running) palette.success else palette.border, CircleShape)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "QEMU LINUX: ${qemu.statusText}",
+                    color = if (qemu.running) palette.success else palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                if (qemu.running) {
+                    PhantomOutlinedButton(text = "Parar", onClick = { qemu.stop() })
+                } else {
+                    PhantomPrimaryButton(
+                        text = "Iniciar",
+                        onClick = { scope.launch { qemu.start() } },
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Preset de recursos (D13)", color = palette.textSecondary, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                QemuPresets.ALL.forEach { preset ->
+                    val selected = qemu.preset.id == preset.id
+                    Text(
+                        text = preset.label,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (selected) palette.accentPrimary.copy(alpha = 0.18f) else palette.surfaceAlt)
+                            .border(
+                                1.dp,
+                                if (selected) palette.accentPrimary else palette.border.copy(alpha = 0.4f),
+                                RoundedCornerShape(3.dp),
+                            )
+                            .clickable { qemu.preset = preset }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = if (selected) palette.accentPrimary else palette.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "${qemu.preset.cpu} cores · ${qemu.preset.ramMb} MB RAM",
+                color = palette.textSecondary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Distros (Phantom Base oficial): Toolbox → baixar/trocar",
+                color = palette.textSecondary,
+                fontSize = 11.sp,
+            )
         }
 
         Spacer(Modifier.height(20.dp))

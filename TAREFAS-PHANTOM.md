@@ -46,16 +46,17 @@
 
 ## 🟠 FASE 3 — TERMINAL + VM LINUX (coração do app)
 
-- [ ] **T14. Embutir QEMU arm64 (jniLibs) + comando headless (§8.1)**
-  - `qemu-system-aarch64 -M virt,accel=tcg` · virtio-blk · SLIRP · `-nographic`
-- [ ] **T15. Gerenciador de distros (D1)**
-  - Download Phantom Base + Ubuntu/Debian/Alpine; validação arm64/checksum/espaço
-- [ ] **T16. virtio-9p + virtio-serial**
-  - Workspace montado no guest (`/home/user/workspace`) · console → unix socket
-- [ ] **T17. Widget de terminal (jackpal) + múltiplas abas (D11)**
-  - Terminal 1/2/Run, abas nomeáveis com cor, split em tablet/landscape
-- [ ] **T18. `dark-code-init.sh`**
-  - Rede SLIRP, user, mount 9p, prompt em `workspace/<projeto>`
+> 🔶 **Estado:** motor da VM pronto (T14, T15, T18 ✅) — faltam os **artefatos reais** (binário QEMU arm64 + rootfs Phantom Base) e o **T17 final** (emulador VT100).
+
+- [x] **T14. QEMU arm64 + comando headless (§8.1)** ✅
+  - `QemuManager`: `-M virt,accel=tcg -cpu cortex-a72` · virtio-blk · SLIRP · `-nographic` · presets D13 · download do binário + SHA-256 · ciclo de vida
+- [x] **T15. Gerenciador de distros (D1)** ✅
+  - `DistroManager`: catálogo (Phantom Base oficial + Ubuntu/Debian/Alpine), download com progresso, checksum, extração tar.gz / imagem .img · UI no Toolbox
+- [x] **T16. virtio-9p + virtio-serial** 🔶 (comando pronto)
+  - `-virtfs` do workspace montado no guest · console stdio → terminal · validação real depende dos artefatos
+- [ ] **T17. Widget de terminal** 🔶 v1 = console de linhas ligado às streams (entrada/saída real) · pendente: VT100/jackpal + abas múltiplas (D11)
+- [x] **T18. `dark-code-init.sh`** ✅
+  - `assets/linux/dark-code-init.sh` (rede SLIRP, user, mount 9p, prompt) · copiado na instalação da distro
 
 ## 🟡 FASE 4 — GIT + TOOLBOX + BACKUP
 

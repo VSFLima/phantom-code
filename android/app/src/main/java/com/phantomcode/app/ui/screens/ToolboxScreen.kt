@@ -18,9 +18,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -36,15 +41,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
+import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.data.vm.DistroCatalog
+import com.phantomcode.app.data.vm.DistroInfo
+import com.phantomcode.app.data.vm.LocalVm
 import kotlinx.coroutines.launch
 
 @Composable
 fun ToolboxScreen() {
+    val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val qemu = vm.qemu
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -56,76 +67,84 @@ fun ToolboxScreen() {
             SectionLabel(text = "Toolbox")
             Spacer(Modifier.height(12.dp))
 
-            // Status do ambiente
-            PhantomCard(glow = false, modifier = Modifier.fillMaxWidth()) {
+            // ── Status do ambiente (real) ──────────────────────────
+            PhantomCard(glow = qemu.running, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier
                             .size(8.dp)
-                            .background(palette.border, CircleShape)
+                            .background(if (qemu.running) palette.success else palette.border, CircleShape)
                     )
                     Spacer(Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("QEMU LINUX", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("STOPPED", color = palette.textSecondary, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        Text(
+                            qemu.statusText + " · " + qemu.preset.label,
+                            color = if (qemu.running) palette.success else palette.textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                        )
+                        qemu.lastError?.let {
+                            Text(it, color = palette.error, fontSize = 11.sp, maxLines = 2)
+                        }
                     }
-                    Text("RAM — / 2G", color = palette.textSecondary, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-                    Spacer(Modifier.width(12.dp))
-                    PhantomOutlinedButton(
-                        text = "Iniciar",
-                        onClick = { scope.launch { snackbar.showSnackbar("VM QEMU — disponível na Fase 3") } },
-                        modifier = Modifier.padding(0.dp),
-                    )
+                    if (qemu.running) {
+                        PhantomOutlinedButton(text = "Parar", icon = Icons.Filled.Stop, onClick = { qemu.stop() })
+                    } else {
+                        PhantomPrimaryButton(
+                            text = "Iniciar",
+                            icon = Icons.Filled.PlayArrow,
+                            onClick = {
+                                scope.launch {
+                                    val ok = qemu.start()
+                                    if (!ok) scope.launch { snackbar.showSnackbar(qemu.lastError ?: "Falha ao iniciar") }
+                                }
+                            },
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Integrações & API Keys (D8)
-            SectionLabel(text = "Integrações & API Keys")
+            // ── Distros (D1) ───────────────────────────────────────
+            SectionLabel(text = "Distros")
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IntegrationCard(name = "Google Drive", connected = true)
-                IntegrationCard(name = "OneDrive", connected = false)
-                Box(
-                    modifier = Modifier
-                        .size(width = 84.dp, height = 84.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(palette.surfaceAlt),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "Adicionar", tint = palette.textSecondary)
-                }
+            DistroCatalog.ALL.forEach { info ->
+                DistroCard(
+                    info = info,
+                    isActive = vm.distros.activeId == info.id,
+                    onClickInstall = { vm.distros.install(info) },
+                    onClickUse = { vm.distros.setActive(info) },
+                )
+                Spacer(Modifier.height(10.dp))
             }
 
             Spacer(Modifier.height(20.dp))
-            SectionLabel(text = "IAs")
+            SectionLabel(text = "Integrações & API Keys (D8)")
             Spacer(Modifier.height(8.dp))
-            ToolChipRow(listOf("Ollama", "llama.cpp", "gpt4all"))
+            PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Cloud, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Google Drive · OneDrive · S3", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Backup em nuvem — Fase 4 (T22)", color = palette.textSecondary, fontSize = 11.sp)
+                    }
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = palette.textSecondary)
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
-            SectionLabel(text = "Linguagens / Runtimes")
+            SectionLabel(text = "IAs · Linguagens · Ferramentas")
             Spacer(Modifier.height(8.dp))
-            ToolChipRow(listOf("Node", "Python", "Rust", "Go"))
-
-            Spacer(Modifier.height(16.dp))
-            SectionLabel(text = "Ferramentas")
-            Spacer(Modifier.height(8.dp))
-            ToolChipRow(listOf("git", "curl", "vim", "htop"))
-
-            Spacer(Modifier.height(16.dp))
-            SectionLabel(text = "Sistema (protegidos)")
-            Spacer(Modifier.height(8.dp))
-            ToolChipRow(listOf("glibc", "apt", "bash", "systemd"))
-
-            Spacer(Modifier.height(16.dp))
             PhantomCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.SmartToy, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Phantom AI Suite (D12)", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Roteador de IAs com contexto compartilhado — em breve.", color = palette.textSecondary, fontSize = 11.sp)
+                        Text("Scanner de pacotes + roteador de IAs — Fase 4 (T20)", color = palette.textSecondary, fontSize = 11.sp)
                     }
                 }
             }
@@ -134,56 +153,75 @@ fun ToolboxScreen() {
 
         SnackbarHost(
             hostState = snackbar,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
         )
     }
 }
 
 @Composable
-private fun IntegrationCard(name: String, connected: Boolean) {
+private fun DistroCard(
+    info: DistroInfo,
+    isActive: Boolean,
+    onClickInstall: () -> Unit,
+    onClickUse: () -> Unit,
+) {
+    val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
-    Column(
-        modifier = Modifier
-            .size(width = 84.dp, height = 84.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(palette.surface)
-            .padding(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            Icons.Filled.Cloud,
-            contentDescription = null,
-            tint = if (connected) palette.success else palette.textSecondary,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(name, color = palette.textPrimary, fontSize = 9.sp, maxLines = 1)
-        Text(
-            if (connected) "Conectado" else "Offline",
-            color = if (connected) palette.success else palette.textSecondary,
-            fontSize = 8.sp,
-        )
-    }
-}
+    val state = vm.distros.installStates[info.id] ?: com.phantomcode.app.data.vm.DistroInstallState()
 
-@Composable
-private fun ToolChipRow(list: List<String>) {
-    val palette = LocalThemeController.current.currentPalette()
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        list.forEach { name ->
-            Text(
-                text = name,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(palette.surface)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                color = palette.textPrimary,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-            )
+    PhantomCard(modifier = Modifier.fillMaxWidth(), glow = isActive) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(info.name, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    info.badge?.let {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            it,
+                            color = palette.accentBright,
+                            fontSize = 9.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(palette.accentPrimary.copy(alpha = 0.18f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                    if (state.installed) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.CheckCircle, contentDescription = "Instalada", tint = palette.success, modifier = Modifier.size(14.dp))
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${info.packageManager} · ~${info.sizeMb} MB",
+                    color = palette.textSecondary,
+                    fontSize = 11.sp,
+                )
+                if (state.downloading) {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.accentPrimary,
+                        trackColor = palette.surfaceAlt,
+                    )
+                }
+                state.error?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, color = palette.error, fontSize = 10.sp, maxLines = 2)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            when {
+                state.downloading -> Text("…", color = palette.textSecondary, fontSize = 14.sp)
+                state.installed && isActive -> Text("Em uso", color = palette.success, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                state.installed -> PhantomOutlinedButton(text = "Usar", onClick = onClickUse)
+                else -> PhantomOutlinedButton(
+                    text = "Instalar",
+                    icon = Icons.Filled.Download,
+                    onClick = onClickInstall,
+                )
+            }
         }
     }
 }

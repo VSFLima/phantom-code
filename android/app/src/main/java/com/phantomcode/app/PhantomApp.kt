@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.VmController
 import com.phantomcode.app.ui.components.PhantomScaffold
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.screens.EditorScreen
@@ -22,6 +24,7 @@ import com.phantomcode.app.ui.screens.GitScreen
 import com.phantomcode.app.ui.screens.HomeScreen
 import com.phantomcode.app.ui.screens.SearchScreen
 import com.phantomcode.app.ui.screens.SettingsScreen
+import com.phantomcode.app.ui.screens.TerminalScreen
 import com.phantomcode.app.ui.screens.ToolboxScreen
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.PhantomTheme
@@ -31,7 +34,11 @@ import com.phantomcode.app.ui.theme.ThemeController
 fun PhantomRoot() {
     val context = LocalContext.current
     val controller = remember { ThemeController(context.applicationContext) }
-    CompositionLocalProvider(LocalThemeController provides controller) {
+    val vm = remember { VmController(context.applicationContext) }
+    CompositionLocalProvider(
+        LocalThemeController provides controller,
+        LocalVm provides vm,
+    ) {
         PhantomTheme(palette = controller.currentPalette()) {
             PhantomApp()
         }
@@ -54,29 +61,27 @@ fun PhantomApp() {
                 restoreState = true
             }
         },
+        onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
     ) {
         NavHost(navController = navController, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
                 HomeScreen(
-                    onOpenProject = { project ->
-                        navController.navigateToTab(Routes.EXPLORER)
-                    },
-                    onOpenFile = { path ->
-                        navController.navigate(Routes.editorRoute(path))
-                    },
+                    onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
+                    onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
                 )
             }
             composable(Routes.EXPLORER) {
                 ExplorerScreen(
-                    onOpenFile = { path ->
-                        navController.navigate(Routes.editorRoute(path))
-                    },
+                    onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
                 )
             }
             composable(Routes.SEARCH) { SearchScreen() }
             composable(Routes.GIT) { GitScreen() }
             composable(Routes.TOOLBOX) { ToolboxScreen() }
             composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.TERMINAL) {
+                TerminalScreen(onBack = { navController.popBackStack() })
+            }
             composable(
                 route = Routes.EDITOR,
                 arguments = listOf(navArgument("path") { type = NavType.StringType }),

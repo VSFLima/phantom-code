@@ -16,6 +16,7 @@ object Routes {
     const val GIT = "git"
     const val TOOLBOX = "toolbox"
     const val SETTINGS = "settings"
+    const val TERMINAL = "terminal"
 
     const val EDITOR = "editor/{path}"
 
