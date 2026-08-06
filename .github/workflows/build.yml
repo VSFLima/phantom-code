@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -44,11 +44,15 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: phantom-code-apk
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+      - name: Publish APK as draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd android
+          ls -la app/build/outputs/apk/release/ app/build/outputs/apk/debug/ 2>/dev/null
+          TAG="apk-$(date +%Y%m%d-%H%M)"
+          gh release create "$TAG" \
+            app/build/outputs/apk/release/*.apk app/build/outputs/apk/debug/*.apk \
+            --title "Phantom-Code APK $(date +%Y-%m-%d %H:%M)" \
+            --notes "APK assinado com a chave VSFLima/Asgard (build manual)." \
+            --draft
