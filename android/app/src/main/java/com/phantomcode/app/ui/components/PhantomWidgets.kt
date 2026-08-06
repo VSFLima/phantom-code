@@ -1,19 +1,22 @@
 package com.phantomcode.app.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,9 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -35,6 +42,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.theme.LocalUiStyleController
+import com.phantomcode.app.ui.theme.PhantomButtonStyle
+import com.phantomcode.app.ui.theme.shape
 
 /** Logo: escudo com gradiente roxo→cyan + raio (marca Cyber-Phantom). */
 @Composable
@@ -81,7 +91,7 @@ fun PhantomLogo(
     }
 }
 
-/** Card Deep Slate com borda angular (6dp) e glow opcional. */
+/** Card com cantos/bordas do estilo do usuário e glow opcional. */
 @Composable
 fun PhantomCard(
     modifier: Modifier = Modifier,
@@ -90,21 +100,143 @@ fun PhantomCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    val ui = LocalUiStyleController.current.ui
+    val corner = ui.cornerStyle.shape()
+    val borderWidth = ui.borderStyle.width.dp // NONE (0) = sem borda de verdade
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(corner)
             .background(palette.surface)
             .border(
-                width = 1.dp,
+                width = borderWidth,
                 color = if (glow) palette.accentPrimary.copy(alpha = 0.6f) else palette.border.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(6.dp),
+                shape = corner,
             )
             .padding(contentPadding),
         content = content,
     )
 }
 
-/** Botão primário — filled roxo angular. */
+/**
+ * Botão universal (Design System v2).
+ *
+ * Segue o estilo escolhido pelo usuário em Settings → UI & Botões, mas aceita
+ * [style] e [color] para sobrepor pontualmente. Estilos: Neon (brilho),
+ * Hacker (borda dupla de terminal), Gradient, Glass, Ghost, Pill e Sólido.
+ * Inclui micro-interação: escala ao pressionar.
+ */
+@Composable
+fun PhantomButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+    style: PhantomButtonStyle? = null,
+    color: Color? = null,
+) {
+    val palette = LocalThemeController.current.currentPalette()
+    val ui = LocalUiStyleController.current.ui
+    val s = style ?: ui.buttonStyle
+    val corner = ui.cornerStyle.shape()
+    val shape = if (s == PhantomButtonStyle.PILL) RoundedCornerShape(50) else corner
+    val borderWidth = ui.borderStyle.width.dp // NONE (0) = sem borda de verdade
+    val fontFamily = ui.fontStyle.fontFamily()
+    val accent = color ?: palette.accentPrimary
+
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (pressed && enabled) 0.95f else 1f, label = "btnScale")
+
+    val isFilled = s == PhantomButtonStyle.NEON || s == PhantomButtonStyle.GRADIENT ||
+        s == PhantomButtonStyle.PILL || s == PhantomButtonStyle.SOLID
+    val contentColor = when {
+        isFilled -> Color.White
+        s == PhantomButtonStyle.GLASS -> palette.textPrimary
+        else -> accent
+    }
+
+    val buttonContent: @Composable RowScope.() -> Unit = {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = if (s == PhantomButtonStyle.HACKER) "> $text" else text,
+            color = contentColor,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            fontFamily = fontFamily,
+        )
+    }
+
+    Box(modifier = modifier.scale(scale), contentAlignment = Alignment.Center) {
+        if (s == PhantomButtonStyle.HACKER) {
+            // Borda dupla estilo terminal (linha externa + linha interna offset)
+            Box(
+                modifier = Modifier
+                    .clip(shape)
+                    .border(borderWidth, accent.copy(alpha = 0.9f), shape)
+                    .background(if (enabled) accent.copy(alpha = 0.05f) else Color.Transparent)
+                    .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
+                    .padding(5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(shape)
+                        .border(1.dp, palette.accentSecondary.copy(alpha = 0.5f), shape)
+                        .padding(horizontal = 15.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        content = buttonContent,
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .then(if (s == PhantomButtonStyle.NEON && enabled) {
+                        Modifier.shadow(16.dp, shape, spotColor = accent, ambientColor = accent)
+                    } else {
+                        Modifier
+                    })
+                    .clip(shape)
+                    .then(
+                        when {
+                            s == PhantomButtonStyle.GRADIENT -> Modifier.background(
+                                Brush.linearGradient(listOf(palette.accentPrimary, palette.accentSecondary)),
+                            )
+                            isFilled -> Modifier.background(if (enabled) accent else accent.copy(alpha = 0.35f))
+                            s == PhantomButtonStyle.GLASS -> Modifier.background(palette.surfaceAlt.copy(alpha = 0.55f))
+                            else -> Modifier
+                        }
+                    )
+                    .then(
+                        if (s == PhantomButtonStyle.GHOST || s == PhantomButtonStyle.GLASS) {
+                            Modifier.border(
+                                borderWidth,
+                                if (enabled) accent.copy(alpha = if (s == PhantomButtonStyle.GHOST) 0.8f else 0.55f) else palette.border,
+                                shape,
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                content = buttonContent,
+            )
+        }
+    }
+}
+
+/** Botão primário — segue o estilo do usuário (alias de [PhantomButton]). */
 @Composable
 fun PhantomPrimaryButton(
     text: String,
@@ -113,25 +245,10 @@ fun PhantomPrimaryButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    val palette = LocalThemeController.current.currentPalette()
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (enabled) palette.accentPrimary else palette.accentPrimary.copy(alpha = 0.35f))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-    }
+    PhantomButton(text = text, onClick = onClick, modifier = modifier, enabled = enabled, icon = icon)
 }
 
-/** Botão secundário — outlined cyan/roxo angular. */
+/** Botão secundário — variante contorno (GHOST). */
 @Composable
 fun PhantomOutlinedButton(
     text: String,
@@ -140,38 +257,28 @@ fun PhantomOutlinedButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    val palette = LocalThemeController.current.currentPalette()
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .border(
-                width = 1.dp,
-                color = if (enabled) palette.accentSecondary.copy(alpha = 0.8f) else palette.border,
-                shape = RoundedCornerShape(4.dp),
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = palette.accentSecondary, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(text, color = palette.accentSecondary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-    }
+    PhantomButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        icon = icon,
+        style = PhantomButtonStyle.GHOST,
+    )
 }
 
-/** Rótulo de seção em caps com espaçamento. */
+/** Rótulo de seção em caps com espaçamento — fonte conforme estilo do usuário. */
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     val palette = LocalThemeController.current.currentPalette()
+    val ui = LocalUiStyleController.current.ui
     Text(
         text = text.uppercase(),
         color = palette.textSecondary,
         fontSize = 11.sp,
         letterSpacing = 2.sp,
         fontWeight = FontWeight.SemiBold,
+        fontFamily = ui.fontStyle.fontFamily(),
         modifier = modifier,
     )
 }

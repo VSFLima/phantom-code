@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,13 +50,23 @@ import androidx.compose.ui.unit.sp
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.QemuPresets
+import com.phantomcode.app.ui.components.BorderStylePreview
+import com.phantomcode.app.ui.components.ButtonStylePreview
+import com.phantomcode.app.ui.components.CornerStylePreview
+import com.phantomcode.app.ui.components.FontStylePreview
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.components.SettingsRow
+import com.phantomcode.app.ui.components.StylePickerDialog
 import com.phantomcode.app.ui.components.SwatchRow
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.theme.LocalUiStyleController
+import com.phantomcode.app.ui.theme.PhantomBorderStyle
+import com.phantomcode.app.ui.theme.PhantomButtonStyle
+import com.phantomcode.app.ui.theme.PhantomCornerStyle
+import com.phantomcode.app.ui.theme.PhantomFontStyle
 import com.phantomcode.app.ui.theme.PhantomPreset
 import kotlinx.coroutines.launch
 
@@ -148,6 +159,102 @@ fun SettingsScreen() {
                     Spacer(Modifier.height(10.dp))
                 }
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ── UI & Botões (Design System v2 — estilo do usuário) ─
+        val uiController = LocalUiStyleController.current
+        val uiPrefs = uiController.ui
+        var uiPicker by remember { mutableStateOf<String?>(null) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Tune, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            SectionLabel(text = "UI & Botões")
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Personalize o visual do seu jeito — preview ao vivo em todo o app e no terminal.",
+            color = palette.textSecondary,
+            fontSize = 11.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsRow(
+                label = "Estilo dos botões",
+                value = uiPrefs.buttonStyle.label,
+                onClick = { uiPicker = "button" },
+            )
+            SettingsRow(
+                label = "Cantos (raio)",
+                value = uiPrefs.cornerStyle.label,
+                onClick = { uiPicker = "corner" },
+            )
+            SettingsRow(
+                label = "Bordas / linhas",
+                value = uiPrefs.borderStyle.label,
+                onClick = { uiPicker = "border" },
+            )
+            SettingsRow(
+                label = "Letras",
+                value = uiPrefs.fontStyle.label,
+                onClick = { uiPicker = "font" },
+            )
+            Spacer(Modifier.height(10.dp))
+            Text("Prévia", color = palette.textSecondary, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PhantomPrimaryButton(text = "Ação principal", onClick = {})
+                Spacer(Modifier.width(10.dp))
+                PhantomOutlinedButton(text = "Secundária", onClick = {})
+            }
+        }
+
+        when (uiPicker) {
+            "button" -> StylePickerDialog(
+                title = "Estilo dos botões",
+                options = PhantomButtonStyle.values().toList(),
+                selected = uiPrefs.buttonStyle,
+                render = { ButtonStylePreview(it) },
+                onPick = {
+                    uiController.update { p -> p.copy(buttonStyle = it) }
+                    uiPicker = null
+                },
+                onDismiss = { uiPicker = null },
+            )
+            "corner" -> StylePickerDialog(
+                title = "Cantos (raio)",
+                options = PhantomCornerStyle.values().toList(),
+                selected = uiPrefs.cornerStyle,
+                render = { CornerStylePreview(it) },
+                onPick = {
+                    uiController.update { p -> p.copy(cornerStyle = it) }
+                    uiPicker = null
+                },
+                onDismiss = { uiPicker = null },
+            )
+            "border" -> StylePickerDialog(
+                title = "Bordas / linhas",
+                options = PhantomBorderStyle.values().toList(),
+                selected = uiPrefs.borderStyle,
+                render = { BorderStylePreview(it) },
+                onPick = {
+                    uiController.update { p -> p.copy(borderStyle = it) }
+                    uiPicker = null
+                },
+                onDismiss = { uiPicker = null },
+            )
+            "font" -> StylePickerDialog(
+                title = "Letras",
+                options = PhantomFontStyle.values().toList(),
+                selected = uiPrefs.fontStyle,
+                render = { FontStylePreview(it) },
+                onPick = {
+                    uiController.update { p -> p.copy(fontStyle = it) }
+                    uiPicker = null
+                },
+                onDismiss = { uiPicker = null },
+            )
         }
 
         Spacer(Modifier.height(20.dp))

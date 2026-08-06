@@ -25,10 +25,14 @@ object QemuPresets {
  *   linux/<id>/{ rootfs.img | kernel | initrd.img | rootfs/ } — ver DistroManager.
  */
 object PhantomMirror {
+    // ⚠️ TODO: publicar o binário QEMU arm64 (Release `qemu-aarch64`) e preencher o checksum.
     const val QEMU_BINARY_URL = "https://example.com/phantom-code/qemu-system-aarch64"
     val QEMU_BINARY_SHA256: String? = null
 
-    const val PHANTOM_BASE_URL = "https://example.com/phantom-code/phantom-base-rootfs.tar.gz"
+    // Artefato real: construído pelo workflow `Build Distro Artifacts`
+    // (.github/workflows/build-distros.yml) → Release `distro-phantom-base`.
+    // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
+    const val PHANTOM_BASE_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom-base/phantom-base.tar.gz"
     val PHANTOM_BASE_SHA256: String? = null
 
     // Candidatos upstream (a curadoria publica os builds compatíveis — aarch64 headless):

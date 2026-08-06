@@ -17,6 +17,7 @@ object Routes {
     const val TOOLBOX = "toolbox"
     const val SETTINGS = "settings"
     const val TERMINAL = "terminal"
+    const val BROWSER = "browser"
 
     const val EDITOR = "editor/{path}"
 

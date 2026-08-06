@@ -84,8 +84,13 @@
   - `CommandPalette` (D14): overlay estilo VS Code com busca, aberta pelo ícone de menu no topo; comandos: Home/Explorer/Terminal/Iniciar-Parar Linux/Git/Toolbox/Settings
 - [ ] **T25. Testes em device (Galaxy Note 10 Plus)**
   - Performance TCG, permutações de tema, corrigir o que quebrar
-- [ ] **T26. Distribuição (D6)**
-  - Sideload APK / F-Droid · decisão Play Store
+- [x] **T27. Design System v2 — UI & Botões (estilo do usuário)** ✅ estilos base prontos (Neon/Hacker/Gradient/Glass/Ghost/Pill/Sólido) + dimensões editáveis (cantos · bordas · letras) persistidas; preview ao vivo; animações (press nos botões, transições de navegação, diálogos com scale+fade); terminal segue a paleta (setColorScheme)
+- [x] **T28. Navegador interno (W2)** ✅ WebView com a cara do app: barra de URL, voltar/avançar/recarregar/início, progresso, página inicial temática; acesso via Home e Command Palette
+- [ ] **T29. Distros com download interno (W3)** 🔶 infra pronta: workflow `build-distros.yml` gera a Phantom Base (Debian arm64: rootfs.img+kernel+initrd) → Release `distro-phantom-base`; app já baixa com progresso — falta rodar o workflow e publicar o artefato
+
+---
+
+## 📌 NOTAS IMPORTANTES
 
 ---
 
@@ -102,5 +107,7 @@
 | App ID | `com.phantomcode.app` (provisório — confirmar) |
 | Repo GitHub | `VSFLima/phantom-code` (provisório — confirmar) |
 | Build | GitHub Actions (sem SDK Android local) |
-| Terminal | jackpal `emulatorview` v1.0.70 (VT100 real, abas) via JitPack |
+| Terminal | jackpal `emulatorview` v1.0.70 (VT100 real, abas) via JitPack — cores seguem a paleta do usuário |
+| Design System | `DesignSystem.kt` (botões/cantos/bordas/letras) + `UiStyleController` persistido — Settings → UI & Botões |
+| Navegador | `BrowserScreen.kt` — WebView interno (W2) |
 | Editor | CodeMirror 6 (WebView) |

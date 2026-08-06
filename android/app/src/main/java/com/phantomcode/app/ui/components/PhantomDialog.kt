@@ -1,5 +1,11 @@
 package com.phantomcode.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,8 +50,15 @@ fun PhantomDialog(
 ) {
     val palette = LocalThemeController.current.currentPalette()
     var text by remember { mutableStateOf(initialValue) }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
 
     Dialog(onDismissRequest = onDismiss) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = scaleIn(animationSpec = tween(200), initialScale = 0.85f) + fadeIn(tween(200)),
+            exit = scaleOut(animationSpec = tween(130), targetScale = 0.9f) + fadeOut(tween(130)),
+        ) {
         Column(
             modifier = Modifier
                 .background(palette.surface, RoundedCornerShape(8.dp))
@@ -88,6 +102,7 @@ fun PhantomDialog(
                 )
             }
         }
+        }
     }
 }
 
@@ -101,7 +116,14 @@ fun PhantomConfirmDialog(
     onDismiss: () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
     Dialog(onDismissRequest = onDismiss) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = scaleIn(animationSpec = tween(200), initialScale = 0.85f) + fadeIn(tween(200)),
+            exit = scaleOut(animationSpec = tween(130), targetScale = 0.9f) + fadeOut(tween(130)),
+        ) {
         Column(
             modifier = Modifier
                 .background(palette.surface, RoundedCornerShape(8.dp))
@@ -118,6 +140,7 @@ fun PhantomConfirmDialog(
                 PhantomPrimaryButton(text = confirmText, onClick = onConfirm)
             }
         }
+        }
     }
 }
 
@@ -130,7 +153,14 @@ fun PhantomActionSheet(
     onDismiss: () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
     Dialog(onDismissRequest = onDismiss) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = scaleIn(animationSpec = tween(200), initialScale = 0.9f) + fadeIn(tween(200)),
+            exit = scaleOut(animationSpec = tween(130), targetScale = 0.95f) + fadeOut(tween(130)),
+        ) {
         Column(
             modifier = Modifier
                 .background(palette.surface, RoundedCornerShape(8.dp))
@@ -157,6 +187,7 @@ fun PhantomActionSheet(
                     Text(label, color = palette.textPrimary, fontSize = 14.sp)
                 }
             }
+        }
         }
     }
 }

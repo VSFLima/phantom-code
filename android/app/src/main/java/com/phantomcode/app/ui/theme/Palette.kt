@@ -19,6 +19,8 @@ data class PhantomPalette(
     val textSecondary: Color,
     val error: Color,
     val success: Color,
+    val warning: Color = Color(0xFFFFB020),
+    val info: Color = Color(0xFF38BDF8),
     val isDark: Boolean = true,
 )
 

@@ -1,0 +1,76 @@
+name: Build Distro Artifacts
+
+# 🐧 Constrói a Phantom Base (arm64) e publica em GitHub Release.
+#
+# O app baixa o artefato internamente (Toolbox → Distros → Instalar) com
+# barra de progresso e validação SHA-256, via PhantomMirror.PHANTOM_BASE_URL.
+#
+# Artefato gerado:  phantom-base.tar.gz
+#   ├── rootfs.img   (ext2 de 1 GiB — Debian bookworm arm64 com ferramentas)
+#   ├── kernel       (vmlinuz do linux-image-arm64)
+#   └── initrd.img   (initramfs do pacote)
+#
+# Boot no app:  -kernel kernel -initrd initrd.img -drive rootfs.img \
+#               -append "root=/dev/vda rw console=ttyAMA0"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  phantom-base:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build arm64 rootfs (docker + Debian bookworm)
+        run: |
+          docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
+            set -e
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              bash ca-certificates curl wget git \
+              python3 python3-pip nodejs npm \
+              openssh-client tzdata nano vim-tiny htop file \
+              linux-image-arm64 initramfs-tools
+            rm -rf /var/lib/apt/lists/*
+          '
+          docker export phantom > /tmp/rootfs.tar
+          mkdir -p /tmp/rootfs
+          tar -xf /tmp/rootfs.tar -C /tmp/rootfs
+
+      - name: Grab kernel + initrd
+        run: |
+          cp -L /tmp/rootfs/boot/vmlinuz-* /tmp/kernel
+          if ! ls /tmp/rootfs/boot/initrd.img-* >/dev/null 2>&1; then
+            echo "❌ initrd.img não veio no pacote linux-image — gere com update-initramfs dentro do container"
+            exit 1
+          fi
+          cp -L /tmp/rootfs/boot/initrd.img-* /tmp/initrd.img
+          ls -la /tmp/kernel /tmp/initrd.img
+
+      - name: Create rootfs.img (genext2fs — 1 GiB ext2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y genext2fs
+          # 262144 blocos de 4KB = 1 GiB; device nodes exigem root (sudo)
+          sudo genext2fs -b 262144 -d /tmp/rootfs /tmp/rootfs.img
+          ls -la /tmp/rootfs.img
+
+      - name: Package artifact
+        run: |
+          cd /tmp
+          tar czf phantom-base.tar.gz rootfs.img kernel initrd.img
+          echo "=== phantom-base.tar.gz ==="
+          ls -la phantom-base.tar.gz
+
+      - name: Publish as Release (tag fixa para o app)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete distro-phantom-base --yes 2>/dev/null || true
+          gh release create distro-phantom-base /tmp/phantom-base.tar.gz \
+            --title "Phantom Base rootfs (arm64) $(date +%Y-%m-%d)" \
+            --notes "Phantom Base — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img. Baixado pelo app com download interno (Toolbox → Distros)."

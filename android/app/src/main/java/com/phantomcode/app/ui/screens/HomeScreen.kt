@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -69,6 +70,7 @@ import java.io.File
 fun HomeScreen(
     onOpenProject: (String) -> Unit,
     onOpenFile: (String) -> Unit,
+    onOpenBrowser: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val workspace = remember { WorkspaceManager(context) }
@@ -175,6 +177,33 @@ fun HomeScreen(
                             },
                         )
                     }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // Acesso rápido (W2): navegador interno
+            PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenBrowser),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Public,
+                        contentDescription = null,
+                        tint = palette.accentPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Navegador interno", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Web com a cara do app", color = palette.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    Icon(
+                        Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = palette.textSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
             }
             Spacer(Modifier.height(22.dp))

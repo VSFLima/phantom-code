@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.theme.LocalThemeController
+import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
 import jackpal.androidterm.emulatorview.TermSession
 import kotlinx.coroutines.launch
@@ -167,7 +169,17 @@ fun TerminalScreen(onBack: () -> Unit) {
         // ── Terminal VT100 real (jackpal emulatorview) ──
         AndroidView(
             factory = { ctx ->
-                EmulatorView(ctx, null, ctx.resources.displayMetrics).also { termView = it }
+                EmulatorView(ctx, null, ctx.resources.displayMetrics).apply {
+                    // Terminal segue a paleta do usuário (Design System v2):
+                    // fundo e texto nas cores do app, com o verde de sucesso no prompt.
+                    setColorScheme(
+                        ColorScheme(
+                            palette.textPrimary.toArgb(),
+                            palette.background.toArgb(),
+                        ),
+                    )
+                    termView = this
+                }
             },
             update = { view ->
                 val tab = terminal.activeTab

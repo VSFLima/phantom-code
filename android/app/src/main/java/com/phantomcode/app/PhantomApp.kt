@@ -5,6 +5,11 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -44,6 +49,7 @@ import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.screens.EditorScreen
 import com.phantomcode.app.ui.screens.ExplorerScreen
 import com.phantomcode.app.ui.screens.GitScreen
+import com.phantomcode.app.ui.screens.BrowserScreen
 import com.phantomcode.app.ui.screens.HomeScreen
 import com.phantomcode.app.ui.screens.OnboardingScreen
 import com.phantomcode.app.ui.screens.SearchScreen
@@ -51,17 +57,21 @@ import com.phantomcode.app.ui.screens.SettingsScreen
 import com.phantomcode.app.ui.screens.TerminalScreen
 import com.phantomcode.app.ui.screens.ToolboxScreen
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.theme.LocalUiStyleController
 import com.phantomcode.app.ui.theme.PhantomTheme
 import com.phantomcode.app.ui.theme.ThemeController
+import com.phantomcode.app.ui.theme.UiStyleController
 import kotlinx.coroutines.launch
 
 @Composable
 fun PhantomRoot() {
     val context = LocalContext.current
     val controller = remember { ThemeController(context.applicationContext) }
+    val uiStyle = remember { UiStyleController(context.applicationContext) }
     val vm = remember { VmController(context.applicationContext) }
     CompositionLocalProvider(
         LocalThemeController provides controller,
+        LocalUiStyleController provides uiStyle,
         LocalVm provides vm,
     ) {
         PhantomTheme(palette = controller.currentPalette()) {
@@ -118,6 +128,7 @@ fun PhantomApp() {
         PaletteCommand("Início", Icons.Filled.Home, "home inicio", { navController.navigateToTab(Routes.HOME) }),
         PaletteCommand("Explorer", Icons.Filled.FolderOpen, "explorer arquivos projetos", { navController.navigateToTab(Routes.EXPLORER) }),
         PaletteCommand("Terminal Linux", Icons.Filled.Terminal, "terminal linux vm qemu", { navController.navigate(Routes.TERMINAL) }),
+        PaletteCommand("Navegador", Icons.Filled.Public, "navegador browser web internet", { navController.navigate(Routes.BROWSER) }),
         PaletteCommand("Iniciar Linux", Icons.Filled.PlayArrow, "iniciar vm qemu start", { scope.launch { vm.qemu.start() } }),
         PaletteCommand("Parar Linux", Icons.Filled.PlayArrow, "parar vm qemu stop", { vm.qemu.stop() }),
         PaletteCommand("Git", Icons.Filled.AccountTree, "git commit push clone", { navController.navigateToTab(Routes.GIT) }),
@@ -141,10 +152,17 @@ fun PhantomApp() {
             onOpenPalette = { paletteOpen = true },
         ) {
             NavHost(navController = navController, startDestination = Routes.HOME) {
-                composable(Routes.HOME) {
+                composable(
+                    Routes.HOME,
+                    enterTransition = { fadeIn(tween(200)) + slideInHorizontally(tween(220)) { it / 6 } },
+                    exitTransition = { fadeOut(tween(160)) },
+                    popEnterTransition = { fadeIn(tween(200)) },
+                    popExitTransition = { fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { it / 6 } },
+                ) {
                     HomeScreen(
                         onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
                         onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
+                        onOpenBrowser = { navController.navigate(Routes.BROWSER) },
                     )
                 }
                 composable(Routes.EXPLORER) {
@@ -158,6 +176,9 @@ fun PhantomApp() {
                 composable(Routes.SETTINGS) { SettingsScreen() }
                 composable(Routes.TERMINAL) {
                     TerminalScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.BROWSER) {
+                    BrowserScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = Routes.EDITOR,
