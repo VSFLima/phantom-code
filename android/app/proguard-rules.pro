@@ -10,3 +10,7 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# JGit (usa reflexão em transport/config)
+-keep class org.eclipse.jgit.** { *; }
+-dontwarn org.eclipse.jgit.**

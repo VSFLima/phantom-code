@@ -60,8 +60,8 @@
 
 ## 🟡 FASE 4 — GIT + TOOLBOX + BACKUP
 
-- [ ] **T19. Git nativo (JGit)**
-  - Clone, commit, push/pull, branches, diff viewer, login token/OAuth GitHub
+- [x] **T19. Git nativo (JGit)** ✅
+  - `GitManager` (JGit 6.10): status (A/M/D/U/C), git init, clone com token, commit, push/pull, log · tela Git real com seleção de projeto + token GitHub
 - [ ] **T20. Toolbox (visual em cards)**
   - Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema) + Integrações & API Keys (Keystore, D8)
 - [ ] **T21. Backup local ZIP/7z (SAF) + restauração (D2)**

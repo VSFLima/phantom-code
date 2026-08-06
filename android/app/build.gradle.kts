@@ -81,5 +81,6 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.documentfile)
+    implementation(libs.org.eclipse.jgit)
     debugImplementation(libs.androidx.ui.tooling)
 }

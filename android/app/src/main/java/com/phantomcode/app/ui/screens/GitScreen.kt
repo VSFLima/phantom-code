@@ -1,6 +1,10 @@
 package com.phantomcode.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,94 +15,401 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.GitHub
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.git.GitChange
+import com.phantomcode.app.data.git.GitCommitInfo
+import com.phantomcode.app.data.git.GitManager
+import com.phantomcode.app.data.git.GitStatus
+import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
+import com.phantomcode.app.ui.components.PhantomDialog
+import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.theme.LocalThemeController
 import kotlinx.coroutines.launch
+import java.io.File
 
+/** Tela Git (T19): status real do repositório do projeto ativo. */
 @Composable
 fun GitScreen() {
+    val context = LocalContext.current
+    val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val git = remember { GitManager(context) }
+
+    var projects by remember { mutableStateOf(vm.workspace.projects()) }
+    var selected by remember { mutableStateOf<String?>(null) }
+    var tick by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+
+    var status by remember { mutableStateOf<GitStatus?>(null) }
+    var commits by remember { mutableStateOf<List<GitCommitInfo>>(emptyList()) }
+    var commitMsg by remember { mutableStateOf("") }
+
+    var tokenDialog by remember { mutableStateOf(false) }
+    var cloneDialog by remember { mutableStateOf(false) }
+
+    val repoDir = selected?.let { File(vm.workspace.root, it) }
+
+    fun notify(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
+
+    LaunchedEffect(Unit) {
+        val p = vm.workspace.projects()
+        projects = p
+        if (selected == null && p.isNotEmpty()) selected = p.first()
+    }
+
+    LaunchedEffect(tick, selected, repoDir) {
+        if (repoDir != null) {
+            if (git.isRepo(repoDir)) {
+                status = git.status(repoDir)
+                commits = git.log(repoDir)
+            } else {
+                status = null
+                commits = emptyList()
+            }
+        } else {
+            status = null
+            commits = emptyList()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionLabel(text = "Git")
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (git.token == null) "sem token" else "token configurado",
+                    color = if (git.token == null) palette.textSecondary else palette.success,
+                    fontSize = 10.sp,
+                )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "main",
+                Icon(
+                    Icons.Filled.Key,
+                    contentDescription = "Token GitHub",
+                    tint = palette.accentPrimary,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(palette.surfaceAlt)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    color = palette.textSecondary,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
+                        .size(36.dp)
+                        .clickable { tokenDialog = true }
+                        .padding(8.dp),
                 )
             }
-            Spacer(Modifier.height(48.dp))
-            Column(
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(Icons.Filled.GitHub, contentDescription = null, tint = palette.border, modifier = Modifier.size(56.dp))
-                Spacer(Modifier.height(12.dp))
-                Text("Nenhum repositório aberto", color = palette.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Clone um repositório para ver Changes, commits e branches aqui.",
-                    color = palette.textSecondary,
-                    fontSize = 12.sp,
-                )
-                Spacer(Modifier.height(20.dp))
-                PhantomPrimaryButton(
-                    text = "Clonar Repositório",
-                    icon = Icons.Filled.GitHub,
-                    onClick = { scope.launch { snackbar.showSnackbar("Git (JGit) — disponível na Fase 4") } },
-                )
-            }
-            Spacer(Modifier.height(32.dp))
-            PhantomCard(modifier = Modifier.fillMaxWidth()) {
-                Row {
-                    Text("Changes", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    Text("0", color = palette.textSecondary, fontSize = 12.sp)
+
+            Spacer(Modifier.height(10.dp))
+
+            // Seleção de projeto
+            if (projects.isEmpty()) {
+                Spacer(Modifier.height(48.dp))
+                Column(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(Icons.Filled.GitHub, contentDescription = null, tint = palette.border, modifier = Modifier.size(56.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("Nenhum projeto no workspace", color = palette.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text("Crie um projeto no Explorer e depois volte aqui.", color = palette.textSecondary, fontSize = 12.sp)
                 }
-                Spacer(Modifier.height(6.dp))
-                Row {
-                    Text("Staged Changes", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    Text("0", color = palette.textSecondary, fontSize = 12.sp)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    projects.forEach { project ->
+                        val isSel = project == selected
+                        Text(
+                            text = project,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (isSel) palette.accentPrimary.copy(alpha = 0.18f) else palette.surfaceAlt)
+                                .border(1.dp, if (isSel) palette.accentPrimary else palette.border.copy(alpha = 0.4f), RoundedCornerShape(3.dp))
+                                .clickable { selected = project; tick++ }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            color = if (isSel) palette.accentPrimary else palette.textPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                if (repoDir != null && !git.isRepo(repoDir)) {
+                    // Sem repositório ainda
+                    PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                        Text("Este projeto ainda não é um repositório Git.", color = palette.textSecondary, fontSize = 12.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Row {
+                            PhantomPrimaryButton(
+                                text = "git init",
+                                onClick = {
+                                    busy = true
+                                    scope.launch {
+                                        val ok = git.initRepo(repoDir)
+                                        busy = false
+                                        if (ok) notify("Repositório iniciado") else notify("Erro ao iniciar")
+                                        tick++
+                                    }
+                                },
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            PhantomOutlinedButton(
+                                text = "Clonar",
+                                icon = Icons.Filled.CloudDownload,
+                                onClick = { cloneDialog = true },
+                            )
+                        }
+                    }
+                } else if (repoDir != null) {
+                    status?.let { st ->
+                        // Status card
+                        PhantomCard(glow = !st.clean, modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(if (st.clean) palette.success else palette.accentBright, RoundedCornerShape(2.dp))
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(st.branch, color = palette.textPrimary, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    if (st.clean) "limpo" else "${st.changes.size} mudanças",
+                                    color = if (st.clean) palette.success else palette.accentBright,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (st.clean) {
+                                    Text("✓", color = palette.success, fontSize = 14.sp)
+                                }
+                            }
+                            if (!st.clean) {
+                                Spacer(Modifier.height(10.dp))
+                                st.changes.take(40).forEach { change ->
+                                    ChangeRow(change)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+
+                        // Commit
+                        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BasicTextField(
+                                    value = commitMsg,
+                                    onValueChange = { commitMsg = it },
+                                    modifier = Modifier.weight(1f),
+                                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                                    cursorBrush = SolidColor(palette.accentSecondary),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = {
+                                        busy = true
+                                        scope.launch {
+                                            val err = git.commit(repoDir, commitMsg)
+                                            busy = false
+                                            notify(err ?: "Commit feito")
+                                            commitMsg = ""
+                                            tick++
+                                        }
+                                    }),
+                                    decorationBox = { inner ->
+                                        if (commitMsg.isEmpty()) {
+                                            Text("Mensagem do commit…", color = palette.textSecondary, fontSize = 13.sp)
+                                        }
+                                        inner()
+                                    },
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                PhantomPrimaryButton(
+                                    text = "Commit",
+                                    enabled = !busy && commitMsg.isNotBlank(),
+                                    onClick = {
+                                        busy = true
+                                        scope.launch {
+                                            val err = git.commit(repoDir, commitMsg)
+                                            busy = false
+                                            notify(err ?: "Commit feito")
+                                            commitMsg = ""
+                                            tick++
+                                        }
+                                    },
+                                )
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row {
+                                PhantomOutlinedButton(
+                                    text = "Push",
+                                    icon = Icons.Filled.CloudUpload,
+                                    onClick = {
+                                        busy = true
+                                        scope.launch {
+                                            val err = git.push(repoDir)
+                                            busy = false
+                                            notify(err ?: "Push enviado")
+                                            tick++
+                                        }
+                                    },
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                PhantomOutlinedButton(
+                                    text = "Pull",
+                                    icon = Icons.Filled.CloudDownload,
+                                    onClick = {
+                                        busy = true
+                                        scope.launch {
+                                            val err = git.pull(repoDir)
+                                            busy = false
+                                            notify(err ?: "Pull ok")
+                                            tick++
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+
+                        // Log de commits
+                        SectionLabel(text = "Commits")
+                        Spacer(Modifier.height(8.dp))
+                        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                            if (commits.isEmpty()) {
+                                Text("Nenhum commit ainda.", color = palette.textSecondary, fontSize = 12.sp)
+                            }
+                            commits.forEach { c ->
+                                Row(modifier = Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(c.shortId, color = palette.accentSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(c.message, color = palette.textPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Text("${c.author} · ${c.date}", color = palette.textSecondary, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(24.dp))
         }
+
+        if (tokenDialog) {
+            PhantomDialog(
+                title = "Token GitHub (PAT)",
+                placeholder = "ghp_xxxxxxxxxxxx",
+                confirmText = "Salvar",
+                onConfirm = { value ->
+                    tokenDialog = false
+                    git.token = value
+                    tick++
+                    notify("Token salvo")
+                },
+                onDismiss = { tokenDialog = false },
+            )
+        }
+
+        if (cloneDialog) {
+            PhantomDialog(
+                title = "Clonar repositório",
+                placeholder = "https://github.com/usuario/repo.git",
+                confirmText = "Clonar",
+                onConfirm = { url ->
+                    cloneDialog = false
+                    val name = url.trim().substringAfterLast('/').removeSuffix(".git").ifBlank { "repositorio" }
+                    busy = true
+                    scope.launch {
+                        val err = git.clone(url, File(vm.workspace.root, name))
+                        busy = false
+                        if (err == null) {
+                            projects = vm.workspace.projects()
+                            selected = name
+                            notify("Clonado em $name")
+                        } else {
+                            notify("Erro: $err")
+                        }
+                        tick++
+                    }
+                },
+                onDismiss = { cloneDialog = false },
+            )
+        }
+
         SnackbarHost(
             hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun ChangeRow(change: GitChange) {
+    val palette = LocalThemeController.current.currentPalette()
+    val color = when (change.status) {
+        'A' -> palette.success
+        'M' -> palette.accentSecondary
+        'D' -> palette.error
+        'C' -> palette.error
+        else -> palette.textSecondary
+    }
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            change.status.toString(),
+            color = color,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp),
+                .clip(RoundedCornerShape(2.dp))
+                .background(color.copy(alpha = 0.15f))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            change.path,
+            color = palette.textPrimary,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
     }
 }
