@@ -49,10 +49,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd android
-          ls -la app/build/outputs/apk/release/ app/build/outputs/apk/debug/ 2>/dev/null
+          ls -la app/build/outputs/apk/release/
           TAG="apk-$(date +%Y%m%d-%H%M)"
           gh release create "$TAG" \
-            app/build/outputs/apk/release/*.apk app/build/outputs/apk/debug/*.apk \
+            app/build/outputs/apk/release/app-release.apk \
             --title "Phantom-Code APK $(date +%Y-%m-%d %H:%M)" \
             --notes "APK assinado com a chave VSFLima/Asgard (build manual)." \
             --draft
