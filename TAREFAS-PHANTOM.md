@@ -19,8 +19,10 @@
   - Tipografia, botões (primary roxo angular / outlined cyan), cards Deep Slate
 - [x] **T4. GitHub Actions — build APK assinado** ✅
   - Workflow `build.yml`: checkout → JDK → build Gradle → assinatura (secrets) → upload APK
-- [x] **T5. Primeiro APK instalável rodando** ✅ (aguardando primeiro build no CI)
-  - App com o tema Cyber-Phantom compilando de ponta a ponta
+- [x] **T5. Primeiro APK instalável rodando** ✅
+  - ✅ **APK assinado compilado com SUCESSO** (build `31127986197`, release `apk-20260806-2105`) — assinatura verificada: `CN=Phantom-Code, OU=Asgard, O=VSFLima, C=BR`
+  - **Build:** só no GitHub Actions (máquina local é ARM64 — aapt2 x86_64 incompatível; e o Android mata processos por RAM)
+  - **Entrega:** APK publicado como GitHub **Release** (contorna cota de artefatos do Actions)
 
 ## 🟣 FASE 1 — SHELL DA UI (navegação)
 
