@@ -26,8 +26,8 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 org-eclipse-jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
 slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
-termux-terminal-emulator = { group = "com.termux", name = "terminal-emulator", version.ref = "termux" }
-termux-terminal-view = { group = "com.termux", name = "terminal-view", version.ref = "termux" }
+termux-terminal-emulator = { group = "com.termux.termux-app", name = "terminal-emulator", version.ref = "termux" }
+termux-terminal-view = { group = "com.termux.termux-app", name = "terminal-view", version.ref = "termux" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

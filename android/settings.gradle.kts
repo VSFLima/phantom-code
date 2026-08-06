@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Termux terminal-emulator/view são publicados via JitPack (não Maven Central)
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
