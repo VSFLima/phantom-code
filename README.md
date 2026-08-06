@@ -127,21 +127,17 @@ Não há SDK Android no ambiente local (Termux/PRoot) → **todo build roda no G
 | 2. CI | Workflow `build.yml` → `./gradlew :app:assembleRelease` |
 | 3. APK | Artifact **`phantom-code-apk`** (release + debug) |
 
-### 🔑 Assinatura (release)
+### 🔑 Assinatura própria (configurada ✅)
 
-```bash
-bash scripts/generate-keystore.sh    # gera android/release.keystore + imprime base64
-```
+O app tem assinatura própria (identidade **VSFLima/Asgard**, RSA 4096, alias `phantom`) e os 4 secrets já estão no GitHub.
 
-Adicione no repositório → **Settings → Secrets and variables → Actions**:
+| Secret | Conteúdo |
+|--------|----------|
+| `PHANTOM_KEYSTORE_BASE64` | base64 do keystore |
+| `PHANTOM_STORE_PASSWORD` / `PHANTOM_KEY_PASSWORD` | senhas |
+| `PHANTOM_KEY_ALIAS` | `phantom` |
 
-| Secret | Valor |
-|--------|-------|
-| `PHANTOM_KEYSTORE_BASE64` | `base64 -w 0 release.keystore` |
-| `PHANTOM_STORE_PASSWORD` | senha do keystore |
-| `PHANTOM_KEY_ALIAS` | alias (padrão: `phantom`) |
-| `PHANTOM_KEY_PASSWORD` | senha da chave |
-
+> ⚠️ **Backup das chaves:** `/root/PHANTOM-SIGNING-BACKUP.txt` (fora do repo) — guarde em lugar seguro. Detalhes no [GIT.md](GIT.md) §5.
 > Sem os secrets o CI gera um APK release **não assinado** (ou use o debug).
 
 ---

@@ -88,20 +88,34 @@ Correto — **nunca** rode `gradlew` localmente esperando APK. O ambiente Termux
 
 ---
 
-## 5. 🔑 Secrets do repositório
+## 5. 🔑 Assinatura do app (configurada)
 
-Caminho: **Settings → Secrets and variables → Actions → New repository secret**
+O Phantom-Code tem **assinatura própria** (identidade VSFLima/Asgard). Tudo já está configurado:
 
-| Secret | Como gerar |
-|--------|-----------|
-| `PHANTOM_KEYSTORE_BASE64` | `bash scripts/generate-keystore.sh` → copiar o base64 impresso |
-| `PHANTOM_STORE_PASSWORD` | senha do keystore (a mesma digitada no script) |
-| `PHANTOM_KEY_ALIAS` | `phantom` (padrão) |
+| Item | Valor |
+|------|-------|
+| Keystore | `android/release.keystore` (RSA 4096 · validade 27 anos) |
+| Alias | `phantom` |
+| DN | `CN=Phantom-Code, OU=Asgard, O=VSFLima, C=BR` |
+| Secrets no GitHub | ✅ 4/4 configurados (`gh secret list`) |
+
+**Os 4 secrets do repo** (Settings → Secrets and variables → Actions):
+
+| Secret | Conteúdo |
+|--------|----------|
+| `PHANTOM_KEYSTORE_BASE64` | base64 do keystore |
+| `PHANTOM_STORE_PASSWORD` | senha do keystore |
+| `PHANTOM_KEY_ALIAS` | `phantom` |
 | `PHANTOM_KEY_PASSWORD` | senha da chave |
+
+**⚠️ BACKUP OBRIGATÓRIO — guarde em lugar MUITO seguro (fora do repositório):**
+`/root/PHANTOM-SIGNING-BACKUP.txt` (contém senhas + base64 completos).
+Se perder o keystore, os APKs futuros **não poderão atualizar** os antigos (identity muda).
 
 **Importante:**
 - `android/release.keystore` está no `.gitignore` — **nunca** commitá-lo
-- Se perder o keystore, o APK não pode mais ser atualizado no mesmo identity → guarde o base64 em lugar seguro
+- Para regenerar do zero (não recomendado): `bash scripts/generate-keystore.sh`
+- O CI já usa os secrets automaticamente quando `PHANTOM_SIGNING=true` (setado no workflow)
 
 ---
 
