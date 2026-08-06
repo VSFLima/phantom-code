@@ -62,8 +62,9 @@
 
 - [x] **T19. Git nativo (JGit)** ✅
   - `GitManager` (JGit 6.10): status (A/M/D/U/C), git init, clone com token, commit, push/pull, log · tela Git real com seleção de projeto + token GitHub
-- [ ] **T20. Toolbox (visual em cards)**
-  - Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema) + Integrações & API Keys (Keystore, D8)
+- [ ] **T20. Toolbox (visual em cards)** 🔶 Integrações & API Keys ✅
+  - [x] **Integrações & API Keys (D8)** — `SecretsManager` (Android Keystore + AES/GCM), cards com valor mascarado `sk-…xxxx`, copiar `$VAR`, toggle "Expor ao Linux", revogar; token do Git migrado p/ Keystore
+  - [ ] Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)
 - [ ] **T21. Backup local ZIP/7z (SAF) + restauração (D2)**
   - Workspace + metadados; merge sem apagar silenciosamente
 - [ ] **T22. Backup cloud (D8)**

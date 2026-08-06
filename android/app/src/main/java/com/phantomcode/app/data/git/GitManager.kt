@@ -1,13 +1,14 @@
 package com.phantomcode.app.data.git
 
 import android.content.Context
+import com.phantomcode.app.data.secrets.SecretCategory
+import com.phantomcode.app.data.secrets.SecretsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 data class GitChange(val path: String, val status: Char)
@@ -25,17 +26,29 @@ data class GitCommitInfo(
     val date: String,
 )
 
-/** Git nativo via JGit (T19) — status, clone, commit, push/pull e log. */
+/** Git nativo via JGit (T19) — status, clone, commit, push/pull e log.
+ *  Token (T20): armazenado criptografado no Android Keystore via SecretsManager. */
 class GitManager(context: Context) {
 
-    private val prefs = context.getSharedPreferences("phantom_git", Context.MODE_PRIVATE)
+    private val secrets = SecretsManager(context)
+    private val legacyPrefs = context.getSharedPreferences("phantom_git", Context.MODE_PRIVATE)
 
-    /** Token GitHub (PAT) — fica em SharedPreferences; exposto à Toolbox/Keystore na T20. */
+    /** Token GitHub (PAT) — criptografado no Android Keystore (D8). Migra do prefs antigo automaticamente. */
     var token: String?
-        get() = prefs.getString(KEY_TOKEN, null)
+        get() {
+            secrets.get(KEY_TOKEN)?.let { return it }
+            val legacy = legacyPrefs.getString(KEY_TOKEN, null)
+            if (!legacy.isNullOrBlank()) {
+                // Migração única: prefs → Keystore (T20)
+                secrets.save(KEY_TOKEN, legacy, SecretCategory.GIT, "GITHUB_TOKEN", exposeToLinux = false)
+                legacyPrefs.edit().remove(KEY_TOKEN).apply()
+                return legacy
+            }
+            return null
+        }
         set(value) {
-            if (value.isNullOrBlank()) prefs.edit().remove(KEY_TOKEN).apply()
-            else prefs.edit().putString(KEY_TOKEN, value.trim()).apply()
+            if (value.isNullOrBlank()) secrets.delete(KEY_TOKEN)
+            else secrets.save(KEY_TOKEN, value.trim(), SecretCategory.GIT, "GITHUB_TOKEN", exposeToLinux = false)
         }
 
     fun isRepo(dir: File): Boolean = File(dir, ".git").exists()

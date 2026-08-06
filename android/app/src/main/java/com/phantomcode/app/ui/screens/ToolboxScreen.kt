@@ -19,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
@@ -30,18 +29,28 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.secrets.SecretsManager
+import com.phantomcode.app.ui.components.AddSecretKeyDialog
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
+import com.phantomcode.app.ui.components.SecretKeyCard
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.data.vm.DistroCatalog
@@ -56,6 +65,13 @@ fun ToolboxScreen() {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val qemu = vm.qemu
+
+    // ── Secrets (D8) ──
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val secrets = remember { SecretsManager(context) }
+    var keysTick by remember { mutableIntStateOf(0) }
+    var addKeyDialog by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -122,18 +138,46 @@ fun ToolboxScreen() {
 
             Spacer(Modifier.height(20.dp))
             SectionLabel(text = "Integrações & API Keys (D8)")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Secrets criptografados no Android Keystore — nunca em texto plano. As marcadas \"Expor ao Linux\" viram variáveis de ambiente na VM.",
+                color = palette.textSecondary,
+                fontSize = 11.sp,
+            )
             Spacer(Modifier.height(8.dp))
-            PhantomCard(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Cloud, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Google Drive · OneDrive · S3", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Backup em nuvem — Fase 4 (T22)", color = palette.textSecondary, fontSize = 11.sp)
-                    }
-                    Icon(Icons.Filled.Add, contentDescription = null, tint = palette.textSecondary)
+            val keys = remember(keysTick) { secrets.list() }
+            if (keys.isEmpty()) {
+                PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                    Text("Nenhuma chave salva ainda.", color = palette.textSecondary, fontSize = 12.sp)
+                    Text("Ex.: GitHub token, OpenAI, Supabase, cloud…", color = palette.border, fontSize = 11.sp)
+                }
+            } else {
+                keys.forEach { entry ->
+                    SecretKeyCard(
+                        entry = entry,
+                        onCopy = {
+                            clipboard.setText(AnnotatedString("\$${entry.envVar}"))
+                            scope.launch { snackbar.showSnackbar("\$${entry.envVar} copiado") }
+                        },
+                        onDelete = {
+                            secrets.delete(entry.alias)
+                            keysTick++
+                            scope.launch { snackbar.showSnackbar("Chave '${entry.alias}' revogada") }
+                        },
+                        onToggleExpose = { expose ->
+                            secrets.setExposeToLinux(entry.alias, expose)
+                            keysTick++
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            PhantomPrimaryButton(
+                text = "Adicionar chave",
+                icon = Icons.Filled.Add,
+                onClick = { addKeyDialog = true },
+            )
 
             Spacer(Modifier.height(16.dp))
             SectionLabel(text = "IAs · Linguagens · Ferramentas")
@@ -144,11 +188,29 @@ fun ToolboxScreen() {
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Phantom AI Suite (D12)", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Scanner de pacotes + roteador de IAs — Fase 4 (T20)", color = palette.textSecondary, fontSize = 11.sp)
+                        Text("Scanner de pacotes + roteador de IAs — próxima etapa", color = palette.textSecondary, fontSize = 11.sp)
                     }
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+
+        if (addKeyDialog) {
+            AddSecretKeyDialog(
+                onSave = { name, value, category, envVar, expose ->
+                    secrets.save(
+                        alias = name.replace(' ', '_').lowercase(),
+                        value = value,
+                        category = category,
+                        envVar = envVar.ifBlank { name.replace(' ', '_').uppercase() },
+                        exposeToLinux = expose,
+                    )
+                    addKeyDialog = false
+                    keysTick++
+                    scope.launch { snackbar.showSnackbar("Chave salva com segurança") }
+                },
+                onDismiss = { addKeyDialog = false },
+            )
         }
 
         SnackbarHost(
