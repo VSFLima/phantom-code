@@ -19,22 +19,34 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.Manifest
+import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.QemuPresets
 import com.phantomcode.app.ui.components.PhantomCard
@@ -215,6 +227,51 @@ fun SettingsScreen() {
                 "Distros (Phantom Base oficial): Toolbox → baixar/trocar",
                 color = palette.textSecondary,
                 fontSize = 11.sp,
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ── Armazenamento (pasta pública do app) ────────────────
+        val storageContext = LocalContext.current
+        var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(storageContext)) }
+        val storageSettingsLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { storageGranted = StorageHelper.hasStorageAccess(storageContext) }
+        val storagePermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { granted -> storageGranted = granted || StorageHelper.hasStorageAccess(storageContext) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Storage, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            SectionLabel(text = "Armazenamento")
+        }
+        Spacer(Modifier.height(8.dp))
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsRow(
+                label = "Pasta do app",
+                value = if (storageGranted) "/${StorageHelper.APP_DIR_NAME}/workspace" else "Interno (privado)",
+            )
+            SettingsRow(
+                label = "Acesso",
+                value = if (storageGranted) "Concedido" else "Não concedido",
+                onClick = {
+                    if (!storageGranted) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            storageSettingsLauncher.launch(Intent(StorageHelper.permissionIntent(storageContext)))
+                        } else {
+                            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        }
+                    }
+                },
+            )
+        }
+        if (!storageGranted) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Toque em \"Acesso\" para liberar a pasta ${StorageHelper.APP_DIR_NAME} no armazenamento interno.",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
             )
         }
 

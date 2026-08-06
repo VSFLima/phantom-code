@@ -12,12 +12,54 @@ data class FileEntry(
 )
 
 /**
- * Gerencia a pasta de projetos do app: `filesDir/workspace` (D3 — workspace
- * independente da distro). Mesma pasta que o guest Linux verá via virtio-9p (Fase 3).
+ * Gerencia a pasta de projetos do app: pasta pública `/storage/emulated/0/Phantom-Code/workspace`
+ * quando há permissão de armazenamento, senão `filesDir/Phantom-Code/workspace` (privado, fallback).
+ * D3 — workspace independente da distro; mesma pasta que o guest Linux verá via virtio-9p (Fase 3).
  */
 class WorkspaceManager(context: Context) {
 
-    val root: File = File(context.filesDir, "workspace").apply { mkdirs() }
+    private val appContext = context.applicationContext
+    private var lastRoot: File? = null
+
+    /** Raiz resolvida dinamicamente: reavalia quando a permissão muda (fix permissões). */
+    val root: File
+        get() {
+            val current = StorageHelper.workspaceRoot(appContext)
+            if (lastRoot == null || lastRoot != current) {
+                lastRoot = current
+                migrateLegacyWorkspace(current)
+            }
+            return current
+        }
+
+    /** Migração: workspace antigo (filesDir/workspace) e troca de raiz p/ a atual. */
+    private fun migrateLegacyWorkspace(newRoot: File) {
+        runCatching {
+            val legacy = File(appContext.filesDir, "workspace")
+            if (legacy.isDirectory && legacy != newRoot) {
+                legacy.listFiles()?.forEach { child ->
+                    val dest = File(newRoot, child.name)
+                    if (!dest.exists()) child.renameTo(dest)
+                }
+            }
+            // Também migra da pasta privada Phantom-Code p/ a pública (quando a permissão é concedida)
+            val private = File(appContext.filesDir, StorageHelper.APP_DIR_NAME)
+            if (private.isDirectory && private != newRoot) {
+                private.listFiles()?.forEach { child ->
+                    val dest = File(newRoot, child.name)
+                    if (!dest.exists()) child.renameTo(dest)
+                }
+            }
+        }
+    }
+
+    /** Caminho legível da pasta raiz (para exibir na UI). */
+    val displayPath: String
+        get() = if (StorageHelper.hasStorageAccess(appContext)) {
+            root.absolutePath
+        } else {
+            "Interno (sem permissão de armazenamento)"
+        }
 
     /** Resolve um caminho relativo, bloqueando saída do workspace (path traversal). */
     fun resolve(relPath: String): File {

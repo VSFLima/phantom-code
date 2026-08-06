@@ -1,6 +1,6 @@
 # Arquitetura — Fase 4 (Git + Toolbox + Backup)
 
-> Status: T19 ✅ (Git JGit) · T20 🔶 (API Keys ✅ · scanner pendente) · T21–T22 pendentes
+> Status: T19 ✅ (Git JGit) · T20 🔶 (API Keys ✅ · scanner pendente) · T21 ✅ (Backup local) · T22 pendente
 
 ## T19 — Git nativo (JGit)
 
@@ -31,8 +31,23 @@
 - "Expor ao Linux" = toggle por chave; na Fase 3 a VM recebe via env vars
 - Keystore: IV + ciphertext em Base64 NO_WRAP; GCM tag 128 bits
 
-## Próximos (T21–T22)
+## T21 — Backup local + fix de permissões (D2) ✅
 
-- **T21** — Backup local: ZIP do workspace (`java.util.zip`) + SAF (`ACTION_CREATE_DOCUMENT`) + restauração com merge
+| Arquivo | Papel |
+|---------|-------|
+| `data/backup/BackupManager.kt` | Workspace → ZIP (`java.util.zip`) via SAF (`ACTION_CREATE_DOCUMENT`) com manifest JSON; restauração (`ACTION_OPEN_DOCUMENT`) com merge que nunca apaga; entradas inválidas (path traversal) puladas |
+| `data/StorageHelper.kt` | Permissões: `MANAGE_EXTERNAL_STORAGE` (API 30+) / `WRITE_EXTERNAL_STORAGE` (<30); pasta pública `/storage/emulated/0/Phantom-Code/` + fallback `filesDir/Phantom-Code`; intents de permissão |
+| `data/WorkspaceManager.kt` | Raiz **dinâmica** (reavalia ao conceder permissão) + migração automática do workspace antigo |
+| `HomeScreen.kt` / `SettingsScreen.kt` | Card de permissão (Home) + seção Armazenamento (Settings) |
+| `AndroidManifest.xml` | `READ/WRITE_EXTERNAL_STORAGE` + `MANAGE_EXTERNAL_STORAGE` + `requestLegacyExternalStorage` |
+
+**Decisões (D2):**
+- Pasta pública com o nome do app: `/storage/emulated/0/Phantom-Code/workspace`
+- Sem permissão → fallback privado (`filesDir/Phantom-Code/workspace`) — o app nunca quebra
+- Migração automática: projetos do `filesDir/workspace` antigo movidos para a nova raiz ao abrir
+- Restauração = merge (sobrescreve/recria) — **nunca apaga silenciosamente**
+
+## Próximos (T22)
+
 - **T22** — Backup cloud: Drive/OneDrive/S3 (maior esforço — pode ficar por último)
 - **T20 restante** — Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)

@@ -1,6 +1,9 @@
 package com.phantomcode.app.ui.screens
 
+import android.Manifest
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -19,12 +22,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -77,6 +81,15 @@ fun HomeScreen(
     val lastOpen = remember(tick) { session.lastOpenPath }
     var newProjectDialog by remember { mutableStateOf(false) }
 
+    // ── Permissão de armazenamento (pasta pública Phantom-Code) ──
+    var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }
+    val storageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> storageGranted = granted || StorageHelper.hasStorageAccess(context); tick++ }
+    val storageSettingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { storageGranted = StorageHelper.hasStorageAccess(context); tick++ }
+
     fun notify(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -115,6 +128,54 @@ fun HomeScreen(
             Text("IDE · TERMINAL LINUX · GIT · IA", fontSize = 11.sp, color = palette.textSecondary, letterSpacing = 2.sp)
             Spacer(Modifier.height(14.dp))
             QemuStatusPill(running = LocalVm.current.qemu.running)
+            Spacer(Modifier.height(14.dp))
+
+            // Aviso/estado de armazenamento (pasta pública do app)
+            PhantomCard(
+                modifier = Modifier.fillMaxWidth(),
+                glow = !storageGranted,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Storage,
+                        contentDescription = null,
+                        tint = if (storageGranted) palette.success else palette.accentBright,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            if (storageGranted) "Armazenamento liberado" else "Permitir acesso à pasta",
+                            color = palette.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            if (storageGranted) {
+                                workspace.displayPath
+                            } else {
+                                "O app usará a pasta ${StorageHelper.APP_DIR_NAME} no armazenamento interno."
+                            },
+                            color = palette.textSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 2,
+                        )
+                    }
+                    if (!storageGranted) {
+                        PhantomPrimaryButton(
+                            text = "Permitir",
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    storageSettingsLauncher.launch(StorageHelper.permissionIntent(context))
+                                } else {
+                                    storageLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(22.dp))
 
             // Continuar sessão (D18)

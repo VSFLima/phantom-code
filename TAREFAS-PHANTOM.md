@@ -67,8 +67,9 @@
 - [ ] **T20. Toolbox (visual em cards)** 🔶 Integrações & API Keys ✅
   - [x] **Integrações & API Keys (D8)** — `SecretsManager` (Android Keystore + AES/GCM), cards com valor mascarado `sk-…xxxx`, copiar `$VAR`, toggle "Expor ao Linux", revogar; token do Git migrado p/ Keystore
   - [ ] Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)
-- [ ] **T21. Backup local ZIP/7z (SAF) + restauração (D2)**
-  - Workspace + metadados; merge sem apagar silenciosamente
+- [x] **T21. Backup local ZIP (SAF) + restauração (D2)** ✅
+  - `BackupManager`: workspace → ZIP (`java.util.zip`) via SAF com manifest JSON; restauração com **merge que nunca apaga silenciosamente** (entradas inválidas puladas)
+  - **Fix permissões**: manifest com `READ/WRITE_EXTERNAL_STORAGE` (≤10) + `MANAGE_EXTERNAL_STORAGE` (11+); `StorageHelper` com pasta pública **`/storage/emulated/0/Phantom-Code/`** + fallback privado; pedido de permissão na Home e Settings; migração automática dos projetos antigos
 - [ ] **T22. Backup cloud (D8)**
   - Drive · OneDrive · Dropbox · S3 · WebDAV (OAuth/keys no Keystore)
 
@@ -94,7 +95,7 @@
 | Cores | `#000000` bg · `#121212` surface · `#9F4DFF` accent · `#00FFFF` secondary · `#00FF9F` success |
 | Navegação | Bottom Nav 5 itens fixa + Activity Bar fina — nunca criar 6º item (D14) |
 | Ambiente Linux | QEMU headless TCG (oficial) · proot = fallback (D5) |
-| Workspace | Independente da rootfs (D3) · montado via virtio-9p |
+| Workspace | Independente da rootfs (D3) · montado via virtio-9p · pasta pública `/storage/emulated/0/Phantom-Code/workspace` (com permissão) |
 | App ID | `com.phantomcode.app` (provisório — confirmar) |
 | Repo GitHub | `VSFLima/phantom-code` (provisório — confirmar) |
 | Build | GitHub Actions (sem SDK Android local) |

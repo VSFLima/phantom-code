@@ -1,5 +1,7 @@
 package com.phantomcode.app.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.secrets.SecretsManager
 import com.phantomcode.app.ui.components.AddSecretKeyDialog
 import com.phantomcode.app.ui.components.PhantomCard
@@ -56,7 +60,9 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.DistroInfo
 import com.phantomcode.app.data.vm.LocalVm
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ToolboxScreen() {
@@ -72,6 +78,36 @@ fun ToolboxScreen() {
     val secrets = remember { SecretsManager(context) }
     var keysTick by remember { mutableIntStateOf(0) }
     var addKeyDialog by remember { mutableStateOf(false) }
+
+    // ── Backup (T21 · D2) ──
+    val backup = remember { BackupManager(context) }
+    var backupBusy by remember { mutableStateOf(false) }
+    val backupCreateLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            backupBusy = true
+            scope.launch {
+                val result = backup.createBackup(uri)
+                backupBusy = false
+                snackbar.showSnackbar("${result.message}${if (result.ok) " · ${result.fileCount} arquivos" else ""}")
+            }
+        }
+    }
+    val backupRestoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            backupBusy = true
+            scope.launch {
+                val result = backup.restore(uri)
+                withContext(Dispatchers.Main) {
+                    backupBusy = false
+                    snackbar.showSnackbar("${result.message}${if (result.ok) " · ${result.fileCount} arquivos" else ""}")
+                }
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -178,6 +214,43 @@ fun ToolboxScreen() {
                 icon = Icons.Filled.Add,
                 onClick = { addKeyDialog = true },
             )
+
+            Spacer(Modifier.height(16.dp))
+            SectionLabel(text = "Backup (D2)")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Salve o workspace em um ZIP. A restauração faz merge — nunca apaga o que já existe.",
+                color = palette.textSecondary,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                Row {
+                    PhantomPrimaryButton(
+                        text = "Criar backup",
+                        icon = Icons.Filled.Download,
+                        enabled = !backupBusy,
+                        onClick = { backupCreateLauncher.launch(backup.suggestedFileName()) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    PhantomOutlinedButton(
+                        text = "Restaurar",
+                        icon = Icons.Filled.Restore,
+                        enabled = !backupBusy,
+                        onClick = { backupRestoreLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (backupBusy) {
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.accentPrimary,
+                        trackColor = palette.surfaceAlt,
+                    )
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
             SectionLabel(text = "IAs · Linguagens · Ferramentas")
