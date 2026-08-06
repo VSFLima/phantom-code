@@ -56,7 +56,7 @@
   - `DistroManager`: catálogo (Phantom Base oficial + Ubuntu/Debian/Alpine), download com progresso, checksum, extração tar.gz / imagem .img · UI no Toolbox
 - [x] **T16. virtio-9p + virtio-serial** 🔶 (comando pronto)
   - `-virtfs` do workspace montado no guest · console stdio → terminal · validação real depende dos artefatos
-- [x] **T17. Widget de terminal VT100 + abas múltiplas (D11)** ✅ emulador real Termux `terminal-view`/`terminal-emulator` 0.118.0 (embutido no APK, sem depender do app Termux): aba `Linux (QEMU)` = console do guest + abas `Shell N` (mksh local com TERM/PATH) + barra de abas com fechar/nova aba
+- [x] **T17. Widget de terminal VT100 + abas múltiplas (D11)** ✅ emulador real **jackpal `emulatorview` v1.0.70** (JitPack, API clássica `TermSession`/`EmulatorView`, embutido no APK): aba `Linux (QEMU)` = console do guest + abas `Shell N` (mksh local com TERM/PATH) + barra de abas com fechar/nova aba
 - [x] **T18. `dark-code-init.sh`** ✅
   - `assets/linux/dark-code-init.sh` (rede SLIRP, user, mount 9p, prompt) · copiado na instalação da distro
 
@@ -102,5 +102,5 @@
 | App ID | `com.phantomcode.app` (provisório — confirmar) |
 | Repo GitHub | `VSFLima/phantom-code` (provisório — confirmar) |
 | Build | GitHub Actions (sem SDK Android local) |
-| Terminal | Termux `terminal-emulator` + `terminal-view` 0.118.0 (VT100 real, abas) |
+| Terminal | jackpal `emulatorview` v1.0.70 (VT100 real, abas) via JitPack |
 | Editor | CodeMirror 6 (WebView) |

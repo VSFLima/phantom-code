@@ -83,7 +83,7 @@ dependencies {
     implementation(libs.androidx.documentfile)
     implementation(libs.org.eclipse.jgit)
     implementation(libs.slf4j.nop)
-    implementation(libs.termux.terminal.emulator)
-    implementation(libs.termux.terminal.view)
+    // T17: emulador VT100 (jackpal emulatorview via JitPack — API clássica TermSession)
+    implementation(libs.jackpal.emulatorview)
     debugImplementation(libs.androidx.ui.tooling)
 }

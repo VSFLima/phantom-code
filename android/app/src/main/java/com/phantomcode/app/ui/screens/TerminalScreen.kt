@@ -44,12 +44,12 @@ import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.theme.LocalThemeController
-import com.termux.terminal.TermSession
-import com.termux.view.TerminalView
+import jackpal.androidterm.emulatorview.EmulatorView
+import jackpal.androidterm.emulatorview.TermSession
 import kotlinx.coroutines.launch
 
 /**
- * Terminal (T17): emulador VT100 real (Termux terminal-view) com abas.
+ * Terminal (T17): emulador VT100 real (jackpal emulatorview) com abas.
  *
  * - Aba "Linux (QEMU)": console do Linux da VM (anexada ao subir a VM);
  * - Abas "Shell N": shells locais do Android para comandos rápidos;
@@ -63,10 +63,10 @@ fun TerminalScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val tabScroll = rememberScrollState()
 
-    var termView by remember { mutableStateOf<TerminalView?>(null) }
+    var termView by remember { mutableStateOf<EmulatorView?>(null) }
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
 
-    // Ciclo de vida da TerminalView (IME + blink + redesenho)
+    // Ciclo de vida da EmulatorView (IME + blink + redesenho)
     LaunchedEffect(termView) {
         termView?.let {
             it.onResume()
@@ -164,10 +164,10 @@ fun TerminalScreen(onBack: () -> Unit) {
             }
         }
 
-        // ── Terminal VT100 real (Termux terminal-view) ──
+        // ── Terminal VT100 real (jackpal emulatorview) ──
         AndroidView(
             factory = { ctx ->
-                TerminalView(ctx, null).also { termView = it }
+                EmulatorView(ctx, null, ctx.resources.displayMetrics).also { termView = it }
             },
             update = { view ->
                 val tab = terminal.activeTab

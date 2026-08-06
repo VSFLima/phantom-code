@@ -51,15 +51,16 @@
 
 | Arquivo | Papel |
 |---------|-------|
-| `data/vm/ProcessTermSession.kt` | Ponte `TermSession` ↔ `Process` (QEMU ou shell local): `setTermIn` (stdout do processo → tela), `setTermOut` (teclado → stdin), `initializeEmulator` |
+| `data/vm/ProcessTermSession.kt` | Ponte `TermSession` ↔ `Process` (QEMU ou shell local): `setTermIn` (stdout do processo → tela), `setTermOut` (teclado → stdin), `initializeEmulator`, `finish()` |
 | `data/vm/TerminalManager.kt` | Abas múltiplas (`tabs` + `activeIndex`): `attach()` console QEMU, `addShellTab()` shell local (mksh com TERM/PATH), `selectTab/closeTab/stop` |
-| `ui/screens/TerminalScreen.kt` | Barra de abas (scroll horizontal) + `AndroidView(TerminalView)` com `attachSession` ao trocar de aba; lifecycle `onResume/onPause` |
+| `ui/screens/TerminalScreen.kt` | Barra de abas (scroll horizontal) + `AndroidView(EmulatorView)` com `attachSession` ao trocar de aba; lifecycle `onResume/onPause` |
 
 **Decisões (D11):**
-- Motor VT100: **Termux `terminal-emulator` + `terminal-view` 0.118.0** (Maven Central) — bibliotecas **embutidas no APK**; não depende do app Termux
+- Motor VT100: **jackpal `emulatorview` v1.0.70** via **JitPack** (`com.github.jackpal.Android-Terminal-Emulator:emulatorview:v1.0.70`) — AAR **embutido no APK**, API clássica `TermSession`/`EmulatorView`
+  - *Nota:* as libs Termux (`com.termux.termux-app:terminal-*`) foram testadas, mas a 0.118.0 trocou a API para `TerminalSession` (final, spawn via JNI/PTY) — incompatível com a ponte de `Process`; jackpal mantém a API `setTermIn/setTermOut`
 - Aba `Linux (QEMU)` = console do guest (aba principal); abas `Shell N` = shell do Android (mksh) para comandos rápidos
 - Fechar a aba QEMU **para a VM** (sem leitor no stdout o pipe enche e o processo trava)
-- Dependências no version catalog (`libs.termux.*`)
+- Dependência no version catalog (`libs.jackpal.emulatorview`) + repositório `https://jitpack.io` no settings.gradle.kts
 
 ## Próximos (T22)
 

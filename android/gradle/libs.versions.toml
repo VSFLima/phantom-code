@@ -9,7 +9,7 @@ navigationCompose = "2.8.5"
 documentfile = "1.0.1"
 jgit = "6.10.0.202406032230-r"
 slf4j = "1.7.36"
-termux = "0.118.0"
+jackpal = "v1.0.70"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -26,8 +26,7 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 org-eclipse-jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
 slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
-termux-terminal-emulator = { group = "com.termux.termux-app", name = "terminal-emulator", version.ref = "termux" }
-termux-terminal-view = { group = "com.termux.termux-app", name = "terminal-view", version.ref = "termux" }
+jackpal-emulatorview = { group = "com.github.jackpal.Android-Terminal-Emulator", name = "emulatorview", version.ref = "jackpal" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
