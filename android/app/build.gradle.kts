@@ -83,5 +83,7 @@ dependencies {
     implementation(libs.androidx.documentfile)
     implementation(libs.org.eclipse.jgit)
     implementation(libs.slf4j.nop)
+    implementation(libs.termux.terminal.emulator)
+    implementation(libs.termux.terminal.view)
     debugImplementation(libs.androidx.ui.tooling)
 }

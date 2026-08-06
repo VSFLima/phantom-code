@@ -47,6 +47,20 @@
 - Migração automática: projetos do `filesDir/workspace` antigo movidos para a nova raiz ao abrir
 - Restauração = merge (sobrescreve/recria) — **nunca apaga silenciosamente**
 
+## T17 — Terminal VT100 real com abas (D11) ✅
+
+| Arquivo | Papel |
+|---------|-------|
+| `data/vm/ProcessTermSession.kt` | Ponte `TermSession` ↔ `Process` (QEMU ou shell local): `setTermIn` (stdout do processo → tela), `setTermOut` (teclado → stdin), `initializeEmulator` |
+| `data/vm/TerminalManager.kt` | Abas múltiplas (`tabs` + `activeIndex`): `attach()` console QEMU, `addShellTab()` shell local (mksh com TERM/PATH), `selectTab/closeTab/stop` |
+| `ui/screens/TerminalScreen.kt` | Barra de abas (scroll horizontal) + `AndroidView(TerminalView)` com `attachSession` ao trocar de aba; lifecycle `onResume/onPause` |
+
+**Decisões (D11):**
+- Motor VT100: **Termux `terminal-emulator` + `terminal-view` 0.118.0** (Maven Central) — bibliotecas **embutidas no APK**; não depende do app Termux
+- Aba `Linux (QEMU)` = console do guest (aba principal); abas `Shell N` = shell do Android (mksh) para comandos rápidos
+- Fechar a aba QEMU **para a VM** (sem leitor no stdout o pipe enche e o processo trava)
+- Dependências no version catalog (`libs.termux.*`)
+
 ## Próximos (T22)
 
 - **T22** — Backup cloud: Drive/OneDrive/S3 (maior esforço — pode ficar por último)

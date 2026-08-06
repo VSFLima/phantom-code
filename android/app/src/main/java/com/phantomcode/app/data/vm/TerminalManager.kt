@@ -4,64 +4,91 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import com.termux.terminal.TermSession
 
-private val ANSI_PATTERN = Regex("\\u001B\\[[0-9;?]*[a-zA-Z]")
-private val CONTROL_PATTERN = Regex("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]")
+/** Tipo de aba do terminal: console da VM ou shell local do Android. */
+enum class TerminalTabKind { QEMU, SHELL }
 
-/** Remove códigos ANSI/controle para exibição segura no console. */
-fun stripAnsi(s: String): String = ANSI_PATTERN.replace(CONTROL_PATTERN.replace(s, ""), "")
+/** Uma aba do terminal: título + sessão VT100 real ligada a um processo. */
+class TerminalTab(
+    val kind: TerminalTabKind,
+    var title: String,
+    val session: TermSession,
+)
 
 /**
- * Console do terminal: conecta as streams do processo QEMU à UI.
- * (v1 — console de linhas; upgrade para VT100/jackpal em T17 final.)
+ * Gerenciador de terminais VT100 reais (T17 — D11).
+ *
+ * Múltiplas abas sobre o emulador Termux (terminal-view):
+ * - aba 0: console do QEMU (anexada quando a VM sobe);
+ * - abas extras: shells locais (`/system/bin/sh`) para comandos rápidos
+ *   sem ocupar o console da VM.
+ *
+ * Compat com o v1: [attach] + [stop] + [active] mantidos para o QemuManager.
  */
 class TerminalManager {
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    val tabs = mutableStateListOf<TerminalTab>()
+    var activeIndex by mutableStateOf(-1)
+        private set
 
-    val lines = mutableStateListOf<String>()
+    /** Compat v1: true quando há ao menos uma aba viva. */
     var active by mutableStateOf(false)
         private set
 
-    private var writer: java.io.OutputStream? = null
-    private var readerJob: Job? = null
+    val activeTab: TerminalTab?
+        get() = tabs.getOrNull(activeIndex)
 
+    /** Anexa o console do processo QEMU (substitui abas antigas). */
     fun attach(process: Process) {
         stop()
-        writer = process.outputStream
+        val tab = TerminalTab(TerminalTabKind.QEMU, "Linux (QEMU)", ProcessTermSession(process))
+        tabs += tab
+        activeIndex = tabs.lastIndex
         active = true
-        readerJob = scope.launch {
-            process.inputStream.bufferedReader().forEachLine { raw ->
-                lines += stripAnsi(raw)
-                while (lines.size > MAX_LINES) lines.removeAt(0)
-            }
-            active = false
-        }
     }
 
-    /** Envia uma linha de comando para o console do guest. */
-    fun send(text: String) {
-        if (!active) return
-        runCatching {
-            writer?.write((text + "\n").toByteArray(Charsets.UTF_8))
-            writer?.flush()
-        }
+    /** Nova aba com shell local do Android (mksh) com ambiente mínimo (TERM/PATH). */
+    fun addShellTab() {
+        val pb = ProcessBuilder("/system/bin/sh").redirectErrorStream(true)
+        pb.environment().putAll(
+            mapOf(
+                "TERM" to "xterm-256color",
+                "PATH" to "/sbin:/system/bin:/vendor/bin:/product/bin",
+                "HOME" to "/data/data/com.phantomcode.app/files",
+                "LANG" to "C.UTF-8",
+            )
+        )
+        val p = runCatching { pb.start() }.getOrNull() ?: return
+        shellCount++
+        val tab = TerminalTab(TerminalTabKind.SHELL, "Shell $shellCount", ProcessTermSession(p))
+        tabs += tab
+        activeIndex = tabs.lastIndex
+        active = true
     }
 
+    /** Troca para a aba [index] (mantém as demais vivas). */
+    fun selectTab(index: Int) {
+        if (index in tabs.indices) activeIndex = index
+    }
+
+    /** Fecha a aba [index]: encerra a sessão e o processo do shell local. */
+    fun closeTab(index: Int) {
+        val tab = tabs.getOrNull(index) ?: return
+        tabs.removeAt(index)
+        runCatching { tab.session.finish() }
+        if (activeIndex >= tabs.size) activeIndex = tabs.size - 1
+        if (tabs.isEmpty()) activeIndex = -1
+        active = tabs.isNotEmpty()
+    }
+
+    /** Encerra todas as abas (chamado quando a VM para). */
     fun stop() {
-        readerJob?.cancel()
-        readerJob = null
-        writer = null
+        tabs.toList().forEach { runCatching { it.session.finish() } }
+        tabs.clear()
+        activeIndex = -1
         active = false
     }
 
-    fun clear() = lines.clear()
-
-    companion object {
-        private const val MAX_LINES = 2000
-    }
+    private var shellCount = 0
 }
