@@ -82,5 +82,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.documentfile)
     implementation(libs.org.eclipse.jgit)
+    implementation(libs.slf4j.nop)
     debugImplementation(libs.androidx.ui.tooling)
 }
