@@ -28,7 +28,7 @@ class SessionManager(context: Context) {
 
     fun addRecent(project: String) {
         val recents = recentProjects().toMutableSet().apply { add(project) }
-        prefs.edit().putStringSet(KEY_RECENTS, recents.takeLast(MAX_RECENTS).toSet()).apply()
+        prefs.edit().putStringSet(KEY_RECENTS, recents.toList().takeLast(MAX_RECENTS).toSet()).apply()
     }
 
     companion object {

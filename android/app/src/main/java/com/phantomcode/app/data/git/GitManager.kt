@@ -6,6 +6,7 @@ import com.phantomcode.app.data.secrets.SecretsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.transport.RemoteRefUpdate
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -114,7 +115,11 @@ class GitManager(context: Context) {
             Git.open(dir).use { git ->
                 val results = git.push().setCredentialsProvider(credentials()).call()
                 results.joinToString("; ") { r ->
-                    if (r.isSuccessfulRemoteUpdate) "push ok" else r.messages.trim().ifBlank { "falha no push" }
+                    val ok = r.remoteUpdates.all { u ->
+                        u.status == RemoteRefUpdate.Status.OK ||
+                            u.status == RemoteRefUpdate.Status.UP_TO_DATE
+                    }
+                    if (ok) "push ok" else r.messages.trim().ifBlank { "falha no push" }
                 }
             }
         }.getOrElse { it.message }
