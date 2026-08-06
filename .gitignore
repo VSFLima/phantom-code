@@ -1,0 +1,27 @@
+# ── Android / Gradle ─────────────────────────────
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ── Pastas de runtime (não versionar) ────────────
+/linux/*
+!/linux/.gitkeep
+/workspace/*
+!/workspace/.gitkeep
+/config/*
+!/config/.gitkeep
+/backups/*
+!/backups/.gitkeep
+
+# ── Sistema ──────────────────────────────────────
+.DS_Store
+*.log
