@@ -34,8 +34,8 @@ object DistroCatalog {
             badge = "Oficial · Recomendada",
             url = PhantomMirror.PHANTOM_BASE_URL,
             sha256 = PhantomMirror.PHANTOM_BASE_SHA256,
-            sizeMb = 60,
-            packageManager = "apk",
+            sizeMb = 500,
+            packageManager = "apt",
         ),
         DistroInfo(
             id = "ubuntu",
