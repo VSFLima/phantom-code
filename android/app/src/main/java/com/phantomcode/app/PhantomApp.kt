@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -128,7 +129,7 @@ fun PhantomApp() {
         PaletteCommand("Início", Icons.Filled.Home, "home inicio", { navController.navigateToTab(Routes.HOME) }),
         PaletteCommand("Explorer", Icons.Filled.FolderOpen, "explorer arquivos projetos", { navController.navigateToTab(Routes.EXPLORER) }),
         PaletteCommand("Terminal Linux", Icons.Filled.Terminal, "terminal linux vm qemu", { navController.navigate(Routes.TERMINAL) }),
-        PaletteCommand("Navegador", Icons.Filled.Public, "navegador browser web internet", { navController.navigate(Routes.BROWSER) }),
+        PaletteCommand("Navegador", Icons.Filled.Web, "navegador browser web internet", { navController.navigate(Routes.BROWSER) }),
         PaletteCommand("Iniciar Linux", Icons.Filled.PlayArrow, "iniciar vm qemu start", { scope.launch { vm.qemu.start() } }),
         PaletteCommand("Parar Linux", Icons.Filled.PlayArrow, "parar vm qemu stop", { vm.qemu.stop() }),
         PaletteCommand("Git", Icons.Filled.AccountTree, "git commit push clone", { navController.navigateToTab(Routes.GIT) }),

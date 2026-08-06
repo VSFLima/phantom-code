@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalUiStyleController
 import com.phantomcode.app.ui.theme.PhantomButtonStyle
+import com.phantomcode.app.ui.theme.fontFamily
 import com.phantomcode.app.ui.theme.shape
 
 /** Logo: escudo com gradiente roxo→cyan + raio (marca Cyber-Phantom). */

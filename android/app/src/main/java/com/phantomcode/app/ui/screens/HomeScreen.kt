@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -188,7 +188,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Filled.Public,
+                        Icons.Filled.Web,
                         contentDescription = null,
                         tint = palette.accentPrimary,
                         modifier = Modifier.size(18.dp),

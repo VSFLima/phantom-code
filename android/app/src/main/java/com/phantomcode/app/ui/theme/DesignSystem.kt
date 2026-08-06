@@ -81,13 +81,13 @@ class UiStyleController(context: Context) {
     }
 
     private fun load(): UiStylePrefs {
-        fun <T : Enum<T>> enumOf(values: Array<T>, id: String?, fallback: T): T =
-            values.firstOrNull { it.id == id } ?: fallback
+        fun <T> pick(values: Array<T>, id: String?, idOf: (T) -> String, fallback: T): T =
+            values.firstOrNull { idOf(it) == id } ?: fallback
         return UiStylePrefs(
-            buttonStyle = enumOf(PhantomButtonStyle.values(), prefs.getString(KEY_BUTTON, null), PhantomButtonStyle.NEON),
-            cornerStyle = enumOf(PhantomCornerStyle.values(), prefs.getString(KEY_CORNER, null), PhantomCornerStyle.ANGULAR),
-            borderStyle = enumOf(PhantomBorderStyle.values(), prefs.getString(KEY_BORDER, null), PhantomBorderStyle.HAIRLINE),
-            fontStyle = enumOf(PhantomFontStyle.values(), prefs.getString(KEY_FONT, null), PhantomFontStyle.HACKER),
+            buttonStyle = pick(PhantomButtonStyle.values(), prefs.getString(KEY_BUTTON, null), { it.id }, PhantomButtonStyle.NEON),
+            cornerStyle = pick(PhantomCornerStyle.values(), prefs.getString(KEY_CORNER, null), { it.id }, PhantomCornerStyle.ANGULAR),
+            borderStyle = pick(PhantomBorderStyle.values(), prefs.getString(KEY_BORDER, null), { it.id }, PhantomBorderStyle.HAIRLINE),
+            fontStyle = pick(PhantomFontStyle.values(), prefs.getString(KEY_FONT, null), { it.id }, PhantomFontStyle.HACKER),
         )
     }
 
