@@ -2,8 +2,8 @@ package com.phantomcode.app.ui.navigation
 
 import android.net.Uri
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.GitHub
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -34,7 +34,7 @@ data class NavItem(
 val BottomNavItems = listOf(
     NavItem(Routes.EXPLORER, "Explorer", Icons.Filled.Folder),
     NavItem(Routes.SEARCH, "Search", Icons.Filled.Search),
-    NavItem(Routes.GIT, "Git", Icons.Filled.GitHub),
+    NavItem(Routes.GIT, "Git", Icons.Filled.AccountTree),
     NavItem(Routes.TOOLBOX, "Toolbox", Icons.Filled.Memory),
     NavItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )

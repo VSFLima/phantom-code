@@ -131,13 +131,14 @@ class DistroManager(context: Context) {
             val result = runCatching { downloadAndInstall(info) }
             val err = result.exceptionOrNull()
             withContext(Dispatchers.Main) {
+                val current = installStates[info.id] ?: DistroInstallState()
                 if (err != null) {
-                    installStates[info.id] = installStates[info.id]?.copy(
+                    installStates[info.id] = current.copy(
                         downloading = false,
                         error = err.message ?: "Falha no download",
                     )
                 } else {
-                    installStates[info.id] = installStates[info.id]?.copy(
+                    installStates[info.id] = current.copy(
                         downloading = false,
                         progress = 1f,
                         installed = true,
@@ -181,7 +182,7 @@ class DistroManager(context: Context) {
                     digest?.update(buf, 0, read)
                     if (total > 0) {
                         val p = done.toFloat() / total.toFloat()
-                        installStates[info.id] = installStates[info.id]?.copy(progress = p)
+                        installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
                     }
                 }
             }
@@ -246,7 +247,7 @@ object TarExtractor {
                 .trimEnd('\u0000', ' ')
                 .toLongOrNull() ?: 0L
             val type = header[156].toInt().toChar()
-            val target = File(dest, name.trimStart('./'))
+            val target = File(dest, name.trimStart('.', '/'))
             when {
                 type == '5' || name.endsWith("/") -> target.mkdirs()
                 else -> {

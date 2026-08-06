@@ -21,7 +21,7 @@ android {
     signingConfigs {
         if (useReleaseSigning) {
             create("release") {
-                storeFile = file("release.keystore")
+                storeFile = file("../release.keystore")
                 storePassword = System.getenv("PHANTOM_STORE_PASSWORD")
                 keyAlias = System.getenv("PHANTOM_KEY_ALIAS")
                 keyPassword = System.getenv("PHANTOM_KEY_PASSWORD")

@@ -108,8 +108,9 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
 
     BackHandler(onBack = { currentTextAndClose() })
 
-    Column(modifier = Modifier.fillMaxSize().background(palette.background)) {
-        // Barra do editor: voltar · nome · indicador de salvo · salvar
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().background(palette.background)) {
+            // Barra do editor: voltar · nome · indicador de salvo · salvar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,14 +198,15 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth().weight(1f),
             update = { webView = it },
         )
-    }
+        }
 
-    SnackbarHost(
-        hostState = snackbar,
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(16.dp),
-    )
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
+    }
 }
 
 /** Converte o retorno de evaluateJavascript (string JSON) para texto puro. */

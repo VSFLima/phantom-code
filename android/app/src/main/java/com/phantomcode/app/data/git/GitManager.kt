@@ -141,7 +141,7 @@ class GitManager(context: Context) {
                         shortId = c.id.abbreviate(7).name(),
                         message = c.fullMessage.trim().lines().firstOrNull() ?: "",
                         author = c.authorIdent?.name ?: "?",
-                        date = c.authorIdent?.when?.let { fmt.format(it) } ?: "",
+                        date = c.authorIdent?.let { fmt.format(it.`when`) } ?: "",
                     )
                 }
             }

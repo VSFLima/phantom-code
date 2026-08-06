@@ -49,8 +49,8 @@ fun PhantomLogo(
         .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     Box(modifier = base) {
         Canvas(Modifier.fillMaxSize()) {
-            // `size` aqui é o DrawScope.Size (canvas) — não o parâmetro Dp
-            val w = size.width
+            // `canvasSize` é o DrawScope.Size (canvas) — não o parâmetro Dp `size`
+            val w = this.size.width
             val h = w * 1.15f
             val shield = Path().apply {
                 moveTo(w / 2f, h * 0.06f)

@@ -22,9 +22,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.GitHub
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -146,7 +146,7 @@ fun GitScreen() {
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(Icons.Filled.GitHub, contentDescription = null, tint = palette.border, modifier = Modifier.size(56.dp))
+                    Icon(Icons.Filled.AccountTree, contentDescription = null, tint = palette.border, modifier = Modifier.size(56.dp))
                     Spacer(Modifier.height(12.dp))
                     Text("Nenhum projeto no workspace", color = palette.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     Text("Crie um projeto no Explorer e depois volte aqui.", color = palette.textSecondary, fontSize = 12.sp)

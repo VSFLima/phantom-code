@@ -22,7 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.GitHub
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -195,7 +195,7 @@ fun HomeScreen(
             Spacer(Modifier.height(10.dp))
             PhantomOutlinedButton(
                 text = "Clonar Repositório",
-                icon = Icons.Filled.GitHub,
+                icon = Icons.Filled.AccountTree,
                 onClick = { notify("Git — disponível na Fase 4") },
                 modifier = Modifier.fillMaxWidth(),
             )
