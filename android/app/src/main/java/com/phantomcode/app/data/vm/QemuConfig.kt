@@ -27,8 +27,7 @@ object QemuPresets {
 /**
  * Espelhos oficiais do projeto (D16 — Phantom) e binário QEMU.
  *
- * ⚠️ TODO: publicar os artefatos no GitHub Releases e preencher os URLs/checksums.
- * Enquanto isso, o app baixa e mostra erro claro ("artefato não publicado").
+ * Artefatos publicados nas Releases oficiais com validação SHA-256.
  * Estrutura esperada do artefato de distro (tarball):
  *   linux/<id>/{ rootfs.img | kernel | initrd.img | rootfs/ } — ver DistroManager.
  */
@@ -43,7 +42,7 @@ object PhantomMirror {
     // (.github/workflows/build-distros.yml) → Release `distro-phantom`.
     // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
     const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
-    val PHANTOM_SHA256: String? = null
+    const val PHANTOM_SHA256 = "ab08d745b5dfa7b3250179f0f5d5cd4c5df44eb62814f2503141caf9b46b92e3"
 
     // Candidatos upstream (a curadoria publica os builds compatíveis — aarch64 headless):
     const val UBUNTU_URL = "https://example.com/phantom-code/ubuntu-24.04-minimal.tar.gz"
