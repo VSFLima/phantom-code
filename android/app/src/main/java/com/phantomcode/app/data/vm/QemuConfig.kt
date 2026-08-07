@@ -37,12 +37,12 @@ object PhantomMirror {
     // a distro oficial Phantom já traz o qemu-system-aarch64 DENTRO do pacote
     // (QemuManager.binary() prioriza o da distro) — nada vem embutido no APK.
     const val QEMU_BINARY_URL = "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
-    const val QEMU_BINARY_SHA256 = "6bf5d271e3392aad412e60ec8646a15bb7ecca61e2e3ac57bc0c770436a67da1"
+    const val QEMU_BINARY_SHA256 = "2a3f85d622d250c24a9028484ad65fb700faecf8e253c3ab63947f59a7859c49"
 
     // Artefato real: construído pelo workflow `Build Distro Artifacts`
     // (.github/workflows/build-distros.yml) → Release `distro-phantom`.
     // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
     const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
-    const val PHANTOM_SHA256 = "ab08d745b5dfa7b3250179f0f5d5cd4c5df44eb62814f2503141caf9b46b92e3"
+    const val PHANTOM_SHA256 = "32e6bc651fa687defa343f0e50bc2876578b91de1c6dd624e24f43efd8d40f39"
 
 }
