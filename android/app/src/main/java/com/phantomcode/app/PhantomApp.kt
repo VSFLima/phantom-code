@@ -96,6 +96,7 @@ fun PhantomApp() {
     val currentRoute = backStackEntry?.destination?.route ?: Routes.HOME
 
     var paletteOpen by remember { mutableStateOf(false) }
+    var editorTabs by remember { mutableStateOf<List<String>>(emptyList()) }
     var showOnboarding by remember { mutableStateOf(!session.onboardingDone) }
     var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }
 
@@ -105,6 +106,18 @@ fun PhantomApp() {
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> storageGranted = granted || StorageHelper.hasStorageAccess(context) }
+
+    fun openEditor(path: String) {
+        val cleanPath = path.trim().trimStart('/')
+        if (cleanPath.isBlank()) return
+        editorTabs = (editorTabs.filterNot { it == cleanPath } + cleanPath).takeLast(8)
+        navController.navigate(Routes.editorRoute(cleanPath))
+    }
+
+    fun closeEditor(path: String) {
+        editorTabs = editorTabs.filterNot { it == path }
+        navController.popBackStack()
+    }
 
     // ── Onboarding de 1º uso (T24 · D20) ────────────────────────
     if (showOnboarding) {
@@ -185,16 +198,16 @@ fun PhantomApp() {
                 ) {
                     HomeScreen(
                         onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
-                        onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
+                        onOpenFile = ::openEditor,
                     )
                 }
                 composable(Routes.EXPLORER) {
                     ExplorerScreen(
-                        onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
+                        onOpenFile = ::openEditor,
                     )
                 }
                  composable(Routes.SEARCH) {
-                     SearchScreen(onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) })
+                     SearchScreen(onOpenFile = ::openEditor)
                  }
                 composable(Routes.GIT) { GitScreen() }
                 composable(Routes.TOOLBOX) {
@@ -216,8 +229,14 @@ fun PhantomApp() {
                     val path = Uri.decode(entry.arguments?.getString("path") ?: "")
                     EditorScreen(
                         path = path,
-                        onClose = { navController.popBackStack() },
-                        onOpenFile = { newPath -> navController.navigate(Routes.editorRoute(newPath)) },
+                        openTabs = editorTabs.ifEmpty { listOf(path) },
+                        onSelectTab = ::openEditor,
+                        onClose = { closeEditor(path) },
+                        onCloseTab = { tab ->
+                            editorTabs = editorTabs.filterNot { it == tab }
+                            if (tab == path) navController.popBackStack()
+                        },
+                        onOpenFile = ::openEditor,
                     )
                 }
             }

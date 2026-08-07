@@ -9,6 +9,7 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,14 +20,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -41,7 +47,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,7 +67,14 @@ import org.json.JSONObject
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit = {}) {
+fun EditorScreen(
+    path: String,
+    openTabs: List<String> = listOf(path),
+    onSelectTab: (String) -> Unit = {},
+    onClose: () -> Unit,
+    onCloseTab: (String) -> Unit = {},
+    onOpenFile: (String) -> Unit = {},
+) {
     val context = LocalContext.current
     val palette = LocalThemeController.current.currentPalette()
     val workspace = remember { WorkspaceManager(context) }
@@ -73,6 +88,9 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
     var saved by remember { mutableStateOf(true) }
     var actionsOpen by remember { mutableStateOf(false) }
     var saveAsOpen by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var replacement by remember { mutableStateOf("") }
 
     val language = when (fileName.substringAfterLast('.', "").lowercase()) {
         "kt", "kts" -> "Kotlin"
@@ -84,6 +102,21 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
         "md" -> "Markdown"
         "sh", "bash" -> "Shell"
         else -> "Texto"
+    }
+
+    fun replaceAll() {
+        val wv = webView ?: return
+        val query = searchQuery
+        if (query.isBlank()) return
+        wv.evaluateJavascript("window.PhantomEditor.getValue()") { value ->
+            val current = unquoteJs(value)
+            val count = current.windowed(query.length, 1, partialWindows = false)
+                .count { it == query }
+            val updated = current.replace(query, replacement)
+            val script = "window.PhantomEditor.setValue(${JSONObject.quote(updated)});window.PhantomEditor.focus();"
+            wv.evaluateJavascript(script, null)
+            scope.launch { snackbar.showSnackbar("$count ocorrência(s) substituída(s)") }
+        }
     }
 
     // Ponte exposta ao JS como window.AndroidBridge
@@ -129,7 +162,7 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(palette.background)) {
             // Barra do editor: voltar · nome · indicador de salvo · salvar
-        Row(
+         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(palette.surface)
@@ -205,6 +238,13 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
                     onDismissRequest = { actionsOpen = false },
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Buscar e substituir") },
+                        onClick = {
+                            actionsOpen = false
+                            searchOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
                         text = { Text("Salvar como…") },
                         onClick = {
                             actionsOpen = false
@@ -212,7 +252,7 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Abrir Explorer") },
+                        text = { Text("Fechar editor") },
                         onClick = {
                             actionsOpen = false
                             currentTextAndClose()
@@ -220,9 +260,97 @@ fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit
                     )
                 }
             }
+         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(palette.surface)
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            openTabs.forEach { tab ->
+                val selected = tab == path
+                Row(
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .background(
+                            if (selected) palette.surfaceAlt else palette.surface,
+                            RoundedCornerShape(4.dp),
+                        )
+                        .clickable { onSelectTab(tab) }
+                        .padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        tab.substringAfterLast('/'),
+                        color = if (selected) palette.accentPrimary else palette.textSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Fechar ${tab.substringAfterLast('/')}",
+                        tint = palette.textSecondary,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .size(16.dp)
+                            .clickable { onCloseTab(tab) }
+                            .padding(3.dp),
+                    )
+                }
+            }
         }
 
-        // WebView com o CodeMirror 6 (preenche só o espaço abaixo da barra)
+        if (searchOpen) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surfaceAlt)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.weight(1f),
+                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
+                    cursorBrush = SolidColor(palette.accentSecondary),
+                    singleLine = true,
+                    decorationBox = { inner ->
+                        if (searchQuery.isEmpty()) Text("Buscar…", color = palette.textSecondary, fontSize = 12.sp)
+                        inner()
+                    },
+                )
+                Spacer(Modifier.width(8.dp))
+                BasicTextField(
+                    value = replacement,
+                    onValueChange = { replacement = it },
+                    modifier = Modifier.weight(1f),
+                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
+                    cursorBrush = SolidColor(palette.accentSecondary),
+                    singleLine = true,
+                    decorationBox = { inner ->
+                        if (replacement.isEmpty()) Text("Substituir por…", color = palette.textSecondary, fontSize = 12.sp)
+                        inner()
+                    },
+                )
+                Text(
+                    "Trocar tudo",
+                    color = if (searchQuery.isBlank()) palette.border else palette.accentPrimary,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .clickable(enabled = searchQuery.isNotBlank()) { replaceAll() },
+                )
+                IconButton(onClick = { searchOpen = false }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = palette.textSecondary)
+                }
+            }
+        }
+
+         // WebView com o CodeMirror 6 (preenche só o espaço abaixo da barra)
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
