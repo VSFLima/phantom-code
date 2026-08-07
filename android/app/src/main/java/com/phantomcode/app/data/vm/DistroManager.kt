@@ -51,7 +51,7 @@ object DistroCatalog {
             id = "phantom-base",
             name = "Phantom",
             badge = "Oficial",
-            description = "Nossa distro oficial, feita sob medida para o app: Debian bookworm arm64 com python3, node/npm e git. Configurada automaticamente pelo app.",
+            description = "Nossa distro oficial, feita sob medida para o app: Debian bookworm arm64 com python3 e git. Configurada automaticamente pelo app.",
             recommendedFor = "Uso geral — o padrão do Phantom-Code",
             url = PhantomMirror.PHANTOM_BASE_URL,
             sha256 = PhantomMirror.PHANTOM_BASE_SHA256,
