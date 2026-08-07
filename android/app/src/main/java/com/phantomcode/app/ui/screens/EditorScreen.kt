@@ -88,6 +88,8 @@ fun EditorScreen(
     var saved by remember { mutableStateOf(true) }
     var actionsOpen by remember { mutableStateOf(false) }
     var saveAsOpen by remember { mutableStateOf(false) }
+    var renameOpen by remember { mutableStateOf(false) }
+    var saveAsInitial by remember { mutableStateOf(path) }
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var replacement by remember { mutableStateOf("") }
@@ -269,7 +271,26 @@ fun EditorScreen(
                         text = { Text("Salvar como…") },
                         onClick = {
                             actionsOpen = false
+                            saveAsInitial = path
                             saveAsOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicar arquivo") },
+                        onClick = {
+                            actionsOpen = false
+                            val extension = fileName.substringAfterLast('.', "").let { if (it.isBlank()) "" else ".$it" }
+                            val base = fileName.removeSuffix(extension)
+                            val parent = path.substringBeforeLast('/', "")
+                            saveAsInitial = if (parent.isBlank()) "$base-copy$extension" else "$parent/$base-copy$extension"
+                            saveAsOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Renomear arquivo") },
+                        onClick = {
+                            actionsOpen = false
+                            renameOpen = true
                         },
                     )
                     DropdownMenuItem(
@@ -410,7 +431,7 @@ fun EditorScreen(
             PhantomDialog(
                 title = "Salvar arquivo como",
                 placeholder = "projeto/src/arquivo.ext",
-                initialValue = path,
+                initialValue = saveAsInitial,
                 confirmText = "Salvar cópia",
                 onConfirm = { newPath ->
                     saveAsOpen = false
@@ -427,6 +448,31 @@ fun EditorScreen(
                     }
                 },
                 onDismiss = { saveAsOpen = false },
+            )
+        }
+
+        if (renameOpen) {
+            PhantomDialog(
+                title = "Renomear arquivo",
+                initialValue = fileName,
+                placeholder = "novo-nome.ext",
+                confirmText = "Renomear",
+                onConfirm = { newName ->
+                    renameOpen = false
+                    val cleanName = newName.trim().substringAfterLast('/').substringAfterLast('\\')
+                    runCatching {
+                        check(cleanName.isNotBlank()) { "Nome vazio" }
+                        check(workspace.rename(path, cleanName)) { "Arquivo já existe ou não pode ser renomeado" }
+                        val parent = path.substringBeforeLast('/', "")
+                        val newPath = if (parent.isBlank()) cleanName else "$parent/$cleanName"
+                        session.lastOpenPath = newPath
+                        onClose()
+                        onOpenFile(newPath)
+                    }.onFailure {
+                        scope.launch { snackbar.showSnackbar("Não foi possível renomear: ${it.message}") }
+                    }
+                },
+                onDismiss = { renameOpen = false },
             )
         }
     }
