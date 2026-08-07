@@ -4,6 +4,9 @@
 > **Fonte:** `Phantom-Code-Documento-Mestre-3.md` (v4.4 · 05/08/2026)
 > **Estratégia recomendada:** 🟣 Fase 0 + Fase 1 primeiro → APK instalável com visual Cyber-Phantom
 > **Build local:** ❌ sem SDK Android no Termux/PRoot → **GitHub Actions**
+>
+> 📋 **TODOS OS PEDIDOS DO USUÁRIO + status real:** ver `docs/REQUESTS-USUARIO.md`
+> ⚠️ **LEIA ANTES DE MEXER NA UI:** o usuário reverteu um polish automático de UI — consulte sempre antes
 
 ---
 
