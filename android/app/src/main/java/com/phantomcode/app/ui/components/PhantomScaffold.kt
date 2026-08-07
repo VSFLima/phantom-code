@@ -2,6 +2,7 @@ package com.phantomcode.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,11 +21,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +52,8 @@ import androidx.compose.ui.unit.sp
 import com.phantomcode.app.ui.navigation.BottomNavItems
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.TerminalTabKind
 
 /**
  * Layout principal (D15): TopBar + Activity Bar fina + conteúdo + Terminal dock + Bottom Nav.
@@ -283,6 +289,8 @@ private fun ActivityIcon(
 @Composable
 fun TerminalDock(onOpen: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
+    val vm = LocalVm.current
+    val terminal = vm.qemu.terminal
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -295,7 +303,6 @@ fun TerminalDock(onOpen: () -> Unit) {
                     strokeWidth = 1.dp.toPx(),
                 )
             }
-            .clickable(onClick = onOpen)
             .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -307,10 +314,52 @@ fun TerminalDock(onOpen: () -> Unit) {
             modifier = Modifier.size(16.dp),
         )
         Spacer(Modifier.width(8.dp))
-        TermTab("Terminal", active = true)
-        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (terminal.tabs.isEmpty()) {
+                Text(
+                    "Nenhum terminal aberto",
+                    color = palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.clickable(onClick = onOpen),
+                )
+            } else {
+                terminal.tabs.forEachIndexed { index, tab ->
+                    TermTab(
+                        name = tab.title,
+                        active = index == terminal.activeIndex,
+                        onClick = {
+                            terminal.selectTab(index)
+                            onOpen()
+                        },
+                        onClose = {
+                            if (tab.kind == TerminalTabKind.QEMU) vm.qemu.stop()
+                            else terminal.closeTab(index)
+                        },
+                    )
+                }
+            }
+        }
+        Icon(
+            imageVector = Icons.Filled.Add,
+            contentDescription = "Novo terminal",
+            tint = palette.textSecondary,
+            modifier = Modifier
+                .size(28.dp)
+                .clickable {
+                    terminal.addShellTab()
+                    onOpen()
+                }
+                .padding(6.dp),
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = "Linux · workspace",
+            text = if (terminal.activeTab?.kind == TerminalTabKind.QEMU) "Linux · workspace" else "Android shell",
             color = palette.textSecondary,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp,
@@ -326,17 +375,33 @@ fun TerminalDock(onOpen: () -> Unit) {
 }
 
 @Composable
-private fun TermTab(name: String, active: Boolean) {
+private fun TermTab(name: String, active: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
-    Text(
-        text = name,
+    Row(
         modifier = Modifier
-            .padding(end = 10.dp)
+            .padding(end = 6.dp)
             .clip(RoundedCornerShape(2.dp))
-            .padding(horizontal = 6.dp, vertical = 3.dp),
-        fontSize = 10.sp,
-        color = if (active) palette.accentPrimary else palette.textSecondary,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-    )
+            .background(if (active) palette.surfaceAlt else Color.Transparent),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+            fontSize = 10.sp,
+            color = if (active) palette.accentPrimary else palette.textSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+        )
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = "Fechar $name",
+            tint = palette.textSecondary,
+            modifier = Modifier
+                .size(16.dp)
+                .clickable(onClick = onClose)
+                .padding(3.dp),
+        )
+    }
 }
