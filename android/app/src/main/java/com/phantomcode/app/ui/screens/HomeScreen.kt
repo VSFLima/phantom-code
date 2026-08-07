@@ -28,8 +28,9 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -73,6 +74,7 @@ fun HomeScreen(
     onOpenFile: (String) -> Unit,
     onOpenBrowser: () -> Unit = {},
     onOpenGit: () -> Unit = {},
+    onOpenToolbox: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val workspace = remember { WorkspaceManager(context) }
@@ -208,28 +210,34 @@ fun HomeScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            // Acesso rápido (W2): navegador interno
+            // Hub inicial: informações e ações principais do ambiente
             PhantomCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenBrowser),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Filled.Web,
+                        Icons.Filled.Info,
                         contentDescription = null,
                         tint = palette.accentPrimary,
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Navegador interno", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Web com a cara do app", color = palette.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                        Text("Central Phantom", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Seu hub de projetos, Linux, Git e ferramentas", color = palette.textSecondary, fontSize = 10.sp)
                     }
-                    Icon(
-                        Icons.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = palette.textSecondary,
-                        modifier = Modifier.size(18.dp),
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    PhantomOutlinedButton(
+                        text = "Toolbox",
+                        icon = Icons.Filled.Memory,
+                        onClick = onOpenToolbox,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PhantomOutlinedButton(
+                        text = "Git",
+                        icon = Icons.Filled.AccountTree,
+                        onClick = onOpenGit,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
