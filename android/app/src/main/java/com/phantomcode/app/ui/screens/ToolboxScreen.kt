@@ -65,6 +65,7 @@ import com.phantomcode.app.data.ai.AiLock
 import com.phantomcode.app.data.ai.AiSuiteManager
 import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.backup.CloudBackupManager
+import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.secrets.SecretsManager
 import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.DistroInfo
@@ -90,6 +91,7 @@ import kotlinx.coroutines.withContext
 fun ToolboxScreen(
     onOpenTerminal: () -> Unit = {},
     onOpenBrowser: (String) -> Unit = {},
+    onOpenGit: () -> Unit = {},
 ) {
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
@@ -99,6 +101,7 @@ fun ToolboxScreen(
 
     // ── Secrets (D8) ──
     val context = LocalContext.current
+    val git = remember { GitManager(context) }
     val clipboard = LocalClipboardManager.current
     val secrets = remember { SecretsManager(context) }
     var keysTick by remember { mutableIntStateOf(0) }
@@ -404,6 +407,8 @@ fun ToolboxScreen(
             DistroConfigDialog(
                 info = info,
                 initialDiskMb = qemu.diskSizeMb(),
+                githubAuthenticated = !git.token.isNullOrBlank(),
+                onOpenGit = onOpenGit,
                 onConfirm = { config ->
                     installTarget = null
                     // Abre o terminal com uma aba de log para acompanhar a instalação

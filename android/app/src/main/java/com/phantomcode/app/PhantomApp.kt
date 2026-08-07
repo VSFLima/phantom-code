@@ -233,6 +233,7 @@ fun PhantomApp() {
                     ToolboxScreen(
                         onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
                         onOpenBrowser = { url -> navController.navigate(Routes.browserRoute(url)) },
+                        onOpenGit = { navController.navigateToTab(Routes.GIT) },
                     )
                 }
                 composable(Routes.SETTINGS) { SettingsScreen() }

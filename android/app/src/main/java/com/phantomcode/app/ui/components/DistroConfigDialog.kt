@@ -59,6 +59,8 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 fun DistroConfigDialog(
     info: DistroInfo,
     initialDiskMb: Int,
+    githubAuthenticated: Boolean = true,
+    onOpenGit: () -> Unit = {},
     onConfirm: (DistroConfig) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -214,12 +216,22 @@ fun DistroConfigDialog(
                 }
 
                 Spacer(Modifier.height(16.dp))
+                if (!githubAuthenticated) {
+                    Text(
+                        "A Phantom é baixada de uma Release privada. Autentique o GitHub antes de instalar.",
+                        color = palette.warning,
+                        fontSize = 10.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    PhantomOutlinedButton(text = "Autenticar GitHub", onClick = onOpenGit)
+                    Spacer(Modifier.height(10.dp))
+                }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     PhantomOutlinedButton(text = "Cancelar", onClick = onDismiss)
                     Spacer(Modifier.width(10.dp))
                     PhantomPrimaryButton(
                         text = "Instalar automaticamente",
-                        enabled = hostname.isNotBlank() && user.isNotBlank(),
+                        enabled = hostname.isNotBlank() && user.isNotBlank() && githubAuthenticated,
                         onClick = {
                             onConfirm(
                                 DistroConfig(
