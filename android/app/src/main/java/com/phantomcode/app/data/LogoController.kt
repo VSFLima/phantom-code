@@ -56,7 +56,7 @@ class LogoController(context: Context) {
         val dir = File(appContext.filesDir, "linux-logos").apply { mkdirs() }
         runCatching {
             (appContext.assets.list("linux/logos") ?: emptyArray())
-                .filter { it.extension.lowercase() in imageExtensions }
+                .filter { File(it).extension.lowercase() in imageExtensions }
                 .forEach { name ->
                     val out = File(dir, name)
                     if (!out.exists() || out.length() == 0L) {

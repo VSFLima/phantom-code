@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -314,7 +315,7 @@ class DistroManager(context: Context) {
         val img = File(targetDir, "rootfs.img")
         if (!img.exists() || img.length() >= config.diskSizeMb.toLong() * 1024 * 1024) return
         runCatching {
-            img.setLength(config.diskSizeMb.toLong() * 1024 * 1024)
+            RandomAccessFile(img, "rw").use { it.setLength(config.diskSizeMb.toLong() * 1024 * 1024) }
         }
     }
 

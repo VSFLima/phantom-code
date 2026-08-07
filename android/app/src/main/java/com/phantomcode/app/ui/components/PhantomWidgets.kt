@@ -83,36 +83,34 @@ fun PhantomLogo(
         return
     }
 
-    Box(modifier = base) {
-        // `canvasSize` é o DrawScope.Size (canvas) — não o parâmetro Dp `size`
-        val w = this.size.width
+    Canvas(modifier = base) {
+        val w = size.width
         val h = w * 1.15f
-            val shield = Path().apply {
-                moveTo(w / 2f, h * 0.06f)
-                lineTo(w * 0.88f, h * 0.22f)
-                lineTo(w * 0.84f, h * 0.62f)
-                quadraticBezierTo(w * 0.78f, h * 0.85f, w / 2f, h * 0.94f)
-                quadraticBezierTo(w * 0.22f, h * 0.85f, w * 0.16f, h * 0.62f)
-                lineTo(w * 0.12f, h * 0.22f)
-                close()
-            }
-            drawPath(
-                path = shield,
-                brush = Brush.linearGradient(
-                    colors = listOf(palette.accentPrimary, palette.accentSecondary),
-                ),
-            )
-            val bolt = Path().apply {
-                moveTo(w * 0.55f, h * 0.30f)
-                lineTo(w * 0.37f, h * 0.57f)
-                lineTo(w * 0.50f, h * 0.57f)
-                lineTo(w * 0.44f, h * 0.73f)
-                lineTo(w * 0.65f, h * 0.43f)
-                lineTo(w * 0.52f, h * 0.43f)
-                close()
-            }
-            drawPath(bolt, color = Color.Black.copy(alpha = 0.85f))
+        val shield = Path().apply {
+            moveTo(w / 2f, h * 0.06f)
+            lineTo(w * 0.88f, h * 0.22f)
+            lineTo(w * 0.84f, h * 0.62f)
+            quadraticBezierTo(w * 0.78f, h * 0.85f, w / 2f, h * 0.94f)
+            quadraticBezierTo(w * 0.22f, h * 0.85f, w * 0.16f, h * 0.62f)
+            lineTo(w * 0.12f, h * 0.22f)
+            close()
         }
+        drawPath(
+            path = shield,
+            brush = Brush.linearGradient(
+                colors = listOf(palette.accentPrimary, palette.accentSecondary),
+            ),
+        )
+        val bolt = Path().apply {
+            moveTo(w * 0.55f, h * 0.30f)
+            lineTo(w * 0.37f, h * 0.57f)
+            lineTo(w * 0.50f, h * 0.57f)
+            lineTo(w * 0.44f, h * 0.73f)
+            lineTo(w * 0.65f, h * 0.43f)
+            lineTo(w * 0.52f, h * 0.43f)
+            close()
+        }
+        drawPath(bolt, color = Color.Black.copy(alpha = 0.85f))
     }
 }
 
