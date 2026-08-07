@@ -6,6 +6,8 @@ import com.phantomcode.app.data.secrets.SecretsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.api.MergeResult
+import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteRefUpdate
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
@@ -14,6 +16,7 @@ import java.util.Locale
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONArray
+import org.json.JSONObject
 
 data class GitChange(val path: String, val status: Char)
 
@@ -127,31 +130,73 @@ class GitManager(context: Context) {
         }.getOrElse { it.message }
     }
 
+    /** Envia os commits para o remote (branch explícita) e configura o upstream. */
     suspend fun push(dir: File): String? = withContext(Dispatchers.IO) {
         runCatching {
             Git.open(dir).use { git ->
-                val results = git.push().setCredentialsProvider(credentials()).call()
+                val remotes = git.remoteList().call()
+                if (remotes.isEmpty()) return@withContext "Nenhum remote — use \"Publicar no GitHub\" primeiro"
+                val remoteName = remotes.first().name
+                val branch = git.repository.branch ?: "main"
+                val results = git.push()
+                    .setRemote(remoteName)
+                    .setRefSpecs(RefSpec("$branch:$branch"))
+                    .setCredentialsProvider(credentials())
+                    .call()
                 results.joinToString("; ") { r ->
                     val ok = r.remoteUpdates.all { u ->
                         u.status == RemoteRefUpdate.Status.OK ||
                             u.status == RemoteRefUpdate.Status.UP_TO_DATE
                     }
-                    if (ok) "push ok" else r.messages.trim().ifBlank { "falha no push" }
+                    if (ok) {
+                        // Configura o upstream para o próximo Pull funcionar sem argumentos
+                        runCatching { git.branchSetUpstream().setName(branch).setUpstreamName("$remoteName/$branch").call() }
+                        "push ok"
+                    } else {
+                        r.messages.trim().ifBlank { "falha no push" }
+                    }
                 }
             }
-        }.getOrElse { it.message }
+        }.getOrElse { it.message ?: "Falha no push" }
     }
 
+    /** Baixa as mudanças do remote e atualiza o projeto local (fetch + merge explícito).
+     *  Não depende de upstream configurado: procura refs/remotes/<remote>/<branch>.
+     *  Traz TODOS os arquivos novos/alterados do remote para o workspace. */
     suspend fun pull(dir: File): String? = withContext(Dispatchers.IO) {
         runCatching {
             Git.open(dir).use { git ->
-                val result = git.pull().setCredentialsProvider(credentials()).call()
-                when {
-                    result.isSuccessful -> "Pull OK"
-                    else -> result.fetchResult?.messages?.trim()?.ifBlank { "Pull sem mudanças" } ?: "Pull sem mudanças"
+                val remotes = git.remoteList().call()
+                if (remotes.isEmpty()) return@withContext "Nenhum remote configurado — use \"Publicar no GitHub\" primeiro"
+                val remoteName = remotes.first().name
+                val branch = git.repository.branch ?: "main"
+
+                // 1) Fetch completo do remote (traz refs e objetos, remove refs apagadas)
+                git.fetch()
+                    .setRemote(remoteName)
+                    .setCredentialsProvider(credentials())
+                    .setRemoveDeletedRefs(true)
+                    .call()
+
+                // 2) Ref remota do branch atual
+                val remoteRef = git.repository.findRef("refs/remotes/$remoteName/$branch")
+                    ?: return@withContext "O remote não tem a branch '$branch' — rode Push primeiro para criá-la"
+
+                // 3) Merge (fast-forward quando possível, merge commit quando divergiu)
+                val result = git.merge()
+                    .include(remoteRef)
+                    .setMessage("Pull de $remoteName/$branch (Phantom-Code)")
+                    .call()
+                when (result.mergeStatus) {
+                    MergeResult.MergeStatus.ALREADY_UP_TO_DATE -> "Já atualizado"
+                    MergeResult.MergeStatus.FAST_FORWARD -> "Pull OK — $branch atualizada"
+                    MergeResult.MergeStatus.MERGED -> "Pull OK (merge de $remoteName/$branch)"
+                    MergeResult.MergeStatus.CONFLICTING -> "Conflitos em ${result.conflicts.size} arquivo(s) — resolva e faça commit"
+                    MergeResult.MergeStatus.FAILED -> "Merge falhou: ${result.failingPaths?.keys?.joinToString(", ") ?: "erro desconhecido"}"
+                    else -> "Pull: ${result.mergeStatus}"
                 }
             }
-        }.getOrElse { it.message }
+        }.getOrElse { it.message ?: "Falha no pull" }
     }
 
     suspend fun log(dir: File, max: Int = 6): List<GitCommitInfo> = withContext(Dispatchers.IO) {
@@ -208,6 +253,104 @@ class GitManager(context: Context) {
                 }
             }
         }
+    }
+
+    /** Cria um repositório no GitHub (POST /user/repos). Retorna o full_name ou erro. */
+    suspend fun createGithubRepo(name: String, description: String = "", private: Boolean = false): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val auth = token?.takeIf { it.isNotBlank() } ?: error("Autentique o GitHub primeiro")
+                val payload = JSONObject()
+                    .put("name", name)
+                    .put("description", description)
+                    .put("private", private)
+                    .put("auto_init", false)
+                val conn = (URL("https://api.github.com/user/repos").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    doOutput = true
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("Authorization", "Bearer $auth")
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                }
+                conn.outputStream.use { it.write(payload.toString().toByteArray()) }
+                val code = conn.responseCode
+                val body = conn.inputStream?.bufferedReader()?.readText().orEmpty()
+                conn.disconnect()
+                if (code in 200..299) {
+                    JSONObject(body).optString("full_name", name)
+                } else {
+                    val msg = JSONObject(body).optString("message", "HTTP $code")
+                    error(msg)
+                }
+            }
+        }
+
+    /** Username do GitHub autenticado (para montar a URL do remote). */
+    suspend fun githubLogin(): Result<String> = withContext(Dispatchers.IO) {
+        apiGet("https://api.github.com/user").map { JSONObject(it).optString("login") }
+    }
+
+    /**
+     * Sincroniza um projeto LOCAL para o GitHub criando o repositório
+     * automaticamente (se não existir remote) e fazendo o primeiro push.
+     *
+     * Retorna mensagem legível (sucesso ou erro).
+     */
+    suspend fun syncLocalToGithub(
+        dir: File,
+        repoName: String = dir.name,
+        description: String = "Projeto do Phantom-Code",
+        isPrivate: Boolean = false,
+    ): String? = withContext(Dispatchers.IO) {
+        if (token.isNullOrBlank()) return@withContext "Autentique o GitHub primeiro"
+        runCatching {
+            Git.open(dir).use { git ->
+                // 1) Remote já existe? → só push.
+                val remotes = git.remoteList().call()
+                if (remotes.isNotEmpty()) {
+                    val r = git.push().setCredentialsProvider(credentials()).call()
+                    val ok = r.all { rr -> rr.remoteUpdates.all { u ->
+                        u.status == RemoteRefUpdate.Status.OK || u.status == RemoteRefUpdate.Status.UP_TO_DATE
+                    } }
+                    return@withContext if (ok) "Push enviado para ${remotes.first().name}" else "Falha no push"
+                }
+                // 2) Sem remote → cria o repositório no GitHub.
+                val created = createGithubRepo(repoName, description, isPrivate).getOrElse { return@withContext "Erro ao criar: ${it.message}" }
+                val login = githubLogin().getOrElse { return@withContext "Erro ao obter usuário: ${it.message}" }
+                val remoteUrl = "https://github.com/$created.git"
+                git.remoteAdd().setName("origin").setUri(remoteUrl).call()
+
+                // 3) Branch main + commit inicial se não houver nenhum.
+                val branch = git.repository.branch ?: "main"
+                if (branch != "main") {
+                    git.branchCreate().setName("main").force(true).call()
+                    git.checkout().setName("main").call()
+                }
+                if (git.log().call().asSequence().none()) {
+                    git.add().addFilepattern(".").call()
+                    git.commit()
+                        .setMessage("Início do projeto (Phantom-Code)")
+                        .setAuthor("Phantom-Code", "phantom@localhost")
+                        .setCommitter("Phantom-Code", "phantom@localhost")
+                        .call()
+                }
+
+                // 4) Push do branch.
+                val r = git.push().setCredentialsProvider(credentials()).call()
+                val ok = r.all { rr -> rr.remoteUpdates.all { u ->
+                    u.status == RemoteRefUpdate.Status.OK || u.status == RemoteRefUpdate.Status.UP_TO_DATE
+                } }
+                if (ok) {
+                    runCatching { git.branchSetUpstream().setName(branch).setUpstreamName("origin/$branch").call() }
+                    "✓ Repositório $login/$repoName criado e projeto enviado"
+                } else {
+                    "Repositório criado, mas o push falhou — tente Push depois"
+                }
+            }
+        }.getOrElse { it.message ?: "Falha na sincronização" }
     }
 
     private fun apiGet(url: String): Result<String> = runCatching {

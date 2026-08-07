@@ -71,8 +71,12 @@ class QemuManager(
 
     val terminal = TerminalManager()
 
-    /** Usa o QEMU que vem no pacote Phantom; demais distros usam o fallback global. */
-    fun binary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
+    /** Binário QEMU usado no boot: 1º o embutido no app (extraído), 2º o da distro, 3º fallback. */
+    fun binary(): File {
+        val native = File(qemuDir, "qemu-system-aarch64")
+        if (native.exists()) return native
+        return distros.activeQemu() ?: native
+    }
 
     init {
         binaryReady = binary().exists()
@@ -102,10 +106,19 @@ class QemuManager(
         prefs.diskSizeMb = sizeMb
     }
 
-    /** Baixa o binário QEMU arm64 (com checksum se informado) e marca como executável. */
+    /** Garante o binário QEMU: 1º embutido no APK, 2º o da distro, 3º download (fallback). */
     suspend fun ensureBinary(onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         if (binaryReady) return@withContext true
-        // A Phantom já traz o QEMU no mesmo pacote da distro; não duplica os 127 MB.
+        // 1) QEMU nativo embutido no APK (assets/qemu — T30): extrai na 1ª execução,
+        //    sem depender de download nem de o pacote da distro trazer o binário.
+        if (extractNativeQemu()) {
+            onMain {
+                binaryInstalling = false
+                binaryReady = true
+            }
+            return@withContext true
+        }
+        // 2) QEMU que já vem dentro do pacote da distro instalada.
         if (distros.activeQemu() != null) {
             onMain {
                 binaryInstalling = false
@@ -152,6 +165,30 @@ class QemuManager(
         onMain { binaryInstalling = false }
         onMain { binaryReady = target.exists() }
         true
+    }
+
+    /**
+     * Extrai o QEMU embutido no APK (assets/qemu/qemu-system-aarch64, T30)
+     * para filesDir/qemu/ e marca como executável. O binário vem de fábrica no
+     * APK (o workflow Build APK o injeta em assets) — nada de download.
+     */
+    private fun extractNativeQemu(): Boolean {
+        val target = File(qemuDir, "qemu-system-aarch64")
+        if (target.exists() && target.length() > 1_000_000L) return true
+        return runCatching {
+            appContext.assets.open("qemu/qemu-system-aarch64").use { input ->
+                val tmp = File(qemuDir, "qemu.native.tmp")
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        out.write(buf, 0, read)
+                    }
+                }
+                tmp.setExecutable(true)
+                tmp.renameTo(target)
+            }
+        }.isSuccess && target.exists()
     }
 
     /** Sobe a VM com a distro ativa. Retorna erro legível quando não dá. */

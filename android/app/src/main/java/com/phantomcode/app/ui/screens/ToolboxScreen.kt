@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
@@ -57,7 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.ai.AiAgent
+import com.phantomcode.app.data.ai.AiLock
+import com.phantomcode.app.data.ai.AiSuiteManager
 import com.phantomcode.app.data.backup.BackupManager
+import com.phantomcode.app.data.backup.CloudBackupManager
 import com.phantomcode.app.data.secrets.SecretsManager
 import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.DistroInfo
@@ -102,6 +109,9 @@ fun ToolboxScreen(
 
     // ── Backup (T21 · D2) ──
     val backup = remember { BackupManager(context) }
+    val cloudBackup = remember { CloudBackupManager(context) }
+    var cloudBusy by remember { mutableStateOf(false) }
+    val aiSuite = remember { AiSuiteManager(context) }
     var backupBusy by remember { mutableStateOf(false) }
     val backupCreateLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
@@ -182,6 +192,16 @@ fun ToolboxScreen(
 
             // ── Pacotes do Linux (T20) ───────────────────────────
             GuestPackagesSection(qemu = qemu, onOpenTerminal = onOpenTerminal)
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── AI Suite (Fase A) ────────────────────────────────
+            AiSuiteSection(
+                aiSuite = aiSuite,
+                qemuRunning = qemu.running,
+                guestPackages = qemu.scanner.packages,
+                onSnack = { msg -> scope.launch { snackbar.showSnackbar(msg) } },
+            )
 
             Spacer(Modifier.height(20.dp))
 
@@ -285,6 +305,76 @@ fun ToolboxScreen(
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+            SectionLabel(text = "Backup na nuvem (WebDAV · T22)")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Envie o workspace para seu Nextcloud/ownCloud. Configure WEBDAV_URL, WEBDAV_USER e WEBDAV_PASS nas Integrações acima.",
+                color = palette.textSecondary,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .background(if (cloudBackup.isConfigured()) palette.success else palette.border, CircleShape)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (cloudBackup.isConfigured())
+                            "WebDAV: ${cloudBackup.configSummary()}"
+                        else
+                            "WebDAV não configurado",
+                        color = if (cloudBackup.isConfigured()) palette.textPrimary else palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row {
+                    PhantomPrimaryButton(
+                        text = "Enviar backup",
+                        icon = Icons.Filled.CloudUpload,
+                        enabled = !cloudBusy && cloudBackup.isConfigured(),
+                        onClick = {
+                            cloudBusy = true
+                            scope.launch {
+                                val result = cloudBackup.upload()
+                                cloudBusy = false
+                                snackbar.showSnackbar("${result.message}${if (result.ok) " · ${result.fileCount} arquivos" else ""}")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    PhantomOutlinedButton(
+                        text = "Restaurar",
+                        icon = Icons.Filled.CloudDownload,
+                        enabled = !cloudBusy && cloudBackup.isConfigured(),
+                        onClick = {
+                            cloudBusy = true
+                            scope.launch {
+                                val result = cloudBackup.restoreLatest()
+                                cloudBusy = false
+                                snackbar.showSnackbar("${result.message}${if (result.ok) " · ${result.fileCount} arquivos" else ""}")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (cloudBusy) {
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = palette.accentPrimary,
+                        trackColor = palette.surfaceAlt,
+                    )
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
         }
 
@@ -320,25 +410,27 @@ fun ToolboxScreen(
                     val logTab = qemu.terminal.addLogTab("Instalando ${info.name}")
                     onOpenTerminal()
                     scope.launch {
-                        // T29: o binário QEMU é instalado junto com a distro (da nuvem).
-                        // Sem passos manuais separados — o usuário só escolhe a distro.
-                        if (!qemu.binaryReady && info.id != "phantom") {
-                            logTab.append("[phantom] Binário QEMU ausente — baixando do servidor…\n")
+                        // T29/T30: o app DETECTA se a distro escolhida já traz o QEMU no
+                        // pacote (Phantom) — nesse caso pula a etapa do binário e parte
+                        // direto para a instalação. Distros sem QEMU no pacote usam o
+                        // binário embutido no APK (extraído na 1ª vez) ou o download.
+                        if (info.includesQemu) {
+                            logTab.append("[phantom] QEMU já vem no pacote da distro — pulando etapa do binário.\n\n")
+                        } else if (!qemu.binaryReady) {
+                            logTab.append("[phantom] Preparando o QEMU…\n")
                             var lastPct = -1
                             val ok = qemu.ensureBinary { pct ->
                                 val p = (pct * 100).toInt()
                                 if (p != lastPct && p % 5 == 0) {
                                     lastPct = p
-                                    logTab.append("[phantom] binário QEMU: $p%…\n")
+                                    logTab.append("[phantom] QEMU: $p%…\n")
                                 }
                             }
                             if (!ok) {
-                                logTab.append("\n\u001b[31m✗ Binário QEMU não instalado: ${qemu.lastError ?: "erro desconhecido"}\u001b[0m\n")
+                                logTab.append("\n\u001b[31m✗ QEMU não disponível: ${qemu.lastError ?: "erro desconhecido"}\u001b[0m\n")
                                 return@launch
                             }
-                            logTab.append("[phantom] ✓ Binário QEMU pronto — instalando a distro…\n\n")
-                        } else if (!qemu.binaryReady) {
-                            logTab.append("[phantom] QEMU incluído no pacote unificado — instalando distro…\n\n")
+                            logTab.append("[phantom] ✓ QEMU pronto — instalando a distro…\n\n")
                         }
                         vm.distros.install(info, config, logTab)
                     }
@@ -587,5 +679,227 @@ private fun GuestPackagesSection(
             },
             dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancelar", color = palette.textSecondary) } },
         )
+    }
+}
+
+/**
+ * AI Suite (Fase A do roteador de IAs — docs/roteador-ias.md):
+ * registro de agentes (manual + auto-scan do guest), reservas de arquivos
+ * (Conflict Guard) e kill switch. Delegação com aprovação humana é a Fase B.
+ */
+@Composable
+private fun AiSuiteSection(
+    aiSuite: AiSuiteManager,
+    qemuRunning: Boolean,
+    guestPackages: List<GuestPackage>,
+    onSnack: (String) -> Unit,
+) {
+    val palette = LocalThemeController.current.currentPalette()
+    var tick by remember { mutableIntStateOf(0) }
+    var registerOpen by remember { mutableStateOf(false) }
+    var regName by remember { mutableStateOf("") }
+    var regInvoke by remember { mutableStateOf("") }
+    var regType by remember { mutableStateOf("local") }
+
+    val agents = remember(tick, guestPackages.size) { aiSuite.allAgents(guestPackages) }
+    val locks = remember(tick) { aiSuite.guard.snapshot() }
+
+    SectionLabel(text = "AI Suite — roteador entre IAs")
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Fase A: registro de agentes + reservas de arquivos (Conflict Guard). Delegação com aprovação do dono chega na Fase B.",
+        color = palette.textSecondary,
+        fontSize = 11.sp,
+    )
+    Spacer(Modifier.height(8.dp))
+
+    if (!qemuRunning) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Agentes do guest aparecem quando o Linux estiver ativo. Você ainda pode registrar IAs manualmente.",
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            if (aiSuite.paused) "⏸ Suite pausada" else "● Suite ativa",
+            color = if (aiSuite.paused) palette.error else palette.success,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (aiSuite.paused) {
+            PhantomOutlinedButton(text = "Retomar", icon = Icons.Filled.PlayArrow, onClick = { aiSuite.resume(); tick++ })
+        } else {
+            PhantomOutlinedButton(text = "Pausar todas", icon = Icons.Filled.Stop, onClick = { aiSuite.pauseAll(); tick++ })
+        }
+        Spacer(Modifier.width(8.dp))
+        PhantomPrimaryButton(text = "Registrar IA", icon = Icons.Filled.Add, onClick = { registerOpen = true })
+    }
+
+    Spacer(Modifier.height(10.dp))
+    Text("Agentes", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(4.dp))
+    if (agents.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Nenhuma IA registrada ainda.", color = palette.textSecondary, fontSize = 12.sp)
+        }
+    } else {
+        agents.forEach { agent ->
+            AiAgentRow(agent, palette)
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+
+    Spacer(Modifier.height(10.dp))
+    Text("Reservas ativas (locks)", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(4.dp))
+    if (locks.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Nenhum arquivo reservado no momento.", color = palette.textSecondary, fontSize = 12.sp)
+        }
+    } else {
+        locks.forEach { lock ->
+            AiLockRow(lock, palette)
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+
+    if (registerOpen) {
+        AlertDialog(
+            onDismissRequest = { registerOpen = false },
+            containerColor = palette.surface,
+            title = { Text("Registrar IA no Suite", color = palette.textPrimary, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    BasicTextField(
+                        value = regName,
+                        onValueChange = { regName = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(palette.surfaceAlt)
+                            .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(10.dp),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (regName.isEmpty()) Text("Nome (ex.: CodeLlama local)", color = palette.textSecondary, fontSize = 13.sp)
+                            inner()
+                        },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    BasicTextField(
+                        value = regInvoke,
+                        onValueChange = { regInvoke = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(palette.surfaceAlt)
+                            .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(10.dp),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (regInvoke.isEmpty()) Text("Comando (ex.: ollama run codellama)", color = palette.textSecondary, fontSize = 13.sp)
+                            inner()
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Tipo:", color = palette.textSecondary, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        listOf("local", "cloud").forEach { t ->
+                            val selected = regType == t
+                            Text(
+                                t,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (selected) palette.accentPrimary.copy(alpha = 0.18f) else palette.surfaceAlt)
+                                    .border(1.dp, if (selected) palette.accentPrimary else palette.border.copy(alpha = 0.4f), RoundedCornerShape(3.dp))
+                                    .clickable { regType = t }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                color = if (selected) palette.accentPrimary else palette.textSecondary,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (regName.isNotBlank() && regInvoke.isNotBlank()) {
+                        aiSuite.registerAgent(regName.trim(), regInvoke.trim(), regType)
+                        regName = ""
+                        regInvoke = ""
+                        regType = "local"
+                        registerOpen = false
+                        tick++
+                        onSnack("IA registrada no Suite")
+                    }
+                }) { Text("Registrar", color = palette.accentPrimary) }
+            },
+            dismissButton = { TextButton(onClick = { registerOpen = false }) { Text("Cancelar", color = palette.textSecondary) } },
+        )
+    }
+}
+
+@Composable
+private fun AiAgentRow(agent: AiAgent, palette: PhantomPalette) {
+    PhantomCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .background(if (agent.status == "online") palette.success else palette.border, CircleShape),
+            )
+            Spacer(Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(agent.name, color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    "${agent.type} · ${agent.invoke} · ${agent.skills.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { "${it.key}:${it.value}" }}",
+                    color = palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (agent.id.startsWith("scan-")) {
+                Text("auto", color = palette.accentSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiLockRow(lock: AiLock, palette: PhantomPalette) {
+    PhantomCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                lock.mode.toString(),
+                color = palette.accentPrimary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                lock.path,
+                color = palette.textPrimary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(lock.owner, color = palette.textSecondary, fontSize = 9.sp)
+        }
     }
 }

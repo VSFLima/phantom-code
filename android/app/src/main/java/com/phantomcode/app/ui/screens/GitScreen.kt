@@ -87,6 +87,8 @@ fun GitScreen() {
 
     var tokenDialog by remember { mutableStateOf(false) }
     var cloneDialog by remember { mutableStateOf(false) }
+    var publishDialog by remember { mutableStateOf(false) }
+    var publishName by remember { mutableStateOf("") }
     var remoteRepos by remember { mutableStateOf<List<GithubRepo>>(emptyList()) }
     var selectedRemote by remember { mutableStateOf<GithubRepo?>(null) }
     var remoteReleases by remember { mutableStateOf<List<com.phantomcode.app.data.git.GithubRelease>>(emptyList()) }
@@ -253,9 +255,19 @@ fun GitScreen() {
                 Text("Trabalho em equipe", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Cada colaborador autentica o próprio GitHub. Use Pull para receber mudanças e Push para compartilhar seus commits no repositório.",
+                    "Cada colaborador autentica o próprio GitHub. Use Pull para receber mudanças e Push para compartilhar seus commits no repositório. Para subir um projeto local, use Publicar — o repositório é criado automaticamente e privado.",
                     color = palette.textSecondary,
                     fontSize = 11.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                PhantomPrimaryButton(
+                    text = "Publicar projeto no GitHub",
+                    icon = Icons.Filled.CloudUpload,
+                    enabled = repoDir != null && git.token != null && !busy,
+                    onClick = {
+                        publishName = repoDir?.name ?: ""
+                        publishDialog = true
+                    },
                 )
             }
 
@@ -482,6 +494,36 @@ fun GitScreen() {
                     notify("Token salvo")
                 },
                 onDismiss = { tokenDialog = false },
+            )
+        }
+
+        if (publishDialog) {
+            PhantomDialog(
+                title = "Publicar no GitHub (privado)",
+                placeholder = "nome-do-repositorio",
+                initialValue = publishName,
+                confirmText = "Criar repositório e enviar",
+                onConfirm = { name ->
+                    val target = repoDir
+                    if (target != null) {
+                        publishDialog = false
+                        busy = true
+                        scope.launch {
+                            val msg = git.syncLocalToGithub(
+                                dir = target,
+                                repoName = name.trim().ifBlank { target.name },
+                                description = "Projeto ${target.name} do Phantom-Code",
+                                isPrivate = true,
+                            )
+                            busy = false
+                            notify(msg ?: "Projeto publicado")
+                            tick++
+                        }
+                    } else {
+                        publishDialog = false
+                    }
+                },
+                onDismiss = { publishDialog = false },
             )
         }
 

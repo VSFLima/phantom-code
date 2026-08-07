@@ -43,6 +43,7 @@ data class DistroInfo(
     val available: Boolean = true,
     val packageManager: String,         // apt / apk
     val headless: Boolean = true,       // sempre true — terminal apenas
+    val includesQemu: Boolean = false,  // true: o pacote já traz o qemu-system-aarch64 (ex.: Phantom)
 )
 
 object DistroCatalog {
@@ -61,6 +62,7 @@ object DistroCatalog {
             risk = DistroRisk.LOW,
             available = true,
             packageManager = "apt",
+            includesQemu = true, // o tarball Phantom traz rootfs.img + kernel + initrd.img + qemu-system-aarch64
         ),
     )
 }

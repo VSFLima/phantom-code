@@ -66,7 +66,7 @@
 
 - [x] **T19. Git nativo (JGit)** ✅
   - `GitManager` (JGit 6.10): status (A/M/D/U/C), git init, clone com token, commit, push/pull, log · tela Git real com seleção de projeto + token GitHub
-- [ ] **T20. Toolbox (visual em cards)** 🔶 Integrações & API Keys ✅
+- [x] **T20. Toolbox (visual em cards)** ✅ Integrações & API Keys: catálogo de 30+ serviços (IA/Git/Cloud/Servidor) com preenchimento automático + botão **"Criar token"** que abre o navegador interno na página oficial do serviço; secrets no Android Keystore (AES-256/GCM)
   - [x] **Integrações & API Keys (D8)** — `SecretsManager` (Android Keystore + AES/GCM), cards com valor mascarado `sk-…xxxx`, copiar `$VAR`, toggle "Expor ao Linux", revogar; token do Git migrado p/ Keystore
   - [ ] Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)
 - [x] **T21. Backup local ZIP (SAF) + restauração (D2)** ✅
@@ -92,7 +92,9 @@
   - Performance TCG, permutações de tema, corrigir o que quebrar
 - [x] **T27. Design System v2 — UI & Botões (estilo do usuário)** ✅ estilos base prontos (Neon/Hacker/Gradient/Glass/Ghost/Pill/Sólido) + dimensões editáveis (cantos · bordas · letras) persistidas; preview ao vivo; animações (press nos botões, transições de navegação, diálogos com scale+fade); terminal segue a paleta (setColorScheme)
 - [x] **T28. Navegador interno (W2)** ✅ WebView com a cara do app: barra de URL, voltar/avançar/recarregar/início, progresso, página inicial temática; acesso via Home e Command Palette
-- [ ] **T29. Distros com download interno (W3)** 🔶 infra + catálogo prontos: workflow `build-distros.yml` gera a Phantom (Debian arm64) → Release `distro-phantom`; catálogo expansível (`DistroCard`) com descrição, consumo, risco (leve/moderada/pesada) e aviso **terminal-only** para Ubuntu/Debian/Alpine/Kali (+"Em breve" até publicar os artefatos); presets de VM (Econômico..Máximo + Custom com sliders até o limite do aparelho) e tamanho do HD (padrão 3 GB, resize2fs no 1º boot) configuráveis; `DistroConfigDialog` (hostname/usuário/preset/HD) e instalação **acompanhada ao vivo no terminal** (aba de log própria, download % → SHA-256 → extração) — falta rodar o workflow e publicar os artefatos (URLs ainda placeholder `example.com`)
+- [x] **T29. Distros com download interno (W3)** ✅ infra + catálogo prontos: workflow `build-distros.yml` gera a Phantom (Debian arm64) → Release **`distro-phantom`** com `phantom.tar.gz` (311 MB: rootfs.img + kernel + initrd.img + **QEMU incluído**) e **`qemu-aarch64`** (binário estático 122 MB, SHA-256 ok); URLs reais no `PhantomMirror`; catálogo expansível (`DistroCard`) + `DistroConfigDialog` (hostname/usuário/preset/HD) + instalação acompanhada ao vivo no terminal (download % → SHA-256 → extração) — resta testar a instalação no device e publicar Ubuntu/Debian/Alpine/Kali (ainda `example.com`)
+- [x] **Fix crash terminal** ✅ `EmulatorView(ctx, null, metrics)` crashava com NPE (construtor jackpal chama attachSession(null)); agora `EmulatorView(ctx, null)` + `setDensity` manual — instalar distro e barra de terminais não fecham mais o app
+- [x] **Fix redundância QEMU** ✅ `start()` verifica a distro instalada PRIMEIRO (o QEMU vem dentro do pacote Phantom); sem download redundante do binário separado
 
 ---
 
@@ -117,4 +119,6 @@
 | Design System | `DesignSystem.kt` (botões/cantos/bordas/letras) + `UiStyleController` persistido — Settings → UI & Botões |
 | Navegador | `BrowserScreen.kt` — WebView interno (W2) |
 | Editor | CodeMirror 6 (WebView) |
-| AI Suite | **`docs/roteador-ias.md`** — roteador de comunicação entre IAs (spec pronta: registro de agentes, Shared Context Bus, Conflict Guard com locks W/R/S/D/G, delegação com aprovação humana obrigatória, threads de conversação, fases A/B/C de implementação) |
+| AI Suite | **`docs/roteador-ias.md`** — roteador de comunicação entre IAs (spec pronta: registro de agentes, Shared Context Bus, Conflict Guard com locks W/R/S/D/G, delegação com aprovação humana obrigatória, threads de conversação, fases A/B/C de implementação) — **Fase A**: `AiSuiteManager.kt` + `ConflictGuard.kt` + `phantom-router.sh` |
+| Backup cloud | `CloudBackupManager.kt` — WebDAV (via chaves do catálogo: `WEBDAV_URL`/user/pass), upload/restore do ZIP do workspace |
+| Sync GitHub | `GitManager.createGithubRepo()` + `syncToGithub()` — cria repositório automático para projeto local e faz push |

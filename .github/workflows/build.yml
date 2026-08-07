@@ -33,6 +33,15 @@ jobs:
           echo "$PHANTOM_KEYSTORE_BASE64" | base64 -d > android/release.keystore
           echo "keystore restaurado ($(wc -c < android/release.keystore) bytes)"
 
+      - name: Bundle native QEMU binary (embutido no APK)
+        run: |
+          mkdir -p android/app/src/main/assets/qemu
+          curl -sL --retry 3 --retry-delay 2 -o android/app/src/main/assets/qemu/qemu-system-aarch64 \
+            "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
+          test -s android/app/src/main/assets/qemu/qemu-system-aarch64
+          ls -la android/app/src/main/assets/qemu/
+          echo "QEMU embutido: $(wc -c < android/app/src/main/assets/qemu/qemu-system-aarch64) bytes"
+
       - name: Build release APK
         env:
           PHANTOM_SIGNING: "true"
