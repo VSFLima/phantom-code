@@ -23,9 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.GitHub
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storage
@@ -286,7 +286,7 @@ fun HomeScreen(
                             val origin = workspace.projectOrigin(project)
                             Icon(
                                 imageVector = when (origin) {
-                                    ProjectOrigin.GITHUB -> Icons.Filled.GitHub
+                                    ProjectOrigin.GITHUB -> Icons.Filled.AccountTree
                                     ProjectOrigin.GIT -> Icons.Filled.AccountTree
                                     ProjectOrigin.LOCAL -> Icons.Filled.Folder
                                 },
