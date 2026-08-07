@@ -11,6 +11,12 @@ data class FileEntry(
     val sizeBytes: Long,
 )
 
+data class TextMatch(
+    val path: String,
+    val line: Int,
+    val preview: String,
+)
+
 /**
  * Gerencia a pasta de projetos do app: pasta pública `/storage/emulated/0/Phantom-Code/workspace`
  * quando há permissão de armazenamento, senão `filesDir/Phantom-Code/workspace` (privado, fallback).
@@ -118,6 +124,39 @@ class WorkspaceManager(context: Context) {
 
     fun writeText(relPath: String, content: String) {
         resolve(relPath).writeText(content)
+    }
+
+    /** Busca textual limitada para não travar a UI nem ler binários grandes. */
+    fun search(query: String, maxResults: Int = 200): List<TextMatch> {
+        val needle = query.trim()
+        if (needle.isEmpty()) return emptyList()
+        val results = mutableListOf<TextMatch>()
+        root.walkTopDown()
+            .onEnter { it.name != ".git" && results.size < maxResults }
+            .filter { it.isFile && it.length() <= MAX_SEARCH_FILE_BYTES }
+            .forEach { file ->
+                if (results.size >= maxResults) return@forEach
+                runCatching {
+                    file.bufferedReader().useLines { lines ->
+                        lines.forEachIndexed { index, line ->
+                            if (line.contains(needle, ignoreCase = true)) {
+                                results += TextMatch(
+                                    path = file.relativeTo(root).invariantSeparatorsPath,
+                                    line = index + 1,
+                                    preview = line.trim().take(MAX_PREVIEW_LENGTH),
+                                )
+                            }
+                            if (results.size >= maxResults) return@useLines
+                        }
+                    }
+                }
+            }
+        return results
+    }
+
+    companion object {
+        private const val MAX_SEARCH_FILE_BYTES = 2L * 1024 * 1024
+        private const val MAX_PREVIEW_LENGTH = 180
     }
 }
 

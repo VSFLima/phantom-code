@@ -195,7 +195,9 @@ fun PhantomApp() {
                         onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
                     )
                 }
-                composable(Routes.SEARCH) { SearchScreen() }
+                 composable(Routes.SEARCH) {
+                     SearchScreen(onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) })
+                 }
                 composable(Routes.GIT) { GitScreen() }
                 composable(Routes.TOOLBOX) {
                     ToolboxScreen(
