@@ -12,6 +12,7 @@ import jackpal.androidterm.emulatorview.TermSession
 class LogTermSession : TermSession() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var emulatorReady = false
 
     init {
         // ⚠️ FIX CRASH: o initializeEmulator() do jackpal inicia mReaderThread e
@@ -36,7 +37,10 @@ class LogTermSession : TermSession() {
                 }
             },
         )
-        initializeEmulator(80, 24)
+        emulatorReady = runCatching {
+            initializeEmulator(80, 24)
+            true
+        }.getOrDefault(false)
     }
 
     /** Anexa texto à tela do terminal (como se viesse de um processo).
@@ -44,6 +48,7 @@ class LogTermSession : TermSession() {
      *  appendToEmulator não é thread-safe com o EmulatorView (evita corromper
      *  a tela durante a instalação). */
     fun append(text: String) {
+        if (!emulatorReady) return
         val bytes = text.toByteArray(Charsets.UTF_8)
         mainHandler.post { runCatching { appendToEmulator(bytes, 0, bytes.size) } }
     }

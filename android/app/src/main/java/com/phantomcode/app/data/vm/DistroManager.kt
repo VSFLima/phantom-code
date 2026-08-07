@@ -236,7 +236,9 @@ class DistroManager(context: Context) {
                         if (pct != lastPct) {
                             lastPct = pct
                             log("\rBaixando… $pct% (${done / (1024 * 1024)} MB / ${total / (1024 * 1024)} MB)")
-                            installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
+                            withContext(Dispatchers.Main) {
+                                installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
+                            }
                         }
                     }
                 }

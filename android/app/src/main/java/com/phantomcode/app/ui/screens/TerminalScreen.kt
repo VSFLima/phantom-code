@@ -1,5 +1,7 @@
 package com.phantomcode.app.ui.screens
 
+import android.view.View
+import android.widget.TextView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,8 +73,10 @@ fun TerminalScreen(onBack: () -> Unit) {
     // Ciclo de vida da EmulatorView (IME + blink + redesenho)
     LaunchedEffect(termView) {
         termView?.let {
-            it.onResume()
-            it.requestFocus()
+            runCatching {
+                it.onResume()
+                it.requestFocus()
+            }
         }
     }
 
@@ -167,34 +171,47 @@ fun TerminalScreen(onBack: () -> Unit) {
         }
 
         // ── Terminal VT100 real (jackpal emulatorview) ──
-        AndroidView(
-            factory = { ctx ->
+            AndroidView<View>(
+                factory = { ctx ->
                 // Construção em 2 passos: o construtor (ctx, session, metrics) chama
                 // attachSession internamente e CRASHA com session null. Usamos o
                 // construtor XML (sem session) + setDensity/attachSession manuais —
                 // a sessão é anexada no `update` abaixo quando há aba ativa.
-                EmulatorView(ctx, null).apply {
+                runCatching { EmulatorView(ctx, null).apply {
                     setDensity(ctx.resources.displayMetrics)
                     // Terminal segue a paleta do usuário (Design System v2):
                     // fundo e texto nas cores do app, com o verde de sucesso no prompt.
-                    setColorScheme(
-                        ColorScheme(
-                            palette.textPrimary.toArgb(),
-                            palette.background.toArgb(),
-                        ),
-                    )
+                    runCatching {
+                        setColorScheme(
+                            ColorScheme(
+                                palette.textPrimary.toArgb(),
+                                palette.background.toArgb(),
+                            ),
+                        )
+                    }
                     termView = this
+                } }.getOrElse {
+                    TextView(ctx).apply {
+                        text = "Terminal indisponível: ${it.message ?: "falha ao iniciar o emulador"}"
+                        setTextColor(palette.textSecondary.toArgb())
+                        setBackgroundColor(palette.background.toArgb())
+                        setPadding(24, 24, 24, 24)
+                    }
                 }
-            },
-            update = { view ->
-                val tab = terminal.activeTab
-                if (tab != null && attachedSession !== tab.session) {
-                    view.attachSession(tab.session)
-                    attachedSession = tab.session
-                    view.requestFocus()
-                }
-            },
-            onRelease = { it.onPause() },
+                },
+                update = { view ->
+                    if (view is EmulatorView) {
+                        val tab = terminal.activeTab
+                        if (tab != null && attachedSession !== tab.session) {
+                            runCatching {
+                                view.attachSession(tab.session)
+                                attachedSession = tab.session
+                                view.requestFocus()
+                            }
+                        }
+                    }
+                },
+             onRelease = { (it as? EmulatorView)?.onPause() },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         )
 
