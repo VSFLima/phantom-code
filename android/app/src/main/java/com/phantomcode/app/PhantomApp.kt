@@ -186,9 +186,6 @@ fun PhantomApp() {
                     HomeScreen(
                         onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
                         onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
-                        onOpenBrowser = { navController.navigate(Routes.BROWSER) },
-                        onOpenGit = { navController.navigateToTab(Routes.GIT) },
-                        onOpenToolbox = { navController.navigateToTab(Routes.TOOLBOX) },
                     )
                 }
                 composable(Routes.EXPLORER) {

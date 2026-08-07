@@ -22,14 +22,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
@@ -72,9 +70,6 @@ import java.util.zip.ZipInputStream
 fun HomeScreen(
     onOpenProject: (String) -> Unit,
     onOpenFile: (String) -> Unit,
-    onOpenBrowser: () -> Unit = {},
-    onOpenGit: () -> Unit = {},
-    onOpenToolbox: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val workspace = remember { WorkspaceManager(context) }
@@ -225,21 +220,12 @@ fun HomeScreen(
                         Text("Seu hub de projetos, Linux, Git e ferramentas", color = palette.textSecondary, fontSize = 10.sp)
                     }
                 }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                    PhantomOutlinedButton(
-                        text = "Toolbox",
-                        icon = Icons.Filled.Memory,
-                        onClick = onOpenToolbox,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PhantomOutlinedButton(
-                        text = "Git",
-                        icon = Icons.Filled.AccountTree,
-                        onClick = onOpenGit,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Use a barra lateral para acessar cada área do app.",
+                    color = palette.textSecondary,
+                    fontSize = 10.sp,
+                )
             }
             Spacer(Modifier.height(22.dp))
 
@@ -323,13 +309,6 @@ fun HomeScreen(
                 text = "Importar Projeto ZIP",
                 icon = Icons.Filled.FolderOpen,
                 onClick = { zipLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(10.dp))
-            PhantomOutlinedButton(
-                text = "Git: clonar / autenticar",
-                icon = Icons.Filled.AccountTree,
-                onClick = onOpenGit,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
