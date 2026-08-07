@@ -51,6 +51,7 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 @Composable
 fun PhantomScaffold(
     currentRoute: String,
+    qemuRunning: Boolean,
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
     onOpenTerminal: () -> Unit,
@@ -65,7 +66,7 @@ fun PhantomScaffold(
             .background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        PhantomTopBar(onHome = onHome, onOpenPalette = onOpenPalette)
+        PhantomTopBar(running = qemuRunning, onHome = onHome, onOpenPalette = onOpenPalette)
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             ActivityBar(
                 currentRoute = currentRoute,
@@ -82,7 +83,7 @@ fun PhantomScaffold(
 }
 
 @Composable
-private fun PhantomTopBar(onHome: () -> Unit, onOpenPalette: () -> Unit) {
+private fun PhantomTopBar(running: Boolean, onHome: () -> Unit, onOpenPalette: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
     Row(
         modifier = Modifier
@@ -110,7 +111,7 @@ private fun PhantomTopBar(onHome: () -> Unit, onOpenPalette: () -> Unit) {
             letterSpacing = 2.sp,
         )
         Spacer(Modifier.weight(1f))
-        QemuStatusPill(running = false)
+        QemuStatusPill(running = running)
         Spacer(Modifier.width(10.dp))
         Icon(
             imageVector = Icons.Filled.Menu,
@@ -330,12 +331,10 @@ fun TerminalDock(onOpen: () -> Unit) {
             modifier = Modifier.size(16.dp),
         )
         Spacer(Modifier.width(8.dp))
-        TermTab("Terminal 1", active = true)
-        TermTab("Terminal 2", active = false)
-        TermTab("Run", active = false)
+        TermTab("Terminal", active = true)
         Spacer(Modifier.weight(1f))
         Text(
-            text = "root@phantom:~/workspace",
+            text = "Linux · workspace",
             color = palette.textSecondary,
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp,

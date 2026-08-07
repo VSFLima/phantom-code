@@ -413,16 +413,21 @@ private fun GuestPackageCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (pkg.running) {
-                Text(
-                    "rodando",
-                    color = palette.success,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                )
-            }
-            Spacer(Modifier.width(4.dp))
+        }
+        if (pkg.running) {
+            Text(
+                "rodando",
+                color = palette.success,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             IconButton(onClick = onClickTerminal) {
                 Icon(Icons.Filled.Restore, "Abrir no terminal", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
             }

@@ -14,7 +14,7 @@ import java.io.File
  * O usuário pode colocar novas imagens (.png/.jpg/.webp) na pasta `linux/` da
  * memória interna do celular (`/storage/emulated/0/linux`) e escolher qual
  * usar como logo na aba de temas. A escolha é persistida e aplicada em todo o
- * app (Home, Onboarding, cabeçalho) — sem imagem selecionada, usa o escudo padrão.
+ * app (Home, Onboarding, cabeçalho) — sem escolha, usa a logo oficial embutida.
  */
 class LogoController(context: Context) {
 
@@ -76,6 +76,7 @@ class LogoController(context: Context) {
             (dir.listFiles() ?: emptyArray())
                 .filter { it.isFile && it.extension.lowercase() in imageExtensions }
                 .sortedBy { it.name.lowercase() }
+                .filter { it.name != DEFAULT_NAME }
                 .filter { seen.add(it.name) }
                 .map { it.name to it }
         }
@@ -83,11 +84,16 @@ class LogoController(context: Context) {
 
     /** Arquivo da logo selecionada, ou null se removida/não encontrada. */
     fun selectedFile(): File? {
-        val name = selected ?: return null
+        val name = selected
+        if (name == null) {
+            return cachedBundledLogos().resolve(DEFAULT_NAME).takeIf { it.isFile }
+        }
         return available().firstOrNull { it.first == name }?.second
     }
 
     companion object {
+        /** Logo oficial usada em Home, onboarding e cabeçalho quando o usuário não escolheu outra. */
+        private const val DEFAULT_NAME = "Phantomlogo1.png"
         private const val KEY = "selected_logo"
         private val selectedState = mutableStateOf<String?>(null)
     }

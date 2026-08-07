@@ -163,6 +163,7 @@ fun PhantomApp() {
     Box(Modifier.fillMaxSize()) {
         PhantomScaffold(
             currentRoute = currentRoute,
+            qemuRunning = vm.qemu.running,
             onNavigate = { route -> navController.navigateToTab(route) },
             onHome = {
                 navController.navigate(Routes.HOME) {
@@ -186,6 +187,7 @@ fun PhantomApp() {
                         onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
                         onOpenFile = { path -> navController.navigate(Routes.editorRoute(path)) },
                         onOpenBrowser = { navController.navigate(Routes.BROWSER) },
+                        onOpenGit = { navController.navigateToTab(Routes.GIT) },
                     )
                 }
                 composable(Routes.EXPLORER) {

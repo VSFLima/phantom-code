@@ -122,12 +122,6 @@ jobs:
           ls -la /tmp/qemu-system-aarch64
           sha256sum /tmp/qemu-system-aarch64 | tee /tmp/qemu-system-aarch64.sha256
 
-      - name: Upload binary as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: qemu-system-aarch64
-          path: /tmp/qemu-system-aarch64
-
       - name: Publish as Release (tag fixa para o app)
         env:
           GH_TOKEN: ${{ github.token }}

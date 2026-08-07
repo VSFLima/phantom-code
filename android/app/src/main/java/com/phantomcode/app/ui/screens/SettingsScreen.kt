@@ -360,6 +360,8 @@ fun SettingsScreen() {
                     value = localCores.toFloat(),
                     onValueChange = {
                         localCores = it.toInt().coerceIn(1, maxCores)
+                    },
+                    onValueChangeFinished = {
                         qemu.setPreset(QemuPresets.CUSTOM, customCores = localCores, customRamMb = localRam)
                     },
                     valueRange = 1f..maxCores.toFloat(),
@@ -376,6 +378,8 @@ fun SettingsScreen() {
                     value = localRam.toFloat(),
                     onValueChange = {
                         localRam = it.toInt().coerceIn(512, maxRam)
+                    },
+                    onValueChangeFinished = {
                         qemu.setPreset(QemuPresets.CUSTOM, customCores = localCores, customRamMb = localRam)
                     },
                     valueRange = 512f..maxRam.toFloat(),

@@ -65,12 +65,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.zip.ZipInputStream
 
 @Composable
 fun HomeScreen(
     onOpenProject: (String) -> Unit,
     onOpenFile: (String) -> Unit,
     onOpenBrowser: () -> Unit = {},
+    onOpenGit: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val workspace = remember { WorkspaceManager(context) }
@@ -109,6 +111,31 @@ fun HomeScreen(
                         notify("Projeto importado: $name")
                     } else {
                         notify("Erro ao importar")
+                    }
+                    tick++
+                }
+            }
+        }
+    }
+
+    val zipLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            val name = runCatching { DocumentFile.fromSingleUri(context, uri)?.name }
+                .getOrNull()
+                ?.substringBeforeLast('.')
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "projeto-importado"
+            scope.launch(Dispatchers.IO) {
+                val ok = importZip(context, uri, workspace.resolve(name))
+                withContext(Dispatchers.Main) {
+                    if (ok) {
+                        session.addRecent(name)
+                        notify("ZIP importado: $name")
+                    } else {
+                        notify("Erro ao importar ZIP")
                     }
                     tick++
                 }
@@ -285,9 +312,16 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(10.dp))
             PhantomOutlinedButton(
-                text = "Clonar Repositório",
+                text = "Importar Projeto ZIP",
+                icon = Icons.Filled.FolderOpen,
+                onClick = { zipLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            PhantomOutlinedButton(
+                text = "Git: clonar / autenticar",
                 icon = Icons.Filled.AccountTree,
-                onClick = { notify("Git — disponível na Fase 4") },
+                onClick = onOpenGit,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
@@ -340,5 +374,36 @@ private suspend fun importFolder(context: android.content.Context, uri: Uri, tar
                 }
             }
             copyTree(DocumentFile.fromTreeUri(context, uri)!!, target)
+        }.isSuccess
+    }
+
+/** Importa um ZIP sem permitir que entradas escapem da pasta do projeto. */
+private suspend fun importZip(context: android.content.Context, uri: Uri, target: File): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            target.mkdirs()
+            val root = target.canonicalFile
+            ZipInputStream(context.contentResolver.openInputStream(uri) ?: error("ZIP indisponível")).use { zip ->
+                val buffer = ByteArray(32 * 1024)
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    val output = File(target, entry.name).canonicalFile
+                    check(output == root || output.path.startsWith(root.path + File.separator)) {
+                        "Entrada ZIP inválida"
+                    }
+                    if (entry.isDirectory) {
+                        output.mkdirs()
+                    } else {
+                        output.parentFile?.mkdirs()
+                        output.outputStream().use { out ->
+                            var count: Int
+                            while (zip.read(buffer).also { count = it } != -1) {
+                                out.write(buffer, 0, count)
+                            }
+                        }
+                    }
+                    zip.closeEntry()
+                }
+            }
         }.isSuccess
     }

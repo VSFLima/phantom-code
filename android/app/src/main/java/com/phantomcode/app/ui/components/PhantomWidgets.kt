@@ -53,7 +53,7 @@ import com.phantomcode.app.ui.theme.PhantomButtonStyle
 import com.phantomcode.app.ui.theme.fontFamily
 import com.phantomcode.app.ui.theme.shape
 
-/** Logo: imagem escolhida pelo usuário (pasta linux/) ou o escudo padrão. */
+/** Logo oficial embutida ou imagem escolhida pelo usuário na pasta linux/. */
 @Composable
 fun PhantomLogo(
     size: Dp,
@@ -316,10 +316,11 @@ fun SettingsRow(
     onClick: (() -> Unit)? = null,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    val shape = LocalUiStyleController.current.ui.cornerStyle.shape()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
