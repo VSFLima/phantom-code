@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -400,6 +401,21 @@ fun GitScreen() {
                             }
                             Spacer(Modifier.height(10.dp))
                             Row {
+                                PhantomOutlinedButton(
+                                    text = "Sincronizar",
+                                    icon = Icons.Filled.Sync,
+                                    enabled = !busy,
+                                    onClick = {
+                                        busy = true
+                                        scope.launch {
+                                            val result = git.pull(repoDir)
+                                            busy = false
+                                            notify(result ?: "Projeto sincronizado")
+                                            tick++
+                                        }
+                                    },
+                                )
+                                Spacer(Modifier.width(10.dp))
                                 PhantomOutlinedButton(
                                     text = "Push",
                                     icon = Icons.Filled.CloudUpload,
