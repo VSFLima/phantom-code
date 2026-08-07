@@ -331,7 +331,7 @@ fun ToolboxScreen(
                     scope.launch {
                         // T29: o binário QEMU é instalado junto com a distro (da nuvem).
                         // Sem passos manuais separados — o usuário só escolhe a distro.
-                        if (!qemu.binaryReady) {
+                        if (!qemu.binaryReady && info.id != "phantom") {
                             logTab.append("[phantom] Binário QEMU ausente — baixando do servidor…\n")
                             var lastPct = -1
                             val ok = qemu.ensureBinary { pct ->
@@ -346,6 +346,8 @@ fun ToolboxScreen(
                                 return@launch
                             }
                             logTab.append("[phantom] ✓ Binário QEMU pronto — instalando a distro…\n\n")
+                        } else if (!qemu.binaryReady) {
+                            logTab.append("[phantom] QEMU incluído no pacote unificado — instalando distro…\n\n")
                         }
                         vm.distros.install(info, config, logTab)
                     }

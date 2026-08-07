@@ -40,10 +40,10 @@ object PhantomMirror {
     val QEMU_BINARY_SHA256: String? = null // preenchido após o 1º build real (Release publica qemu-system-aarch64.sha256)
 
     // Artefato real: construído pelo workflow `Build Distro Artifacts`
-    // (.github/workflows/build-distros.yml) → Release `distro-phantom-base`.
+    // (.github/workflows/build-distros.yml) → Release `distro-phantom`.
     // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
-    const val PHANTOM_BASE_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom-base/phantom-base.tar.gz"
-    val PHANTOM_BASE_SHA256: String? = null
+    const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
+    val PHANTOM_SHA256: String? = null
 
     // Candidatos upstream (a curadoria publica os builds compatíveis — aarch64 headless):
     const val UBUNTU_URL = "https://example.com/phantom-code/ubuntu-24.04-minimal.tar.gz"

@@ -66,7 +66,7 @@ qemu-system-aarch64 -M virt,accel=tcg -cpu cortex-a72 -smp N -m XM
 ## ⚠️ Pendências (artefatos reais)
 
 1. **Binário QEMU arm64 para Android** — publicar no GitHub Releases e preencher `PhantomMirror.QEMU_BINARY_URL` (+ SHA-256)
-2. **Phantom** (D16) — rootfs aarch64 headless + kernel/initrd p/ máquina `virt` — publicar em `PHANTOM_BASE_URL` (workflow `build-distros.yml` gera; já com `e2fsprogs` e tamanho ext2 dinâmico)
+2. **Phantom** (D16) — rootfs aarch64 headless + kernel/initrd p/ máquina `virt` — publicar em `PHANTOM_URL` (workflow `build-distros.yml` gera; já com `e2fsprogs` e tamanho ext2 dinâmico)
 3. **Ubuntu/Debian/Alpine/Kali** — curadoria publica os builds compatíveis e preenche as URLs (hoje placeholder `example.com` → "Em breve" no catálogo)
 4. **Teste real no device** — Note 10 Plus (TCG ~15–20% do nativo; presets ajudam)
 

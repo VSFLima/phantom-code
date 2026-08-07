@@ -198,7 +198,7 @@ Por isso ferramentas de IA e CLIs que esperam glibc completo costumam quebrar ou
 
 | # | Decisão | Status |
 |---|---|---|
-| **D1** | Distros: não embute rootfs no APK; **Phantom Base** oficial + Ubuntu/Debian/Alpine/Kali + import arm64 | ✅ |
+| **D1** | Distros: não embute rootfs no APK; **Phantom** oficial + Ubuntu/Debian/Alpine/Kali + import arm64 | ✅ |
 | **D2** | Backup local ZIP/7z via SAF | ✅ |
 | **D3** | `workspace/` independente da distro | ✅ |
 | **D4** | Terminal inicia em `workspace/<projeto-ativo>` | ✅ |
@@ -213,7 +213,7 @@ Por isso ferramentas de IA e CLIs que esperam glibc completo costumam quebrar ou
 | **D13** | VM pode usar todo o poder do aparelho (opt-in) | ✅ |
 | **D14** | Muitas funções ≠ bagunça (nav fixa, painéis, Palette) | ✅ |
 | **D15** | Design principal = mockups Gemini + Activity Bar fina | ✅ |
-| **D16** | Phantom Base = customizar Linux upstream → rootfs oficial terminal-only | ✅ |
+| **D16** | Phantom = customizar Linux upstream → rootfs oficial terminal-only | ✅ |
 | **D17** | Modos: App-only (SPCK) · App+Terminal · Terminal background | ✅ |
 | **D18** | Auto-save + restaurar sessão | ✅ |
 | **D19** | Storage: padrão app+SAF; opt-in pasta livre ou amplo | ✅ |
@@ -403,15 +403,15 @@ Por padrão a VM pode vir com limites seguros (ex.: 2 GB RAM, 4 cores) para não
 
 **Princípio:** o limite é **escolha do usuário**, não uma restrição artificial fixa do app.
 
-### 8.5 Distros: oficial Phantom Base + catálogo amplo (D1 / D16)
+### 8.5 Distros: oficial Phantom + catálogo amplo (D1 / D16)
 
-**Princípio:** existe uma **distro oficial enxuta** do Phantom-Code (**Phantom Base**), recomendada como padrão. O usuário **sempre pode** instalar Ubuntu, Kali, Debian, Alpine ou importar outra arm64.
+**Princípio:** existe uma **distro oficial enxuta** do Phantom-Code (**Phantom**), recomendada como padrão. O usuário **sempre pode** instalar Ubuntu, Kali, Debian, Alpine ou importar outra arm64.
 
-### 8.5.1 Phantom Base — distro oficial do app (D16)
+### 8.5.1 Phantom — distro oficial do app (D16)
 
 #### Intenção de produto (registro oficial)
 
-> **Intenção:** partir de um **Linux base já existente** (upstream), **modificá-lo e curá-lo**, e assim **recriar / publicar a base Linux oficial do Phantom-Code** — a **Phantom Base**.  
+> **Intenção:** partir de um **Linux base já existente** (upstream), **modificá-lo e curá-lo**, e assim **recriar / publicar a distro Linux oficial do Phantom-Code** — a **Phantom**.
 > Não se trata de inventar um kernel do zero; trata-se de **customizar um rootfs mínimo headless** para o app (terminal-only, arm64, QEMU no Android), com identidade, scripts de integração e pacotes alinhados ao Phantom-Code.
 
 **Fluxo de criação da distro oficial:**
@@ -435,12 +435,12 @@ Publicar rootfs arm64 + checksum
   (GitHub Releases / mirror do projeto)
         │
         ▼
-App: badge “Oficial · Recomendada” = Phantom Base
+App: badge “Oficial · Recomendada” = Phantom
 ```
 
 | Item | Definição |
 |---|---|
-| **Nome** | **Phantom Base** (código: `phantom-base` / alinhado a Dark-Code) |
+| **Nome** | **Phantom** (código: `phantom` / alinhado a Dark-Code) |
 | **Papel** | Rootfs **oficial e recomendada** — terminal-only, leve, integrada ao app |
 | **Método** | **Fork/customização** de Linux base upstream + scripts e pacotes Phantom — **não** kernel from scratch |
 | **Upstream candidato** | **Alpine** mini (leveza no TCG) **ou** **Debian minbase** / **Ubuntu Base** (`apt`) — escolha final na PoC de build |
@@ -458,18 +458,18 @@ App: badge “Oficial · Recomendada” = Phantom Base
 5. Opcional: repositório ou meta-pacote `phantom-devtools`  
 6. Versionamento e notas de release no app  
 
-**O que NÃO entra na Phantom Base:**
+**O que NÃO entra na Phantom:**
 - Ambiente gráfico / desktop  
 - Metapacotes tipo kali-linux-default  
 - Toolchains completos pré-instalados (usuário instala sob demanda)  
 
 **Por que existe:**
-1. 1º uso previsível (“Instalar Phantom Base”)  
+1. 1º uso previsível (“Instalar Phantom”)
 2. Otimizada para VM terminal no Android  
 3. Toolbox e docs testados nessa rootfs  
 4. Usuário ainda pode instalar Ubuntu, Kali, Debian, Alpine ou importar outra arm64  
 
-**Manutenção:** `phantom-base-YYYY.MM`; update = nova rootfs (workspace preservado, D3); rebuild periódico a partir do upstream para patches de segurança.
+**Manutenção:** `phantom-YYYY.MM`; update = nova rootfs (workspace preservado, D3); rebuild periódico a partir do upstream para patches de segurança.
 
 #### Catálogo completo (além da oficial)
 
@@ -485,10 +485,10 @@ App: badge “Oficial · Recomendada” = Phantom Base
 
 | Prioridade | Distro | Gerenciador | Notas | Ideal para |
 |---|---|---|---|---|
-| **0 — Oficial** | **Phantom Base** (D16) | apk ou apt (conforme base) | Enxuta, badge “Oficial · Recomendada”, mirror do projeto | **Padrão do app / 1º uso** |
+| **0 — Oficial** | **Phantom** (D16) | apk ou apt (conforme base) | Enxuta, badge “Oficial · Recomendada”, mirror do projeto | **Padrão do app / 1º uso** |
 | **1** | **Ubuntu** minimal/Base 22.04 / 24.04 arm64 | `apt` | Máximo de tutoriais e pacotes | Uso geral, quem já conhece Ubuntu |
 | **2** | **Debian** bookworm slim/minbase arm64 | `apt` | Estável | Builds, servidores de dev |
-| **3** | **Alpine** mini rootfs aarch64 | `apk` | Muito leve (próxima da Phantom Base se a oficial for Alpine-based) | Aparelhos fracos |
+| **3** | **Alpine** mini rootfs aarch64 | `apk` | Muito leve (próxima da Phantom se a oficial for Alpine-based) | Aparelhos fracos |
 | **4** | **Kali Linux** arm64 | `apt` | Ecossistema pentest; imagem **maior** + avisos | Labs / segurança |
 | **5** | Outras arm64 + **Importar rootfs** (SAF) | varia | Arch ARM, Fedora aarch64, etc. | Avançado |
 
@@ -500,9 +500,9 @@ App: badge “Oficial · Recomendada” = Phantom Base
 - Qualquer rootfs arm64 compatível pode rodar além da lista curada  
 
 #### Recomendação de primeira instalação
-1. **Phantom Base** (oficial, enxuta) — onboarding padrão  
+1. **Phantom** (oficial, enxuta) — onboarding padrão
 2. Ubuntu 24.04 minimal — se o usuário preferir ecossistema Ubuntu  
-3. Alpine — se nem Phantom Base estiver disponível e o aparelho for fraco  
+3. Alpine — se nem Phantom estiver disponível e o aparelho for fraco
 4. Kali — só se o objetivo for o toolkit Kali  
 
 #### Evitar no fluxo padrão
@@ -510,11 +510,11 @@ App: badge “Oficial · Recomendada” = Phantom Base
 - Só x86_64  
 - Imagens sem checksum confiável  
 
-#### Pós-install (Phantom Base e demais)
+#### Pós-install (Phantom e demais)
 - `dark-code-init.sh`: SLIRP, 9p workspace, user, prompt no projeto ativo  
 - Workspace independente (D3); backup antes de trocar (D2)  
 
-**Resumo:** **Phantom Base = oficial e leve**; Ubuntu/Kali/Debian/Alpine/import = liberdade total do usuário.
+**Resumo:** **Phantom = oficial e leve**; Ubuntu/Kali/Debian/Alpine/import = liberdade total do usuário.
 
 ---
 
@@ -943,7 +943,7 @@ Cada card mostra: nome, versão, tamanho aproximado, tag verde se “rodando”.
 
 ### 11.12 Funções recomendadas para completude (priorizadas, D14)
 
-**Já decidido (D1–D20):** VM, distros, Phantom Base, design Gemini, multi-terminal, AI Suite, temas, cloud/keys, modos SPCK/terminal, auto-save, storage opt-in, **iniciar Linux na abertura (D20)**.
+**Já decidido (D1–D20):** VM, distros, Phantom, design Gemini, multi-terminal, AI Suite, temas, cloud/keys, modos SPCK/terminal, auto-save, storage opt-in, **iniciar Linux na abertura (D20)**.
 
 **Camada A — produtividade IDE (Fase 2)**  
 Command Palette · atalhos · templates · snippets · format on save · Problems · onboarding · exportar projeto  
@@ -959,7 +959,7 @@ Docker na Toolbox · LSP · debug · widget · tablet/DeX · plugins leves
 | Prioridade | Item | Por quê |
 |---|---|---|
 | Alta | Command Palette | Muitas ações, zero bagunça na nav |
-| Alta | Onboarding (Phantom Base + D20) | 1º uso claro |
+| Alta | Onboarding (Phantom + D20) | 1º uso claro |
 | Alta | PoC VM + 9p + terminal | Valida o produto |
 | Média | Ports / abrir no browser | Loop dev server |
 | Média | SSH remoto · templates | Uso diário |
@@ -1126,7 +1126,7 @@ O Phantom-Code **não obriga** a VM ligada o tempo todo. Três modos claros (com
 
 - **Settings → Ambiente:** modo padrão ao abrir (A, B ou “perguntar”)
 - **Toggle rápido** na Top Bar / status: `Terminal OFF` · `Terminal ON`
-- **Primeira vez:** pode começar em **App-only** (editar na hora) e só depois “Instalar Phantom Base + Iniciar terminal”
+- **Primeira vez:** pode começar em **App-only** (editar na hora) e só depois “Instalar Phantom + Iniciar terminal”
 - **Sem distro instalada:** força modo A até haver rootfs (não quebra o editor)
 
 ### Iniciar Linux na abertura do app (D20) — escolha do usuário
@@ -1141,14 +1141,14 @@ O Phantom-Code **não obriga** a VM ligada o tempo todo. Três modos claros (com
 1. Preferência em **Settings → Ambiente → Iniciar Linux na abertura** (toggle claro)
 2. Se **Desativado**: zero espera de boot da VM; ideal para só editar código  
 3. Se **Ativado**: pode mostrar splash/status “Iniciando QEMU…”; resume snapshot se existir  
-4. Sem distro instalada: ignora o toggle e fica App-only + CTA para instalar Phantom Base  
+4. Sem distro instalada: ignora o toggle e fica App-only + CTA para instalar Phantom
 5. Combina com D13 (poder do aparelho) e FGS se o usuário também mantiver terminal em background  
 6. A escolha é **100% do usuário** — o app não força VM ligada
 
 ### Regras de produto
 
 1. **Modo A nunca bloqueia** edição, Git local nem backup — zero dependência de QEMU  
-2. **Modo B/C** exigem distro (Phantom Base ou outra) + permissões FGS/rede  
+2. **Modo B/C** exigem distro (Phantom ou outra) + permissões FGS/rede
 3. Trocar A → B = boot da VM (ou resume snapshot); B → A = para VM com confirmação se houver processos  
 4. Bottom Nav igual nos três modos; no modo A, Terminal dock mostra CTA “Iniciar ambiente Linux” em vez do shell  
 5. Toolbox no modo A: mostra integrações/API keys; pacotes do guest ficam “Indisponível até iniciar terminal”
@@ -1291,7 +1291,7 @@ Builds: `arm64-v8a` principal. Versionamento semântico + changelog no app.
 ## 20. Próximos passos
 
 1. **PoC da VM (D5):** QEMU headless + 9p + terminal + install de ferramenta real; medir performance.
-2. **Protótipo Phantom Base (D16):** escolher upstream (Alpine vs Debian minbase) e gerar 1ª rootfs.
+2. **Protótipo Phantom (D16):** escolher upstream (Alpine vs Debian minbase) e gerar 1ª rootfs.
 3. Fechar **D6** (distribuição) e validar **D7** (CodeMirror 6 no aparelho).
 4. Fase 1: editor + explorer + workspace + modos A/B (D17) + D20.
 5. Manter este **Documento Mestre** como única fonte de verdade.
@@ -1316,7 +1316,7 @@ Builds: `arm64-v8a` principal. Versionamento semântico + changelog no app.
 
 ### 21.2 Coerências verificadas (sem conflito)
 
-- **D1 ≠ embutir rootfs no APK** e **D16 Phantom Base por download** → compatíveis  
+- **D1 ≠ embutir rootfs no APK** e **D16 Phantom por download** → compatíveis
 - **D17 App-only** e **D5 QEMU oficial** → VM não é obrigatória o tempo todo  
 - **D20 off** = nasce SPCK; **D20 on** = sobe Linux → coerente com D17  
 - **D13 poder máximo** + **auto-stop background** → escolha do usuário, não contradição  
@@ -1331,7 +1331,7 @@ Builds: `arm64-v8a` principal. Versionamento semântico + changelog no app.
 | Ordem interna §11 (11.10 após 11.13) | Cosmético; conteúdo ok |
 | D6 em aberto | Decidir antes do release público |
 | D7 | Confirmar CodeMirror 6 no device real na Fase 1 |
-| Phantom Base upstream | Fechar Alpine vs Debian na PoC (D16) |
+| Phantom upstream | Fechar Alpine vs Debian na PoC (D16) |
 | Play + DCL + download de distro | Ligado a D6; sideload/F-Droid mitiga |
 | Performance TCG | Expectativa já documentada §13; aviso na UI |
 

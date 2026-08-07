@@ -104,6 +104,19 @@ class QemuManager(
     /** Baixa o binário QEMU arm64 (com checksum se informado) e marca como executável. */
     suspend fun ensureBinary(onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         if (binaryReady) return@withContext true
+        // A Phantom já traz o QEMU no mesmo pacote da distro; evita um segundo download.
+        distros.activeQemu()?.let { bundled ->
+            runCatching {
+                bundled.copyTo(binary(), overwrite = true)
+                binary().setExecutable(true)
+            }.onSuccess {
+                onMain {
+                    binaryInstalling = false
+                    binaryReady = true
+                }
+                return@withContext true
+            }
+        }
         binaryInstalling = true
         val target = binary()
         val tmp = File(qemuDir, "qemu.tmp")

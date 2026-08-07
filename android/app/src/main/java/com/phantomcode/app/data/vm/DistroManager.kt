@@ -48,18 +48,18 @@ data class DistroInfo(
 object DistroCatalog {
     val ALL: List<DistroInfo> = listOf(
         DistroInfo(
-            id = "phantom-base",
+            id = "phantom",
             name = "Phantom",
             badge = "Oficial",
             description = "Nossa distro oficial, feita sob medida para o app: Debian bookworm arm64 com python3 e git. Configurada automaticamente pelo app.",
             recommendedFor = "Uso geral — o padrão do Phantom-Code",
-            url = PhantomMirror.PHANTOM_BASE_URL,
-            sha256 = PhantomMirror.PHANTOM_BASE_SHA256,
+            url = PhantomMirror.PHANTOM_URL,
+            sha256 = PhantomMirror.PHANTOM_SHA256,
             sizeMb = 500,
             installSizeMb = 2048,
             ramMb = 1024,
             risk = DistroRisk.LOW,
-            available = false, // ⚠️ artefato ainda não publicado — "Em breve"
+            available = true,
             packageManager = "apt",
         ),
         DistroInfo(
@@ -155,11 +155,21 @@ class DistroManager(context: Context) {
         private set
 
     init {
+        migrateLegacyPhantom()
         // Detecta distros já instaladas
         DistroCatalog.ALL.forEach { info ->
             installStates[info.id] = stateFor(info.id)
         }
         activeId = linuxDir.listFiles()?.firstOrNull { it.isDirectory && isInstalled(it.name) }?.name
+    }
+
+    /** Renomeia a instalação antiga quando o ID oficial ainda era phantom-base. */
+    private fun migrateLegacyPhantom() {
+        val old = File(linuxDir, "phantom-base")
+        val current = File(linuxDir, "phantom")
+        if (old.isDirectory && !current.exists()) {
+            runCatching { old.renameTo(current) }
+        }
     }
 
     fun dirFor(id: String): File = File(linuxDir, id)
@@ -187,6 +197,7 @@ class DistroManager(context: Context) {
 
     fun activeKernel(): File? = activeId?.let { id -> File(dirFor(id), "kernel").takeIf { it.exists() } }
     fun activeInitrd(): File? = activeId?.let { id -> File(dirFor(id), "initrd.img").takeIf { it.exists() } }
+    fun activeQemu(): File? = activeId?.let { id -> File(dirFor(id), "qemu-system-aarch64").takeIf { it.exists() } }
 
     /** Baixa, valida (SHA-256) e instala a distro em background. */
     fun install(info: DistroInfo) {
