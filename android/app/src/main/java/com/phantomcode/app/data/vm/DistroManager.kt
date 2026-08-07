@@ -328,13 +328,18 @@ class DistroManager(context: Context) {
         }
     }
 
-    /** Copia o dark-code-init.sh (T18) para dentro da distro instalada. */
+    /** Copia o dark-code-init.sh (T18) e o phantom-agent.sh (T20) para dentro da distro instalada. */
     private fun copyInitScript(targetDir: File) {
+        copyAssetToRoot("linux/dark-code-init.sh", "dark-code-init.sh", targetDir)
+        copyAssetToRoot("linux/phantom-agent.sh", "phantom-agent.sh", targetDir)
+    }
+
+    private fun copyAssetToRoot(asset: String, name: String, targetDir: File) {
         runCatching {
-            appContext.assets.open("linux/dark-code-init.sh").use { input ->
-                File(targetDir, "dark-code-init.sh").outputStream().use { out -> input.copyTo(out) }
+            appContext.assets.open(asset).use { input ->
+                File(targetDir, name).outputStream().use { out -> input.copyTo(out) }
             }
-            File(targetDir, "dark-code-init.sh").setExecutable(true)
+            File(targetDir, name).setExecutable(true)
         }
     }
 

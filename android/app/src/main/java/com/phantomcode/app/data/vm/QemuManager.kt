@@ -12,6 +12,7 @@ import com.phantomcode.app.data.WorkspaceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -61,6 +62,12 @@ class QemuManager(
 
     /** Socket unix do console via virtio-serial (T16) — removido no stop. */
     private var serialSocket: File? = null
+
+    /** Socket unix do canal de controle (T20, phantom-agent.sh) — removido no stop. */
+    private var ctrlSocket: File? = null
+
+    /** Scanner de pacotes do guest (T20) — canal via 2ª porta do virtio-serial. */
+    val scanner = PackageScanner()
 
     val terminal = TerminalManager()
 
@@ -179,6 +186,10 @@ class QemuManager(
         val sock = File(qemuDir, "term.sock")
         sock.delete()
         serialSocket = sock
+        // Canal de controle (T20): 2ª porta do virtio-serial → phantom-agent.sh.
+        val ctrlSock = File(qemuDir, "ctrl.sock")
+        ctrlSock.delete()
+        ctrlSocket = ctrlSock
         cmd += listOf(
             // Ponte de arquivos: workspace do Android dentro do guest (D3)
             "-virtfs", "local,path=${workspace.root.absolutePath},mount_tag=darkcode-ws,security_model=none,id=ws0",
@@ -189,6 +200,9 @@ class QemuManager(
             "-chardev", "socket,id=term0,path=${sock.absolutePath},server=on,wait=off",
             "-device", "virtio-serial-device",
             "-device", "virtconsole,chardev=term0",
+            // Canal app↔guest (T20): virtserialport → /dev/vport1p1 no guest
+            "-chardev", "socket,id=ctrl0,path=${ctrlSock.absolutePath},server=on,wait=off",
+            "-device", "virtserialport,chardev=ctrl0,name=phantom.ctrl",
             // Monitor QEMU + uart0 no stdio (headless)
             "-nographic",
         )
@@ -212,6 +226,7 @@ class QemuManager(
             } else {
                 terminal.attach(p)
             }
+            connectControlSocket()
             onMain {
                 running = true
                 statusText = "RUNNING"
@@ -254,12 +269,39 @@ class QemuManager(
         return null
     }
 
+    /**
+     * Conecta ao socket de controle (2ª porta do virtio-serial, T20). O agente
+     * do guest (`phantom-agent.sh`) escuta em /dev/vport1p1 e responde SCAN/RUN.
+     */
+    private fun connectControlSocket() {
+        val sock = ctrlSocket ?: return
+        scope.launch {
+            repeat(60) {
+                if (sock.exists()) {
+                    val s = LocalSocket()
+                    val ok = runCatching {
+                        s.connect(LocalSocketAddress(sock.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
+                    }.isSuccess
+                    if (ok) {
+                        scanner.attach(s)
+                        return@launch
+                    }
+                    runCatching { s.close() }
+                }
+                delay(100)
+            }
+        }
+    }
+
     fun stop() {
         runCatching { process?.destroy() }
         watcher?.cancel()
         terminal.stop()
+        scanner.disconnect()
         runCatching { serialSocket?.delete() }
         serialSocket = null
+        runCatching { ctrlSocket?.delete() }
+        ctrlSocket = null
         running = false
         statusText = "STOPPED"
         autoStartSuppressed = true

@@ -67,9 +67,16 @@ export SHELL
 export HOME=/root
 cd /root
 
-# Prompt com o projeto ativo (se workspace visível)
-PS1='\[\033[01;35m\]\u@phantom\[\033[00m\]:\[\033[01;36m\]\w\[\033[00m\]\$ '
+# Prompt com o projeto ativo (se workspace visível) — hostname real (phantom por padrão)
+PS1='\[\033[01;35m\]\u@'"$HOSTNAME"'\[\033[00m\]:\[\033[01;36m\]\w\[\033[00m\]\$ '
 export PS1
+
+# ── 5. Agente Phantom (canal app↔guest — T20) ───────────────
+# Sobe o agente do scanner de pacotes na 2ª porta do virtio-serial.
+AGENT="$(dirname "$0")/phantom-agent.sh"
+if [ -c /dev/vport1p1 ] && [ -x "$AGENT" ]; then
+  nohup "$AGENT" >/dev/null 2>&1 &
+fi
 
 log "Pronto. Workspace: $WORKSPACE_MOUNT"
 

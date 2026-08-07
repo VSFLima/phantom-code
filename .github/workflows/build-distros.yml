@@ -61,19 +61,15 @@ jobs:
           cp -L /tmp/rootfs/boot/initrd.img-* /tmp/initrd.img
           ls -la /tmp/kernel /tmp/initrd.img
 
-      - name: Create rootfs.img (genext2fs — ext2 dinâmico)
+      - name: Create rootfs.img (mkfs.ext2 -d — imagem ext2 populada direto do dir)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y genext2fs
-          # Tamanho do rootfs em KiB → blocos de 4KiB com 40% de folga.
-          # (linux-image-arm64 + python3 + nodejs estouram os 1 GiB fixos do genext2fs)
-          SIZE_KIB=$(du -sk /tmp/rootfs | awk '{print $1}')
-          BLOCKS=$(( SIZE_KIB * 140 / 100 / 4 ))
-          # Inodes: 1 por 4KiB (nodejs instala dezenas de milhares de arquivos pequenos)
-          INODES=$(( BLOCKS ))
-          echo "rootfs: ${SIZE_KIB} KiB → ext2: $(( BLOCKS * 4 / 1024 )) MiB, ${INODES} inodes"
-          # device nodes exigem root (sudo)
-          sudo genext2fs -b "$BLOCKS" -i 4096 -d /tmp/rootfs /tmp/rootfs.img
+          # `du -s` subconta hardlinks (docker export) — usamos -l e ainda sobramos
+          # 140% + 200 MB. ext2 de verdade via e2fsprogs (muito mais robusto que
+          # genext2fs, que estourava "couldn't allocate a block").
+          SIZE_MB=$(( $(du -sk -l /tmp/rootfs | awk '{print $1}') * 140 / 100 / 1024 + 200 ))
+          echo "rootfs real: $(du -sk /tmp/rootfs | awk '{print $1}') KiB → ext2: ${SIZE_MB} MiB"
+          truncate -s "${SIZE_MB}M" /tmp/rootfs.img
+          sudo mkfs.ext2 -q -F /tmp/rootfs.img -d /tmp/rootfs
           ls -la /tmp/rootfs.img
 
       - name: Package artifact
