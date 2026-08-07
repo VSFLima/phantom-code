@@ -2,7 +2,6 @@ package com.phantomcode.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -78,7 +76,6 @@ fun PhantomScaffold(
             }
         }
         TerminalDock(onOpen = onOpenTerminal)
-        PhantomBottomBar(currentRoute = currentRoute, onNavigate = onNavigate)
     }
 }
 
@@ -243,67 +240,6 @@ private fun ActivityIcon(
     }
 }
 
-/** Bottom Nav fixa com 5 itens (D14) — indicador angular no item ativo. */
-@Composable
-fun PhantomBottomBar(
-    currentRoute: String,
-    onNavigate: (String) -> Unit,
-) {
-    val palette = LocalThemeController.current.currentPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(palette.surface)
-            .drawBehind {
-                drawLine(
-                    color = palette.border.copy(alpha = 0.5f),
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
-            .navigationBarsPadding(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        BottomNavItems.forEach { item ->
-            val selected = currentRoute == item.route
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { onNavigate(item.route) }
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                        tint = if (selected) palette.accentPrimary else palette.textSecondary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    if (selected) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .offset(y = (-6).dp)
-                                .width(20.dp)
-                                .height(2.dp)
-                                .background(palette.accentPrimary)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = item.label,
-                    fontSize = 10.sp,
-                    color = if (selected) palette.accentPrimary else palette.textSecondary,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
 /** Terminal dock no rodapé — toque abre o terminal (D4/D11). */
 @Composable
 fun TerminalDock(onOpen: () -> Unit) {
@@ -321,6 +257,7 @@ fun TerminalDock(onOpen: () -> Unit) {
                 )
             }
             .clickable(onClick = onOpen)
+            .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
