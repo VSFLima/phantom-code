@@ -6,8 +6,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
@@ -24,12 +26,22 @@ import androidx.compose.material.icons.filled.Web
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -50,6 +62,7 @@ import com.phantomcode.app.data.vm.VmController
 import com.phantomcode.app.ui.components.CommandPalette
 import com.phantomcode.app.ui.components.PaletteCommand
 import com.phantomcode.app.ui.components.PhantomScaffold
+import com.phantomcode.app.ui.components.PhantomLogo
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.screens.EditorScreen
 import com.phantomcode.app.ui.screens.ExplorerScreen
@@ -67,6 +80,7 @@ import com.phantomcode.app.ui.theme.PhantomTheme
 import com.phantomcode.app.ui.theme.ThemeController
 import com.phantomcode.app.ui.theme.UiStyleController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 fun PhantomRoot() {
@@ -74,14 +88,46 @@ fun PhantomRoot() {
     val controller = remember { ThemeController(context.applicationContext) }
     val uiStyle = remember { UiStyleController(context.applicationContext) }
     val vm = remember { VmController(context.applicationContext) }
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(850)
+        showSplash = false
+    }
     CompositionLocalProvider(
         LocalThemeController provides controller,
         LocalUiStyleController provides uiStyle,
         LocalVm provides vm,
     ) {
         PhantomTheme(palette = controller.currentPalette()) {
-            PhantomApp()
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                PhantomApp()
+                AnimatedVisibility(
+                    visible = showSplash,
+                    enter = fadeIn(tween(180)) + scaleIn(tween(420), initialScale = 0.82f),
+                    exit = fadeOut(tween(320)),
+                ) {
+                    PhantomLaunchSplash()
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun PhantomLaunchSplash() {
+    val palette = LocalThemeController.current.currentPalette()
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.background),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        PhantomLogo(size = 104.dp)
+        Spacer(Modifier.height(18.dp))
+        Text("PHANTOM-CODE", color = palette.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+        Spacer(Modifier.height(6.dp))
+        Text("IDE · LINUX · GIT", color = palette.accentSecondary, fontSize = 10.sp, letterSpacing = 1.5.sp)
     }
 }
 

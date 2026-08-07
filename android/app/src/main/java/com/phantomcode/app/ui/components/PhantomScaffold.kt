@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +40,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +63,7 @@ fun PhantomScaffold(
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    var sidebarOpen by remember { mutableStateOf(true) }
 
     Column(
         modifier = Modifier
@@ -66,11 +73,27 @@ fun PhantomScaffold(
     ) {
         PhantomTopBar(running = qemuRunning, onHome = onHome, onOpenPalette = onOpenPalette)
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            ActivityBar(
-                currentRoute = currentRoute,
-                onNavigate = onNavigate,
-                onHome = onHome,
-            )
+            if (sidebarOpen) {
+                ActivityBar(
+                    currentRoute = currentRoute,
+                    onNavigate = onNavigate,
+                    onHome = onHome,
+                    modifier = Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (dragAmount < -24f) sidebarOpen = false
+                        }
+                    },
+                )
+            } else {
+                SidebarHandle(
+                    onOpen = { sidebarOpen = true },
+                    modifier = Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (dragAmount > 24f) sidebarOpen = true
+                        }
+                    },
+                )
+            }
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 content()
             }
@@ -162,10 +185,11 @@ fun ActivityBar(
     currentRoute: String,
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val palette = LocalThemeController.current.currentPalette()
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(52.dp)
             .fillMaxHeight()
             .background(palette.surface)
@@ -203,6 +227,21 @@ fun ActivityBar(
             )
             Spacer(Modifier.height(6.dp))
         }
+    }
+}
+
+@Composable
+private fun SidebarHandle(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val palette = LocalThemeController.current.currentPalette()
+    Box(
+        modifier = modifier
+            .width(12.dp)
+            .fillMaxHeight()
+            .background(palette.surface)
+            .clickable(onClick = onOpen),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("›", color = palette.accentPrimary, fontSize = 16.sp)
     }
 }
 

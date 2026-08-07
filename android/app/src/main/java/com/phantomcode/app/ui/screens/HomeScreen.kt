@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GitHub
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storage
@@ -51,6 +52,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.WorkspaceManager
+import com.phantomcode.app.data.ProjectOrigin
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomDialog
@@ -281,7 +283,25 @@ fun HomeScreen(
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.Filled.Folder, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
+                            val origin = workspace.projectOrigin(project)
+                            Icon(
+                                imageVector = when (origin) {
+                                    ProjectOrigin.GITHUB -> Icons.Filled.GitHub
+                                    ProjectOrigin.GIT -> Icons.Filled.AccountTree
+                                    ProjectOrigin.LOCAL -> Icons.Filled.Folder
+                                },
+                                contentDescription = when (origin) {
+                                    ProjectOrigin.GITHUB -> "Projeto GitHub"
+                                    ProjectOrigin.GIT -> "Projeto Git"
+                                    ProjectOrigin.LOCAL -> "Projeto local"
+                                },
+                                tint = when (origin) {
+                                    ProjectOrigin.GITHUB -> palette.textPrimary
+                                    ProjectOrigin.GIT -> palette.accentSecondary
+                                    ProjectOrigin.LOCAL -> palette.accentPrimary
+                                },
+                                modifier = Modifier.size(18.dp),
+                            )
                             Spacer(Modifier.width(10.dp))
                             Text(project, color = palette.textPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
                             Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = palette.textSecondary, modifier = Modifier.size(18.dp))

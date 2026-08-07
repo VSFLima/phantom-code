@@ -17,6 +17,12 @@ data class TextMatch(
     val preview: String,
 )
 
+enum class ProjectOrigin {
+    LOCAL,
+    GIT,
+    GITHUB,
+}
+
 /**
  * Gerencia a pasta de projetos do app: pasta pública `/storage/emulated/0/Phantom-Code/workspace`
  * quando há permissão de armazenamento, senão `filesDir/Phantom-Code/workspace` (privado, fallback).
@@ -100,6 +106,14 @@ class WorkspaceManager(context: Context) {
     /** Projetos = pastas de primeiro nível do workspace. */
     fun projects(): List<String> =
         root.listFiles()?.filter { it.isDirectory }?.map { it.name }?.sorted() ?: emptyList()
+
+    /** Identifica a origem do projeto para a UI sem executar Git na main thread. */
+    fun projectOrigin(project: String): ProjectOrigin {
+        val gitDir = resolve(project).resolve(".git")
+        if (!gitDir.isDirectory) return ProjectOrigin.LOCAL
+        val config = File(gitDir, "config").takeIf { it.isFile }?.readText().orEmpty()
+        return if (config.contains("github.com", ignoreCase = true)) ProjectOrigin.GITHUB else ProjectOrigin.GIT
+    }
 
     fun createDir(relPath: String): Boolean = resolve(relPath).mkdirs()
 
