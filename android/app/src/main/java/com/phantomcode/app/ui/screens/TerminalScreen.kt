@@ -171,6 +171,14 @@ fun TerminalScreen(onBack: () -> Unit) {
         }
 
         // ── Terminal VT100 real (jackpal emulatorview) ──
+        if (terminal.activeTab == null) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Nenhuma sessão de terminal ativa.", color = palette.textSecondary, fontSize = 12.sp)
+            }
+        } else {
             AndroidView<View>(
                 factory = { ctx ->
                 // Construção em 2 passos: o construtor (ctx, session, metrics) chama
@@ -212,8 +220,9 @@ fun TerminalScreen(onBack: () -> Unit) {
                     }
                 },
              onRelease = { (it as? EmulatorView)?.onPause() },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        )
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
 
         // ── Rodapé: dica de uso ──
         Row(

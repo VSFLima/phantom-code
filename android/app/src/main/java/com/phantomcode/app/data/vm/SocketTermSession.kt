@@ -15,9 +15,11 @@ import jackpal.androidterm.emulatorview.TermSession
 class SocketTermSession(private val socket: LocalSocket) : TermSession() {
 
     init {
-        setTermIn(socket.inputStream)
-        setTermOut(socket.outputStream)
-        initializeEmulator(80, 24)
+        runCatching {
+            setTermIn(socket.inputStream)
+            setTermOut(socket.outputStream)
+            initializeEmulator(80, 24)
+        }
     }
 
     override fun finish() {

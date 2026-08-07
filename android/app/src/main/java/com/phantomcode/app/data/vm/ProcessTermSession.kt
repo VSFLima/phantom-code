@@ -15,9 +15,11 @@ import jackpal.androidterm.emulatorview.TermSession
 class ProcessTermSession(private val process: Process) : TermSession() {
 
     init {
-        setTermIn(process.inputStream)
-        setTermOut(process.outputStream)
-        initializeEmulator(80, 24)
+        runCatching {
+            setTermIn(process.inputStream)
+            setTermOut(process.outputStream)
+            initializeEmulator(80, 24)
+        }
     }
 
     override fun finish() {
