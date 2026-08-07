@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,7 +48,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
+import com.phantomcode.app.ui.components.PhantomOutlinedButton
+import com.phantomcode.app.ui.components.PhantomLogo
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.theme.LocalTerminalStyleController
 import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
 import jackpal.androidterm.emulatorview.TermSession
@@ -60,9 +65,12 @@ import kotlinx.coroutines.launch
  * - Teclado físico e virtual com suporte a Ctrl/Alt/Tab do emulador.
  */
 @Composable
-fun TerminalScreen(onBack: () -> Unit) {
+fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
+    val terminalStyle = LocalTerminalStyleController.current
+    val terminalColors = terminalStyle.colors(palette)
+    val keyboard = LocalSoftwareKeyboardController.current
     val terminal = vm.qemu.terminal
     val scope = rememberCoroutineScope()
     val tabScroll = rememberScrollState()
@@ -71,11 +79,12 @@ fun TerminalScreen(onBack: () -> Unit) {
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
 
     // Ciclo de vida da EmulatorView (IME + blink + redesenho)
-    LaunchedEffect(termView) {
+    LaunchedEffect(termView, attachedSession) {
         termView?.let {
             runCatching {
                 it.onResume()
                 it.requestFocus()
+                keyboard?.show()
             }
         }
     }
@@ -143,42 +152,49 @@ fun TerminalScreen(onBack: () -> Unit) {
 
         // ── Aviso sem abas (VM parada) ──
         if (terminal.tabs.isEmpty()) {
-            Row(
+            Column(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .background(palette.surfaceAlt)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .background(palette.background)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = palette.accentPrimary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(8.dp))
+                PhantomLogo(size = 72.dp)
+                Spacer(Modifier.size(12.dp))
+                Text("PHANTOM-CODE TERMINAL", color = palette.textPrimary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(Modifier.size(6.dp))
                 Text(
-                    "VM parada — inicie o Linux para abrir o terminal.",
+                    "Escolha uma ação para começar.",
                     color = palette.textSecondary,
                     fontSize = 12.sp,
-                    modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.size(16.dp))
                 PhantomPrimaryButton(
-                    text = "Iniciar",
+                    text = "Iniciar Linux",
+                    icon = Icons.Filled.PlayArrow,
                     onClick = { scope.launch { vm.qemu.start() } },
+                )
+                Spacer(Modifier.size(8.dp))
+                PhantomOutlinedButton(
+                    text = "Nova shell Android",
+                    icon = Icons.Filled.Add,
+                    onClick = {
+                        terminal.addShellTab()
+                    },
+                )
+                Spacer(Modifier.size(8.dp))
+                PhantomOutlinedButton(
+                    text = "Abrir Toolbox",
+                    icon = Icons.Filled.Memory,
+                    onClick = onOpenToolbox,
                 )
             }
         }
 
         // ── Terminal VT100 real (jackpal emulatorview) ──
-        if (terminal.activeTab == null) {
-            Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Nenhuma sessão de terminal ativa.", color = palette.textSecondary, fontSize = 12.sp)
-            }
-        } else {
+        if (terminal.activeTab != null) {
             AndroidView<View>(
                 factory = { ctx ->
                 // Construção em 2 passos: o construtor (ctx, session, metrics) chama
@@ -186,14 +202,15 @@ fun TerminalScreen(onBack: () -> Unit) {
                 // construtor XML (sem session) + setDensity/attachSession manuais —
                 // a sessão é anexada no `update` abaixo quando há aba ativa.
                 runCatching { EmulatorView(ctx, null).apply {
+                    isFocusableInTouchMode = true
                     setDensity(ctx.resources.displayMetrics)
                     // Terminal segue a paleta do usuário (Design System v2):
                     // fundo e texto nas cores do app, com o verde de sucesso no prompt.
                     runCatching {
                         setColorScheme(
                             ColorScheme(
-                                palette.textPrimary.toArgb(),
-                                palette.background.toArgb(),
+                                terminalColors.first.toArgb(),
+                                terminalColors.second.toArgb(),
                             ),
                         )
                     }
@@ -212,6 +229,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                         val tab = terminal.activeTab
                         if (tab != null && attachedSession !== tab.session) {
                             runCatching {
+                                view.setColorScheme(ColorScheme(terminalColors.first.toArgb(), terminalColors.second.toArgb()))
                                 view.attachSession(tab.session)
                                 attachedSession = tab.session
                                 view.requestFocus()

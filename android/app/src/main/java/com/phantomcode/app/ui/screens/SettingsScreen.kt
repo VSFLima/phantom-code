@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -67,11 +68,13 @@ import com.phantomcode.app.ui.components.StylePickerDialog
 import com.phantomcode.app.ui.components.SwatchRow
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalUiStyleController
+import com.phantomcode.app.ui.theme.LocalTerminalStyleController
 import com.phantomcode.app.ui.theme.PhantomBorderStyle
 import com.phantomcode.app.ui.theme.PhantomButtonStyle
 import com.phantomcode.app.ui.theme.PhantomCornerStyle
 import com.phantomcode.app.ui.theme.PhantomFontStyle
 import com.phantomcode.app.ui.theme.PhantomPreset
+import com.phantomcode.app.ui.theme.TerminalPreset
 
 private data class CustomField(val key: String, val label: String)
 
@@ -260,6 +263,41 @@ fun SettingsScreen() {
                 },
                 onDismiss = { uiPicker = null },
             )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Terminal, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            SectionLabel(text = "Terminal")
+        }
+        Spacer(Modifier.height(8.dp))
+        val terminalStyle = LocalTerminalStyleController.current
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Estilo do terminal", color = palette.textSecondary, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TerminalPreset.entries.forEach { preset ->
+                    val selected = terminalStyle.style == preset
+                    Text(
+                        preset.label,
+                        color = if (selected) palette.accentPrimary else palette.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (selected) palette.accentPrimary.copy(alpha = 0.18f) else palette.surfaceAlt)
+                            .border(1.dp, if (selected) palette.accentPrimary else palette.border.copy(alpha = 0.4f), RoundedCornerShape(3.dp))
+                            .clickable { terminalStyle.select(preset) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("A cor do texto e o fundo acompanham o estilo escolhido.", color = palette.textSecondary, fontSize = 10.sp)
         }
 
         Spacer(Modifier.height(20.dp))

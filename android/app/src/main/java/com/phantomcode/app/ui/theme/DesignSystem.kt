@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -51,6 +52,40 @@ enum class PhantomFontStyle(val id: String, val label: String) {
     HACKER("hacker", "Hacker Mono"),
     MODERN("modern", "Moderna"),
     CLASSIC("classic", "Clássica"),
+}
+
+enum class TerminalPreset(val id: String, val label: String) {
+    APP("app", "Tema do app"),
+    MATRIX("matrix", "Matrix"),
+    AMBER("amber", "Amber"),
+    ICE("ice", "Ice"),
+    PAPER("paper", "Paper"),
+}
+
+class TerminalStyleController(context: Context) {
+    private val prefs = context.getSharedPreferences("phantom_terminal_style", Context.MODE_PRIVATE)
+    var style by mutableStateOf(
+        TerminalPreset.entries.firstOrNull { it.id == prefs.getString("preset", TerminalPreset.APP.id) }
+            ?: TerminalPreset.APP,
+    )
+        private set
+
+    fun select(preset: TerminalPreset) {
+        style = preset
+        prefs.edit().putString("preset", preset.id).apply()
+    }
+
+    fun colors(palette: PhantomPalette): Pair<Color, Color> = when (style) {
+        TerminalPreset.APP -> palette.textPrimary to palette.background
+        TerminalPreset.MATRIX -> Color(0xFF00FF41) to Color(0xFF050A05)
+        TerminalPreset.AMBER -> Color(0xFFFFB000) to Color(0xFF100B00)
+        TerminalPreset.ICE -> Color(0xFFBDEBFF) to Color(0xFF061018)
+        TerminalPreset.PAPER -> Color(0xFF202124) to Color(0xFFF4F1E8)
+    }
+}
+
+val LocalTerminalStyleController = staticCompositionLocalOf<TerminalStyleController> {
+    error("TerminalStyleController não fornecido — envolva o conteúdo em PhantomRoot()")
 }
 
 /** Preferências de estilo de UI do usuário. */

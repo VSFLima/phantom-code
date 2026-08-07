@@ -2,7 +2,6 @@ package com.phantomcode.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -21,13 +19,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,11 +44,9 @@ import androidx.compose.ui.unit.sp
 import com.phantomcode.app.ui.navigation.BottomNavItems
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.theme.LocalThemeController
-import com.phantomcode.app.data.vm.LocalVm
-import com.phantomcode.app.data.vm.TerminalTabKind
 
 /**
- * Layout principal (D15): TopBar + Activity Bar fina + conteúdo + Terminal dock + Bottom Nav.
+ * Layout principal: TopBar + Activity Bar recolhível + conteúdo.
  */
 @Composable
 fun PhantomScaffold(
@@ -63,7 +54,7 @@ fun PhantomScaffold(
     qemuRunning: Boolean,
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
-    onOpenTerminal: () -> Unit,
+    onToggleLinux: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -75,7 +66,7 @@ fun PhantomScaffold(
             .background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        PhantomTopBar(running = qemuRunning, onHome = onHome)
+        PhantomTopBar(running = qemuRunning, onHome = onHome, onToggleLinux = onToggleLinux)
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (sidebarOpen) {
                 ActivityBar(
@@ -102,12 +93,11 @@ fun PhantomScaffold(
                 content()
             }
         }
-        TerminalDock(onOpen = onOpenTerminal)
     }
 }
 
 @Composable
-private fun PhantomTopBar(running: Boolean, onHome: () -> Unit) {
+private fun PhantomTopBar(running: Boolean, onHome: () -> Unit, onToggleLinux: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
     Row(
         modifier = Modifier
@@ -135,22 +125,22 @@ private fun PhantomTopBar(running: Boolean, onHome: () -> Unit) {
             letterSpacing = 2.sp,
         )
         Spacer(Modifier.weight(1f))
-        QemuStatusPill(running = running)
+        QemuStatusPill(running = running, onClick = onToggleLinux)
     }
 }
 
 /** Pill de status da VM (verde quando RUNNING, neutro quando STOPPED). */
 @Composable
-fun QemuStatusPill(running: Boolean, modifier: Modifier = Modifier) {
+fun QemuStatusPill(running: Boolean, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     val palette = LocalThemeController.current.currentPalette()
     val dot = if (running) palette.success else palette.border
-    val text = if (running) "QEMU LINUX: RUNNING" else "QEMU LINUX: STOPPED"
+    val text = if (running) "LINUX: ATIVO" else "LINUX: INICIAR"
     val color = if (running) palette.success else palette.textSecondary
     Surface(
         shape = RoundedCornerShape(3.dp),
         color = palette.surfaceAlt,
         border = androidx.compose.foundation.BorderStroke(1.dp, palette.border.copy(alpha = 0.5f)),
-        modifier = modifier,
+        modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -269,126 +259,5 @@ private fun ActivityIcon(
                     .background(palette.accentPrimary)
             )
         }
-    }
-}
-
-/** Terminal dock no rodapé — toque abre o terminal (D4/D11). */
-@Composable
-fun TerminalDock(onOpen: () -> Unit) {
-    val palette = LocalThemeController.current.currentPalette()
-    val vm = LocalVm.current
-    val terminal = vm.qemu.terminal
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(palette.surface)
-            .drawBehind {
-                drawLine(
-                    color = palette.border.copy(alpha = 0.5f),
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
-            .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Terminal,
-            contentDescription = null,
-            tint = palette.accentSecondary,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (terminal.tabs.isEmpty()) {
-                Text(
-                    "Nenhum terminal aberto",
-                    color = palette.textSecondary,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    modifier = Modifier.clickable(onClick = onOpen),
-                )
-            } else {
-                terminal.tabs.forEachIndexed { index, tab ->
-                    TermTab(
-                        name = tab.title,
-                        active = index == terminal.activeIndex,
-                        onClick = {
-                            terminal.selectTab(index)
-                            onOpen()
-                        },
-                        onClose = {
-                            if (tab.kind == TerminalTabKind.QEMU) vm.qemu.stop()
-                            else terminal.closeTab(index)
-                        },
-                    )
-                }
-            }
-        }
-        Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = "Novo terminal",
-            tint = palette.textSecondary,
-            modifier = Modifier
-                .size(28.dp)
-                .clickable {
-                    terminal.addShellTab()
-                    onOpen()
-                }
-                .padding(6.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = if (terminal.activeTab?.kind == TerminalTabKind.QEMU) "Linux · workspace" else "Android shell",
-            color = palette.textSecondary,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
-        )
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            imageVector = Icons.Filled.KeyboardArrowUp,
-            contentDescription = "Abrir terminal",
-            tint = palette.textSecondary,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-@Composable
-private fun TermTab(name: String, active: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
-    val palette = LocalThemeController.current.currentPalette()
-    Row(
-        modifier = Modifier
-            .padding(end = 6.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(if (active) palette.surfaceAlt else Color.Transparent),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = name,
-            modifier = Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            fontSize = 10.sp,
-            color = if (active) palette.accentPrimary else palette.textSecondary,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-        )
-        Icon(
-            imageVector = Icons.Filled.Close,
-            contentDescription = "Fechar $name",
-            tint = palette.textSecondary,
-            modifier = Modifier
-                .size(16.dp)
-                .clickable(onClick = onClose)
-                .padding(3.dp),
-        )
     }
 }

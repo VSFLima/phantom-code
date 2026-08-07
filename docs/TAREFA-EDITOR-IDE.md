@@ -148,3 +148,28 @@ Criar um painel de árvore (arquivos + pastas do projeto ativo) ao lado do edito
 3. HTML do projeto → **Preview** abre no navegador interno com CSS funcionando.
 4. **Terminal embaixo do editor** roda `node script.js` do projeto.
 5. Tudo com o **tema phantom** (sem componentes fora do padrão visual).
+
+---
+
+## 8. Roadmap futuro — Preview Hub e identidade visual
+
+### P3.1 — Preview Hub por tecnologia
+- HTML/CSS/JavaScript com navegador interno e console.
+- Markdown com renderização visual.
+- JSON, SVG e imagens com visualizador próprio.
+- React/Vite e outros projetos web por servidor local no workspace.
+- Python, Node, Kotlin e Shell com execução no terminal/QEMU quando o runtime existir.
+- Android e outros projetos compiláveis com saída de build, logs e instalação de teste quando o toolchain estiver disponível.
+- Detecção automática por arquivos (`package.json`, `build.gradle`, `Cargo.toml`, `requirements.txt`, etc.).
+
+### P3.2 — Temas unificados
+- Presets do app aplicados ao editor, terminal, preview e diálogos.
+- Presets de terminal independentes: App, Matrix, Amber, Ice e Paper.
+- Tamanho de fonte, cursor, seleção, quebra de linha e espaçamento configuráveis.
+- Nenhum componente de preview pode criar uma identidade visual separada do Phantom.
+
+### P3.3 — GitHub colaborativo
+- Projetos locais, Git genérico e GitHub identificados visualmente.
+- Clone, releases, publicação, sincronização, pull, push e conflitos.
+- Cada colaborador usa seu próprio token; o app não embute credenciais.
+- Futuramente: convites, permissões e status de equipe via API GitHub.

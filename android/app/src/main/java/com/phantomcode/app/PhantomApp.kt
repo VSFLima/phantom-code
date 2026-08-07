@@ -64,8 +64,10 @@ import com.phantomcode.app.ui.screens.TerminalScreen
 import com.phantomcode.app.ui.screens.ToolboxScreen
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalUiStyleController
+import com.phantomcode.app.ui.theme.LocalTerminalStyleController
 import com.phantomcode.app.ui.theme.PhantomTheme
 import com.phantomcode.app.ui.theme.ThemeController
+import com.phantomcode.app.ui.theme.TerminalStyleController
 import com.phantomcode.app.ui.theme.UiStyleController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -75,6 +77,7 @@ fun PhantomRoot() {
     val context = LocalContext.current
     val controller = remember { ThemeController(context.applicationContext) }
     val uiStyle = remember { UiStyleController(context.applicationContext) }
+    val terminalStyle = remember { TerminalStyleController(context.applicationContext) }
     val vm = remember { VmController(context.applicationContext) }
     var showSplash by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
@@ -84,6 +87,7 @@ fun PhantomRoot() {
     CompositionLocalProvider(
         LocalThemeController provides controller,
         LocalUiStyleController provides uiStyle,
+        LocalTerminalStyleController provides terminalStyle,
         LocalVm provides vm,
     ) {
         PhantomTheme(palette = controller.currentPalette()) {
@@ -205,7 +209,7 @@ fun PhantomApp() {
                     restoreState = true
                 }
             },
-            onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
+            onToggleLinux = { scope.launch { if (vm.qemu.running) vm.qemu.stop() else vm.qemu.start() } },
         ) {
             NavHost(navController = navController, startDestination = Routes.HOME) {
                 composable(
@@ -238,7 +242,10 @@ fun PhantomApp() {
                 }
                 composable(Routes.SETTINGS) { SettingsScreen() }
                 composable(Routes.TERMINAL) {
-                    TerminalScreen(onBack = { navController.popBackStack() })
+                    TerminalScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenToolbox = { navController.navigateToTab(Routes.TOOLBOX) },
+                    )
                 }
                 composable(
                     route = Routes.BROWSER_URL,
