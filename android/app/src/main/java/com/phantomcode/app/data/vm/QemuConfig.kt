@@ -25,7 +25,7 @@ object QemuPresets {
 }
 
 /**
- * Espelhos oficiais do projeto (D16 — Phantom Base) e binário QEMU.
+ * Espelhos oficiais do projeto (D16 — Phantom) e binário QEMU.
  *
  * ⚠️ TODO: publicar os artefatos no GitHub Releases e preencher os URLs/checksums.
  * Enquanto isso, o app baixa e mostra erro claro ("artefato não publicado").
@@ -34,7 +34,7 @@ object QemuPresets {
  */
 object PhantomMirror {
     // Binário QEMU arm64 (estático/musl) publicado na Release `qemu-aarch64`
-    // pelo workflow `Build Distro Artifacts`. O app baixa automaticamente ao
+    // pelo workflow `Build QEMU Binary`. O app baixa automaticamente ao
     // instalar uma distro (Toolbox → Distros) — nada vem embutido no APK.
     const val QEMU_BINARY_URL = "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
     val QEMU_BINARY_SHA256: String? = null // preenchido após o 1º build real (Release publica qemu-system-aarch64.sha256)

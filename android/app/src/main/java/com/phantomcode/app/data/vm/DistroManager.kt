@@ -24,14 +24,14 @@ enum class DistroRisk(val label: String) {
 }
 
 /**
- * Distro do catálogo (D1 — o usuário escolhe; Phantom Base é a oficial).
+ * Distro do catálogo (D1 — o usuário escolhe; Phantom é a oficial).
  *
  * Todas rodam headless (modo terminal apenas) — sem área gráfica.
  */
 data class DistroInfo(
     val id: String,
     val name: String,
-    val badge: String? = null,          // "Oficial · Recomendada" para a Phantom Base
+    val badge: String? = null,          // "Oficial · Recomendada" para a Phantom
     val description: String,            // o que é, em 1-2 linhas
     val recommendedFor: String,         // para quem é indicada
     val url: String,
@@ -49,7 +49,7 @@ object DistroCatalog {
     val ALL: List<DistroInfo> = listOf(
         DistroInfo(
             id = "phantom-base",
-            name = "Phantom Base",
+            name = "Phantom",
             badge = "Oficial",
             description = "Nossa distro oficial, feita sob medida para o app: Debian bookworm arm64 com python3, node/npm e git. Configurada automaticamente pelo app.",
             recommendedFor = "Uso geral — o padrão do Phantom-Code",
@@ -79,7 +79,7 @@ object DistroCatalog {
         DistroInfo(
             id = "debian",
             name = "Debian bookworm slim",
-            description = "Debian 12 em versão enxuta (arm64). Muito estável e leve — base do Ubuntu e da própria Phantom Base.",
+            description = "Debian 12 em versão enxuta (arm64). Muito estável e leve — base do Ubuntu e da própria Phantom.",
             recommendedFor = "Servidores de dev, builds e quem quer estabilidade máxima",
             url = PhantomMirror.DEBIAN_URL,
             sizeMb = 300,

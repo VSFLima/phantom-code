@@ -1,6 +1,6 @@
 name: Build Distro Artifacts
 
-# 🐧 Constrói a Phantom Base (arm64) e publica em GitHub Release.
+# 🐧 Constrói a Phantom (arm64) e publica em GitHub Release.
 #
 # O app baixa o artefato internamente (Toolbox → Distros → Instalar) com
 # barra de progresso e validação SHA-256, via PhantomMirror.PHANTOM_BASE_URL.
@@ -83,8 +83,8 @@ jobs:
         run: |
           gh release delete distro-phantom-base --yes 2>/dev/null || true
           gh release create distro-phantom-base /tmp/phantom-base.tar.gz \
-            --title "Phantom Base rootfs (arm64) $(date +%Y-%m-%d)" \
-            --notes "Phantom Base — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img. Baixado pelo app com download interno (Toolbox → Distros)."
+            --title "Phantom rootfs (arm64) $(date +%Y-%m-%d)" \
+            --notes "Phantom — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img. Baixado pelo app com download interno (Toolbox → Distros)."
 
 # Binário QEMU: build separado no workflow `Build QEMU Binary`
 # (build-qemu.yml) → Release `qemu-aarch64`.

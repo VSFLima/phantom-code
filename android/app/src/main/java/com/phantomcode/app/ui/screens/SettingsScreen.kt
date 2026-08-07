@@ -434,7 +434,7 @@ fun SettingsScreen() {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Distros (Phantom Base oficial): Toolbox → baixar/trocar",
+                "Distros (Phantom oficial): Toolbox → baixar/trocar",
                 color = palette.textSecondary,
                 fontSize = 11.sp,
             )

@@ -150,7 +150,7 @@ class QemuManager(
         val rootfs = distros.activeRootfsImage()
         val kernel = distros.activeKernel()
         if (rootfs == null && kernel == null) {
-            onMain { lastError = "Nenhuma distro instalada — instale a Phantom Base no Toolbox" }
+            onMain { lastError = "Nenhuma distro instalada — instale a Phantom no Toolbox" }
             return@withContext false
         }
 

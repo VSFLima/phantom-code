@@ -43,5 +43,5 @@ Tema `EditorView.theme` espelhando o Cyber-Phantom:
 ## Próxima fase (T14–T18 — VM QEMU + Terminal)
 
 - Binários QEMU arm64 (jniLibs) + comando headless (§8.1)
-- Gerenciador de distros (Phantom Base + checksum)
+- Gerenciador de distros (Phantom + checksum)
 - virtio-9p (workspace) + virtio-serial (console → terminal jackpal)

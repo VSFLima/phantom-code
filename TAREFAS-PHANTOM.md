@@ -48,12 +48,12 @@
 
 ## 🟠 FASE 3 — TERMINAL + VM LINUX (coração do app)
 
-> 🔶 **Estado:** motor da VM pronto (T14, T15, T18 ✅) — faltam os **artefatos reais** (binário QEMU arm64 + rootfs Phantom Base).
+> 🔶 **Estado:** motor da VM pronto (T14, T15, T18 ✅) — faltam os **artefatos reais** (binário QEMU arm64 + rootfs Phantom).
 
 - [x] **T14. QEMU arm64 + comando headless (§8.1)** ✅
   - `QemuManager`: `-M virt,accel=tcg -cpu cortex-a72` · virtio-blk · SLIRP · `-nographic` · presets D13 · download do binário + SHA-256 · ciclo de vida
 - [x] **T15. Gerenciador de distros (D1)** ✅
-  - `DistroManager`: catálogo (Phantom Base oficial + Ubuntu/Debian/Alpine), download com progresso, checksum, extração tar.gz / imagem .img · UI no Toolbox
+  - `DistroManager`: catálogo (Phantom oficial + Ubuntu/Debian/Alpine), download com progresso, checksum, extração tar.gz / imagem .img · UI no Toolbox
 - [x] **T16. virtio-9p + virtio-serial** ✅ código pronto — validação real depende dos artefatos
   - **virtio-9p**: `-virtfs local,path=<workspace>,mount_tag=darkcode-ws,security_model=none,id=ws0` → montado no guest pelo `dark-code-init.sh`
   - **virtio-serial**: `-chardev socket,id=term0,path=term.sock,server=on,wait=off` + `-device virtio-serial-device` + `-device virtconsole,chardev=term0`; kernel boota com `console=ttyAMA0 console=hvc0`
@@ -86,13 +86,13 @@
   - `ON_RESUME` → se há distro ativa, VM não está rodando e não houve encerramento explícito, `start()` sobe sozinha
   - Encerramento explícito (app ou notificação) marca `autoStartSuppressed` → não volta a subir sozinha até o usuário iniciar
 - [x] **T24. Onboarding + Command Palette (D14)** ✅
-  - `OnboardingScreen` (D20): 3 passos — armazenamento · instalar Phantom Base · iniciar Linux; flag `onboardingDone` (só 1ª vez)
+  - `OnboardingScreen` (D20): 3 passos — armazenamento · instalar Phantom · iniciar Linux; flag `onboardingDone` (só 1ª vez)
   - `CommandPalette` (D14): overlay estilo VS Code com busca, aberta pelo ícone de menu no topo; comandos: Home/Explorer/Terminal/Iniciar-Parar Linux/Git/Toolbox/Settings
 - [ ] **T25. Testes em device (Galaxy Note 10 Plus)**
   - Performance TCG, permutações de tema, corrigir o que quebrar
 - [x] **T27. Design System v2 — UI & Botões (estilo do usuário)** ✅ estilos base prontos (Neon/Hacker/Gradient/Glass/Ghost/Pill/Sólido) + dimensões editáveis (cantos · bordas · letras) persistidas; preview ao vivo; animações (press nos botões, transições de navegação, diálogos com scale+fade); terminal segue a paleta (setColorScheme)
 - [x] **T28. Navegador interno (W2)** ✅ WebView com a cara do app: barra de URL, voltar/avançar/recarregar/início, progresso, página inicial temática; acesso via Home e Command Palette
-- [ ] **T29. Distros com download interno (W3)** 🔶 infra + catálogo prontos: workflow `build-distros.yml` gera a Phantom Base (Debian arm64) → Release `distro-phantom-base`; catálogo expansível (`DistroCard`) com descrição, consumo, risco (leve/moderada/pesada) e aviso **terminal-only** para Ubuntu/Debian/Alpine/Kali (+"Em breve" até publicar os artefatos); presets de VM (Econômico..Máximo + Custom com sliders até o limite do aparelho) e tamanho do HD (padrão 3 GB, resize2fs no 1º boot) configuráveis; `DistroConfigDialog` (hostname/usuário/preset/HD) e instalação **acompanhada ao vivo no terminal** (aba de log própria, download % → SHA-256 → extração) — falta rodar o workflow e publicar os artefatos (URLs ainda placeholder `example.com`)
+- [ ] **T29. Distros com download interno (W3)** 🔶 infra + catálogo prontos: workflow `build-distros.yml` gera a Phantom (Debian arm64) → Release `distro-phantom-base`; catálogo expansível (`DistroCard`) com descrição, consumo, risco (leve/moderada/pesada) e aviso **terminal-only** para Ubuntu/Debian/Alpine/Kali (+"Em breve" até publicar os artefatos); presets de VM (Econômico..Máximo + Custom com sliders até o limite do aparelho) e tamanho do HD (padrão 3 GB, resize2fs no 1º boot) configuráveis; `DistroConfigDialog` (hostname/usuário/preset/HD) e instalação **acompanhada ao vivo no terminal** (aba de log própria, download % → SHA-256 → extração) — falta rodar o workflow e publicar os artefatos (URLs ainda placeholder `example.com`)
 
 ---
 

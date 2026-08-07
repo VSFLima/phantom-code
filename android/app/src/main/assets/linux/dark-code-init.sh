@@ -1,7 +1,7 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────
 # dark-code-init.sh — inicialização do guest Phantom-Code (T18)
-# Roda no boot da VM (Phantom Base e demais distros):
+# Roda no boot da VM (Phantom e demais distros):
 #   · lê dark-code.conf (hostname/user definidos na instalação)
 #   · rede SLIRP (DHCP)
 #   · usuário + skel padrão

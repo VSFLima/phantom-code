@@ -59,7 +59,7 @@ Um **IDE Android completo** que une, em um único app:
 | **0 — Fundação** | ✅ | Projeto Android (Kotlin + Compose), tema Cyber-Phantom, CI no GitHub Actions |
 | **1 — Shell da UI** | ✅ | Bottom Nav (5 itens), Home, Activity Bar, Settings com temas, Terminal dock |
 | **2 — Editor + Explorer** | ✅ | CodeMirror 6, explorer real do workspace, autosave + sessão |
-| **3 — VM + Terminal** | 🔶 | Motor QEMU pronto (T14/15/18) — faltam artefatos (binário + Phantom Base) e VT100 |
+| **3 — VM + Terminal** | 🔶 | Motor QEMU pronto (T14/15/18) — faltam artefatos (binário + Phantom) e VT100 |
 | **4 — Git + Toolbox** | ⬜ | JGit, Toolbox + API Keys, backup local/cloud |
 | **5 — Polish** | ⬜ | Foreground Service, onboarding, testes no device, distribuição |
 
