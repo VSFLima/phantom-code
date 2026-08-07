@@ -3,12 +3,11 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Escudo -->
+    <!-- Escudo (monocromático — o launcher aplica o tint do tema) -->
     <path
         android:pathData="M54,16 L90,29 L86,63 C86,84 72,95 54,102 C36,95 22,84 22,63 L18,29 Z"
-        android:fillColor="#9F4DFF" />
-    <!-- Raio (energia) -->
+        android:fillColor="#FFFFFF" />
     <path
         android:pathData="M59,35 L41,59 L52,59 L46,74 L66,50 L55,50 Z"
-        android:fillColor="#00FFFF" />
+        android:fillColor="#FFFFFF" />
 </vector>
