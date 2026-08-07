@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -285,19 +284,6 @@ fun ToolboxScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            SectionLabel(text = "IAs · Linguagens · Ferramentas")
-            Spacer(Modifier.height(8.dp))
-            PhantomCard(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.SmartToy, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Phantom AI Suite (D12)", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Scanner de pacotes + roteador de IAs — próxima etapa", color = palette.textSecondary, fontSize = 11.sp)
-                    }
-                }
-            }
             Spacer(Modifier.height(24.dp))
         }
 

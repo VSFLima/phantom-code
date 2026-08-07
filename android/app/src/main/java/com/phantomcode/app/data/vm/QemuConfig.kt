@@ -44,9 +44,4 @@ object PhantomMirror {
     const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
     const val PHANTOM_SHA256 = "ab08d745b5dfa7b3250179f0f5d5cd4c5df44eb62814f2503141caf9b46b92e3"
 
-    // Candidatos upstream (a curadoria publica os builds compatíveis — aarch64 headless):
-    const val UBUNTU_URL = "https://example.com/phantom-code/ubuntu-24.04-minimal.tar.gz"
-    const val DEBIAN_URL = "https://example.com/phantom-code/debian-bookworm-slim.tar.gz"
-    const val ALPINE_URL = "https://example.com/phantom-code/alpine-mini.tar.gz"
-    const val KALI_URL = "https://example.com/phantom-code/kali-linux-arm64.tar.gz"
 }

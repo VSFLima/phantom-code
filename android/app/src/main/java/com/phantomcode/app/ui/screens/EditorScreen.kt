@@ -58,6 +58,7 @@ import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.components.PhantomDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -402,14 +403,16 @@ fun EditorScreen(
                     addJavascriptInterface(bridge, "AndroidBridge")
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView, url: String?) {
-                            val payload = JSONObject()
-                                .put("value", workspace.readText(path))
-                                .put("name", fileName)
-                            val js = "PhantomEditor.init(" +
-                                "document.getElementById('editor')," +
-                                "${payload.getString("value")}," +
-                                "${payload.getString("name")});"
-                            view.evaluateJavascript(js, null)
+                            scope.launch(Dispatchers.IO) {
+                                val payload = JSONObject()
+                                    .put("value", workspace.readText(path))
+                                    .put("name", fileName)
+                                val js = "PhantomEditor.init(" +
+                                    "document.getElementById('editor')," +
+                                    "${payload.getString("value")}," +
+                                    "${payload.getString("name")});"
+                                mainHandler.post { view.evaluateJavascript(js, null) }
+                            }
                         }
                     }
                     loadUrl("file:///android_asset/editor/index.html")

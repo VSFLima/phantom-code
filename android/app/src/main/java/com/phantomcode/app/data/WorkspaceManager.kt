@@ -20,7 +20,7 @@ data class TextMatch(
 /**
  * Gerencia a pasta de projetos do app: pasta pública `/storage/emulated/0/Phantom-Code/workspace`
  * quando há permissão de armazenamento, senão `filesDir/Phantom-Code/workspace` (privado, fallback).
- * D3 — workspace independente da distro; mesma pasta que o guest Linux verá via virtio-9p (Fase 3).
+ * D3 — workspace independente da distro; mesma pasta que o guest Linux verá via virtio-9p.
  */
 class WorkspaceManager(context: Context) {
 

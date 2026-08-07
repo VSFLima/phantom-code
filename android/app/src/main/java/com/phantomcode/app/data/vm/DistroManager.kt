@@ -40,7 +40,7 @@ data class DistroInfo(
     val installSizeMb: Int,             // espaço em disco instalada (~)
     val ramMb: Int,                     // RAM mínima recomendada
     val risk: DistroRisk,               // nível de lentidão/peso
-    val available: Boolean = true,      // false = "Em breve" (artefato não publicado)
+    val available: Boolean = true,
     val packageManager: String,         // apt / apk
     val headless: Boolean = true,       // sempre true — terminal apenas
 )
@@ -60,60 +60,6 @@ object DistroCatalog {
             ramMb = 1024,
             risk = DistroRisk.LOW,
             available = true,
-            packageManager = "apt",
-        ),
-        DistroInfo(
-            id = "ubuntu",
-            name = "Ubuntu 24.04 minimal",
-            badge = "Recomendada · padrão",
-            description = "Ubuntu LTS 24.04 em versão mínima (arm64). Máxima compatibilidade com tutoriais e pacotes do ecossistema.",
-            recommendedFor = "Quem já conhece Ubuntu e quer um uso geral sólido",
-            url = PhantomMirror.UBUNTU_URL,
-            sizeMb = 400,
-            installSizeMb = 1600,
-            ramMb = 1024,
-            risk = DistroRisk.LOW,
-            available = true,
-            packageManager = "apt",
-        ),
-        DistroInfo(
-            id = "debian",
-            name = "Debian bookworm slim",
-            description = "Debian 12 em versão enxuta (arm64). Muito estável e leve — base do Ubuntu e da própria Phantom.",
-            recommendedFor = "Servidores de dev, builds e quem quer estabilidade máxima",
-            url = PhantomMirror.DEBIAN_URL,
-            sizeMb = 300,
-            installSizeMb = 1200,
-            ramMb = 512,
-            risk = DistroRisk.LOW,
-            available = false, // ⚠️ artefato não publicado — "Em breve"
-            packageManager = "apt",
-        ),
-        DistroInfo(
-            id = "alpine",
-            name = "Alpine mini",
-            description = "Distro ultra-leve (musl/busybox), ~20 MB de download. Consome pouquíssimo disco e RAM.",
-            recommendedFor = "Aparelhos fracos e quem quer o mínimo possível",
-            url = PhantomMirror.ALPINE_URL,
-            sizeMb = 20,
-            installSizeMb = 200,
-            ramMb = 256,
-            risk = DistroRisk.LOW,
-            available = false, // ⚠️ artefato não publicado — "Em breve"
-            packageManager = "apk",
-        ),
-        DistroInfo(
-            id = "kali",
-            name = "Kali Linux arm64",
-            badge = "Pentest",
-            description = "Distro de segurança ofensiva (base Debian) com centenas de ferramentas de pentest pré-instaladas: Nmap, Metasploit, Wireshark, sqlmap e mais.",
-            recommendedFor = "Estudos e labs de segurança — usuários avançados",
-            url = PhantomMirror.KALI_URL,
-            sizeMb = 2500,
-            installSizeMb = 8000,
-            ramMb = 4096,
-            risk = DistroRisk.HIGH,
-            available = false, // ⚠️ imagem grande — "Em breve"
             packageManager = "apt",
         ),
     )

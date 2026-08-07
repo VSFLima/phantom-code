@@ -484,18 +484,6 @@ fun SettingsScreen() {
 
         Spacer(Modifier.height(20.dp))
 
-        // ── Editor ──────────────────────────────────────────────
-        SectionLabel(text = "Editor")
-        Spacer(Modifier.height(8.dp))
-        PhantomCard(modifier = Modifier.fillMaxWidth()) {
-            SettingsRow(label = "Fonte", value = "JetBrains Mono")
-            SettingsRow(label = "Tamanho", value = "14")
-            SettingsRow(label = "Word wrap", value = "On")
-            SettingsRow(label = "Tema de syntax", value = "Cyber-Phantom")
-        }
-
-        Spacer(Modifier.height(20.dp))
-
         // ── Sobre ───────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Info, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
@@ -506,7 +494,7 @@ fun SettingsScreen() {
         PhantomCard(modifier = Modifier.fillMaxWidth()) {
             SettingsRow(label = "Versão", value = "0.1.0")
             SettingsRow(label = "Codinome", value = "Dark-Code")
-            SettingsRow(label = "Ambiente", value = "QEMU headless (Fase 3)")
+            SettingsRow(label = "Ambiente", value = "QEMU headless")
         }
         Spacer(Modifier.height(24.dp))
     }

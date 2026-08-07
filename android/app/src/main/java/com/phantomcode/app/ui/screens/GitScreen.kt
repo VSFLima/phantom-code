@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -53,6 +54,7 @@ import com.phantomcode.app.data.git.GitChange
 import com.phantomcode.app.data.git.GitCommitInfo
 import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.git.GitStatus
+import com.phantomcode.app.data.git.GithubRepo
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomDialog
@@ -84,15 +86,62 @@ fun GitScreen() {
 
     var tokenDialog by remember { mutableStateOf(false) }
     var cloneDialog by remember { mutableStateOf(false) }
+    var remoteRepos by remember { mutableStateOf<List<GithubRepo>>(emptyList()) }
+    var selectedRemote by remember { mutableStateOf<GithubRepo?>(null) }
+    var remoteReleases by remember { mutableStateOf<List<com.phantomcode.app.data.git.GithubRelease>>(emptyList()) }
+    var remoteBusy by remember { mutableStateOf(false) }
 
     val repoDir = selected?.let { File(vm.workspace.root, it) }
 
     fun notify(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
 
+    fun loadGithubRepos() {
+        if (git.token.isNullOrBlank() || remoteBusy) return
+        remoteBusy = true
+        scope.launch {
+            val result = git.githubRepos()
+            remoteBusy = false
+            result.onSuccess { remoteRepos = it }.onFailure { notify("GitHub: ${it.message}") }
+        }
+    }
+
+    fun selectRemote(repo: GithubRepo) {
+        selectedRemote = repo
+        remoteReleases = emptyList()
+        scope.launch {
+            git.githubReleases(repo.fullName).onSuccess { remoteReleases = it }
+        }
+    }
+
+    fun cloneRemote(repo: GithubRepo) {
+        val target = File(vm.workspace.root, repo.name)
+        if (target.exists()) {
+            notify("O projeto ${repo.name} já existe no workspace")
+            return
+        }
+        busy = true
+        scope.launch {
+            val error = git.clone("https://github.com/${repo.fullName}.git", target)
+            busy = false
+            if (error == null) {
+                projects = vm.workspace.projects()
+                selected = repo.name
+                tick++
+                notify("Projeto baixado: ${repo.name}")
+            } else {
+                notify("Erro ao baixar: $error")
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         val p = vm.workspace.projects()
         projects = p
         if (selected == null && p.isNotEmpty()) selected = p.first()
+    }
+
+    LaunchedEffect(git.token) {
+        if (git.token != null) loadGithubRepos()
     }
 
     LaunchedEffect(tick, selected, repoDir) {
@@ -134,6 +183,82 @@ fun GitScreen() {
             }
 
             Spacer(Modifier.height(10.dp))
+
+            SectionLabel(text = "GitHub")
+            Spacer(Modifier.height(8.dp))
+            if (git.token == null) {
+                PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                    Text("Autentique o GitHub para ver seus projetos e releases.", color = palette.textSecondary, fontSize = 12.sp)
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (remoteBusy) "Carregando projetos…" else "${remoteRepos.size} projeto(s) disponível(is)",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PhantomOutlinedButton(
+                        text = "Atualizar",
+                        icon = Icons.Filled.Refresh,
+                        enabled = !remoteBusy,
+                        onClick = ::loadGithubRepos,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                remoteRepos.forEach { repo ->
+                    PhantomCard(
+                        modifier = Modifier.fillMaxWidth().clickable { selectRemote(repo) },
+                        glow = selectedRemote?.fullName == repo.fullName,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(repo.fullName, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    repo.description.ifBlank { "Sem descrição" },
+                                    color = palette.textSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Text(if (repo.private) "privado" else "público", color = palette.accentSecondary, fontSize = 10.sp)
+                        }
+                        if (selectedRemote?.fullName == repo.fullName) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("branch: ${repo.defaultBranch}", color = palette.textSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                                PhantomPrimaryButton(
+                                    text = "Baixar projeto",
+                                    icon = Icons.Filled.CloudDownload,
+                                    enabled = !busy,
+                                    onClick = { cloneRemote(repo) },
+                                )
+                            }
+                            if (remoteReleases.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text("Releases", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                remoteReleases.take(5).forEach { release ->
+                                    Text("${release.name} · ${release.tag} · ${release.publishedAt}", color = palette.textSecondary, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            PhantomCard(modifier = Modifier.fillMaxWidth()) {
+                Text("Trabalho em equipe", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Cada colaborador autentica o próprio GitHub. Use Pull para receber mudanças e Push para compartilhar seus commits no repositório.",
+                    color = palette.textSecondary,
+                    fontSize = 11.sp,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
 
             // Seleção de projeto
             if (projects.isEmpty()) {

@@ -11,6 +11,9 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONArray
 
 data class GitChange(val path: String, val status: Char)
 
@@ -25,6 +28,20 @@ data class GitCommitInfo(
     val message: String,
     val author: String,
     val date: String,
+)
+
+data class GithubRepo(
+    val fullName: String,
+    val name: String,
+    val description: String,
+    val private: Boolean,
+    val defaultBranch: String,
+)
+
+data class GithubRelease(
+    val name: String,
+    val tag: String,
+    val publishedAt: String,
 )
 
 /** Git nativo via JGit (T19) — status, clone, commit, push/pull e log.
@@ -151,6 +168,59 @@ class GitManager(context: Context) {
                 }
             }
         }.getOrDefault(emptyList())
+    }
+
+    /** Repositórios do usuário autenticado para a aba GitHub. */
+    suspend fun githubRepos(): Result<List<GithubRepo>> = withContext(Dispatchers.IO) {
+        apiGet("https://api.github.com/user/repos?per_page=100&sort=updated").map { body ->
+            val json = JSONArray(body)
+            buildList {
+                for (i in 0 until json.length()) {
+                    val item = json.getJSONObject(i)
+                    add(
+                        GithubRepo(
+                            fullName = item.optString("full_name"),
+                            name = item.optString("name"),
+                            description = item.optString("description"),
+                            private = item.optBoolean("private"),
+                            defaultBranch = item.optString("default_branch", "main"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Releases do repositório selecionado. */
+    suspend fun githubReleases(fullName: String): Result<List<GithubRelease>> = withContext(Dispatchers.IO) {
+        apiGet("https://api.github.com/repos/${fullName}/releases?per_page=20").map { body ->
+            val json = JSONArray(body)
+            buildList {
+                for (i in 0 until json.length()) {
+                    val item = json.getJSONObject(i)
+                    add(
+                        GithubRelease(
+                            name = item.optString("name").ifBlank { item.optString("tag_name") },
+                            tag = item.optString("tag_name"),
+                            publishedAt = item.optString("published_at").take(10),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun apiGet(url: String): Result<String> = runCatching {
+        val auth = token?.takeIf { it.isNotBlank() } ?: error("Autentique o GitHub primeiro")
+        (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 30000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("Authorization", "Bearer $auth")
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        }.let { conn ->
+            conn.inputStream.use { it.bufferedReader().readText() }
+        }
     }
 
     companion object {
