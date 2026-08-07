@@ -98,6 +98,10 @@ jobs:
       - name: Build static QEMU (aarch64-softmmu, cross)
         run: |
           set -e
+          # Cada `run:` é um shell novo — $PREFIX não persiste entre etapas.
+          # Sem ele, PKG_CONFIG_LIBDIR virava /lib/pkgconfig e o meson do QEMU
+          # não achava o glib-2.0.pc (Run-time dependency glib-2.0 found: NO).
+          export PREFIX=/opt/arm
           # PKG_CONFIG=pkg-config: o configure usa ${cross_prefix}pkg-config
           # (aarch64-linux-gnu-pkg-config) por padrão, que não existe → o cross
           # file do meson ficava sem pkg-config e o build morria em
