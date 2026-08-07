@@ -58,6 +58,7 @@ import com.phantomcode.app.ui.components.BorderStylePreview
 import com.phantomcode.app.ui.components.ButtonStylePreview
 import com.phantomcode.app.ui.components.CornerStylePreview
 import com.phantomcode.app.ui.components.FontStylePreview
+import com.phantomcode.app.ui.components.LogoPickerSection
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
@@ -138,6 +139,8 @@ fun SettingsScreen() {
                     )
                 }
             }
+
+            LogoPickerSection()
         }
 
         if (controller.preset == PhantomPreset.CUSTOM) {

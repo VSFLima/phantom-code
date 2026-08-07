@@ -2,6 +2,7 @@ package com.phantomcode.app.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,19 +36,24 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.BitmapFactory
+import com.phantomcode.app.data.LogoController
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalUiStyleController
 import com.phantomcode.app.ui.theme.PhantomButtonStyle
 import com.phantomcode.app.ui.theme.fontFamily
 import com.phantomcode.app.ui.theme.shape
 
-/** Logo: escudo com gradiente roxo→cyan + raio (marca Cyber-Phantom). */
+/** Logo: imagem escolhida pelo usuário (pasta linux/) ou o escudo padrão. */
 @Composable
 fun PhantomLogo(
     size: Dp,
@@ -55,14 +61,32 @@ fun PhantomLogo(
     onClick: (() -> Unit)? = null,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    val context = LocalContext.current
+    val logos = remember { LogoController(context) }
+    val custom = logos.selectedFile()
+    val bitmap = remember(custom?.absolutePath) {
+        custom?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
+    }
     val base = modifier
         .size(size)
         .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+
+    if (bitmap != null) {
+        Box(modifier = base, contentAlignment = Alignment.Center) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = "Logo",
+                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        return
+    }
+
     Box(modifier = base) {
-        Canvas(Modifier.fillMaxSize()) {
-            // `canvasSize` é o DrawScope.Size (canvas) — não o parâmetro Dp `size`
-            val w = this.size.width
-            val h = w * 1.15f
+        // `canvasSize` é o DrawScope.Size (canvas) — não o parâmetro Dp `size`
+        val w = this.size.width
+        val h = w * 1.15f
             val shield = Path().apply {
                 moveTo(w / 2f, h * 0.06f)
                 lineTo(w * 0.88f, h * 0.22f)
