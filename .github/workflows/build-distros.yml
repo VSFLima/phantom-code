@@ -55,12 +55,19 @@ jobs:
           cp -L /tmp/rootfs/boot/initrd.img-* /tmp/initrd.img
           ls -la /tmp/kernel /tmp/initrd.img
 
-      - name: Create rootfs.img (genext2fs — 1 GiB ext2)
+      - name: Create rootfs.img (genext2fs — ext2 dinâmico)
         run: |
           sudo apt-get update
           sudo apt-get install -y genext2fs
-          # 262144 blocos de 4KB = 1 GiB; device nodes exigem root (sudo)
-          sudo genext2fs -b 262144 -d /tmp/rootfs /tmp/rootfs.img
+          # Tamanho do rootfs em KiB → blocos de 4KiB com 40% de folga.
+          # (linux-image-arm64 + python3 + nodejs estouram os 1 GiB fixos do genext2fs)
+          SIZE_KIB=$(du -sk /tmp/rootfs | awk '{print $1}')
+          BLOCKS=$(( SIZE_KIB * 140 / 100 / 4 ))
+          # Inodes: 1 por 4KiB (nodejs instala dezenas de milhares de arquivos pequenos)
+          INODES=$(( BLOCKS ))
+          echo "rootfs: ${SIZE_KIB} KiB → ext2: $(( BLOCKS * 4 / 1024 )) MiB, ${INODES} inodes"
+          # device nodes exigem root (sudo)
+          sudo genext2fs -b "$BLOCKS" -i 4096 -d /tmp/rootfs /tmp/rootfs.img
           ls -la /tmp/rootfs.img
 
       - name: Package artifact
