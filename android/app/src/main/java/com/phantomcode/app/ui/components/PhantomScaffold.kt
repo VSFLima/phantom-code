@@ -25,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -65,7 +64,6 @@ fun PhantomScaffold(
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
     onOpenTerminal: () -> Unit,
-    onOpenPalette: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -77,7 +75,7 @@ fun PhantomScaffold(
             .background(palette.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        PhantomTopBar(running = qemuRunning, onHome = onHome, onOpenPalette = onOpenPalette)
+        PhantomTopBar(running = qemuRunning, onHome = onHome)
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (sidebarOpen) {
                 ActivityBar(
@@ -109,7 +107,7 @@ fun PhantomScaffold(
 }
 
 @Composable
-private fun PhantomTopBar(running: Boolean, onHome: () -> Unit, onOpenPalette: () -> Unit) {
+private fun PhantomTopBar(running: Boolean, onHome: () -> Unit) {
     val palette = LocalThemeController.current.currentPalette()
     Row(
         modifier = Modifier
@@ -138,17 +136,6 @@ private fun PhantomTopBar(running: Boolean, onHome: () -> Unit, onOpenPalette: (
         )
         Spacer(Modifier.weight(1f))
         QemuStatusPill(running = running)
-        Spacer(Modifier.width(10.dp))
-        Icon(
-            imageVector = Icons.Filled.Menu,
-            contentDescription = "Command Palette (⌘⇧P)",
-            tint = palette.textSecondary,
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .clickable(onClick = onOpenPalette)
-                .padding(6.dp),
-        )
     }
 }
 

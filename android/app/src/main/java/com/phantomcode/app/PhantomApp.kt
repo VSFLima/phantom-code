@@ -1,6 +1,5 @@
 package com.phantomcode.app
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,15 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Web
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -59,8 +49,6 @@ import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.VmController
-import com.phantomcode.app.ui.components.CommandPalette
-import com.phantomcode.app.ui.components.PaletteCommand
 import com.phantomcode.app.ui.components.PhantomScaffold
 import com.phantomcode.app.ui.components.PhantomLogo
 import com.phantomcode.app.ui.navigation.Routes
@@ -141,7 +129,6 @@ fun PhantomApp() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: Routes.HOME
 
-    var paletteOpen by remember { mutableStateOf(false) }
     var editorTabs by remember { mutableStateOf<List<String>>(emptyList()) }
     var showOnboarding by remember { mutableStateOf(!session.onboardingDone) }
     var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }
@@ -206,19 +193,6 @@ fun PhantomApp() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val paletteCommands = listOf(
-        PaletteCommand("Início", Icons.Filled.Home, "home inicio", { navController.navigateToTab(Routes.HOME) }),
-        PaletteCommand("Explorer", Icons.Filled.FolderOpen, "explorer arquivos projetos", { navController.navigateToTab(Routes.EXPLORER) }),
-        PaletteCommand("Terminal Linux", Icons.Filled.Terminal, "terminal linux vm qemu", { navController.navigate(Routes.TERMINAL) }),
-        PaletteCommand("Navegador", Icons.Filled.Web, "navegador browser web internet", { navController.navigate(Routes.BROWSER) }),
-        PaletteCommand("Iniciar Linux", Icons.Filled.PlayArrow, "iniciar vm qemu start", { scope.launch { vm.qemu.start() } }),
-        PaletteCommand("Parar Linux", Icons.Filled.PlayArrow, "parar vm qemu stop", { vm.qemu.stop() }),
-        PaletteCommand("Git", Icons.Filled.AccountTree, "git commit push clone", { navController.navigateToTab(Routes.GIT) }),
-        PaletteCommand("Toolbox", Icons.Filled.Memory, "toolbox distros backup keys", { navController.navigateToTab(Routes.TOOLBOX) }),
-        PaletteCommand("Settings", Icons.Filled.Settings, "settings tema armazenamento", { navController.navigateToTab(Routes.SETTINGS) }),
-        PaletteCommand("Fechar", null, "fechar sair", { paletteOpen = false }),
-    )
-
     Box(Modifier.fillMaxSize()) {
         PhantomScaffold(
             currentRoute = currentRoute,
@@ -232,7 +206,6 @@ fun PhantomApp() {
                 }
             },
             onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
-            onOpenPalette = { paletteOpen = true },
         ) {
             NavHost(navController = navController, startDestination = Routes.HOME) {
                 composable(
@@ -288,9 +261,6 @@ fun PhantomApp() {
             }
         }
 
-        if (paletteOpen) {
-            CommandPalette(commands = paletteCommands, onDismiss = { paletteOpen = false })
-        }
     }
 }
 
