@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.phantomcode.app.data.git.GitManager
+import com.phantomcode.app.data.git.GithubAssetClient
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
@@ -94,6 +96,7 @@ data class DistroConfig(
 class DistroManager(context: Context) {
 
     private val appContext: Context = context.applicationContext
+    private val git = GitManager(appContext)
     val linuxDir: File = File(context.filesDir, "linux").apply { mkdirs() }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -211,11 +214,7 @@ class DistroManager(context: Context) {
         log("[phantom] hostname: ${config.hostname} · user: ${config.user}\n")
 
         // Download com progresso
-        val conn = (URL(info.url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15000
-            readTimeout = 30000
-            setRequestProperty("User-Agent", "Phantom-Code/0.1.0")
-        }
+        val conn = downloadConnection(info)
         if (conn.responseCode !in 200..299) {
             throw IllegalStateException("HTTP ${conn.responseCode} — artefato não publicado ainda")
         }
@@ -268,6 +267,19 @@ class DistroManager(context: Context) {
         copyInitScript(targetDir)
         log("[phantom] pronto.\n")
         true
+    }
+
+    private fun downloadConnection(info: DistroInfo): HttpURLConnection {
+        val token = git.token
+        if (info.id == "phantom") {
+            if (token.isNullOrBlank()) error("Autentique o GitHub na aba Git antes de instalar a Phantom")
+            return GithubAssetClient.openReleaseAsset("distro-phantom", "phantom.tar.gz", token)
+        }
+        return (URL(info.url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 30000
+            setRequestProperty("User-Agent", "Phantom-Code/0.1.0")
+        }
     }
 
     /** Expande o rootfs.img para o tamanho escolhido (padrão 3 GB) via setLength. */

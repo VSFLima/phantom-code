@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.phantomcode.app.data.WorkspaceManager
+import com.phantomcode.app.data.git.GitManager
+import com.phantomcode.app.data.git.GithubAssetClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,6 +36,7 @@ class QemuManager(
 ) {
 
     private val appContext: Context = context.applicationContext
+    private val git = GitManager(appContext)
     private val qemuDir: File = File(appContext.filesDir, "qemu").apply { mkdirs() }
     private val scope = CoroutineScope(Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -127,10 +130,8 @@ class QemuManager(
         val target = binary()
         val tmp = File(qemuDir, "qemu.tmp")
         runCatching {
-            val conn = (URL(PhantomMirror.QEMU_BINARY_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000
-                readTimeout = 30000
-            }
+            val token = git.token ?: error("Autentique o GitHub antes de baixar o QEMU")
+            val conn = GithubAssetClient.openReleaseAsset("qemu-aarch64", "qemu-system-aarch64", token)
             if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode}")
             val total = conn.contentLengthLong
             val digest = PhantomMirror.QEMU_BINARY_SHA256?.let { MessageDigest.getInstance("SHA-256") }
