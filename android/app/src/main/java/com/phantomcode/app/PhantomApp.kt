@@ -115,7 +115,7 @@ fun PhantomApp() {
                     storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             },
-            onInstallDistro = { vm.distros.install(DistroCatalog.ALL.first()) },
+            onChooseDistro = { navController.navigateToTab(Routes.TOOLBOX) },
             onStartLinux = { scope.launch { vm.qemu.start() } },
             onFinish = {
                 session.onboardingDone = true
@@ -173,7 +173,11 @@ fun PhantomApp() {
                 }
                 composable(Routes.SEARCH) { SearchScreen() }
                 composable(Routes.GIT) { GitScreen() }
-                composable(Routes.TOOLBOX) { ToolboxScreen() }
+                composable(Routes.TOOLBOX) {
+                    ToolboxScreen(
+                        onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
+                    )
+                }
                 composable(Routes.SETTINGS) { SettingsScreen() }
                 composable(Routes.TERMINAL) {
                     TerminalScreen(onBack = { navController.popBackStack() })

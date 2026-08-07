@@ -6,8 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import jackpal.androidterm.emulatorview.TermSession
 
-/** Tipo de aba do terminal: console da VM ou shell local do Android. */
-enum class TerminalTabKind { QEMU, SHELL }
+/** Tipo de aba do terminal: console da VM, shell local ou log do app. */
+enum class TerminalTabKind { QEMU, SHELL, LOG }
 
 /** Uma aba do terminal: título + sessão VT100 real ligada a um processo. */
 class TerminalTab(
@@ -70,6 +70,19 @@ class TerminalManager {
     /** Troca para a aba [index] (mantém as demais vivas). */
     fun selectTab(index: Int) {
         if (index in tabs.indices) activeIndex = index
+    }
+
+    /**
+     * Nova aba de log: o app escreve na tela em tempo real (ex.: instalação
+     * de distro). Retorna a sessão para o app fazer `append(...)`.
+     */
+    fun addLogTab(title: String): LogTermSession {
+        val session = LogTermSession()
+        val tab = TerminalTab(TerminalTabKind.LOG, title, session)
+        tabs += tab
+        activeIndex = tabs.lastIndex
+        active = true
+        return session
     }
 
     /** Fecha a aba [index]: encerra a sessão e o processo do shell local. */

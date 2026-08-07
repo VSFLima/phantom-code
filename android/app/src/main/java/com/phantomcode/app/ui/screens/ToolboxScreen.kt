@@ -16,11 +16,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.PlayArrow
@@ -40,7 +38,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -50,22 +47,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.secrets.SecretsManager
+import com.phantomcode.app.data.vm.DistroCatalog
+import com.phantomcode.app.data.vm.DistroInfo
+import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.AddSecretKeyDialog
+import com.phantomcode.app.ui.components.DistroCard
+import com.phantomcode.app.ui.components.DistroConfigDialog
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.SecretKeyCard
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.theme.LocalThemeController
-import com.phantomcode.app.data.vm.DistroCatalog
-import com.phantomcode.app.data.vm.DistroInfo
-import com.phantomcode.app.data.vm.LocalVm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ToolboxScreen() {
+fun ToolboxScreen(
+    onOpenTerminal: () -> Unit = {},
+) {
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
     val snackbar = remember { SnackbarHostState() }
@@ -78,6 +79,9 @@ fun ToolboxScreen() {
     val secrets = remember { SecretsManager(context) }
     var keysTick by remember { mutableIntStateOf(0) }
     var addKeyDialog by remember { mutableStateOf(false) }
+
+    // ── Distros (D1) — instalação com config + terminal ──
+    var installTarget by remember { mutableStateOf<DistroInfo?>(null) }
 
     // ── Backup (T21 · D2) ──
     val backup = remember { BackupManager(context) }
@@ -161,12 +165,19 @@ fun ToolboxScreen() {
 
             // ── Distros (D1) ───────────────────────────────────────
             SectionLabel(text = "Distros")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Escolha a sua. Toque no card para ver descrição, consumo e riscos.",
+                color = palette.textSecondary,
+                fontSize = 11.sp,
+            )
             Spacer(Modifier.height(8.dp))
             DistroCatalog.ALL.forEach { info ->
                 DistroCard(
                     info = info,
                     isActive = vm.distros.activeId == info.id,
-                    onClickInstall = { vm.distros.install(info) },
+                    state = vm.distros.installStates[info.id] ?: com.phantomcode.app.data.vm.DistroInstallState(),
+                    onClickInstall = { installTarget = info },
                     onClickUse = { vm.distros.setActive(info) },
                 )
                 Spacer(Modifier.height(10.dp))
@@ -286,77 +297,24 @@ fun ToolboxScreen() {
             )
         }
 
+        installTarget?.let { info ->
+            DistroConfigDialog(
+                info = info,
+                initialDiskMb = qemu.diskSizeMb(),
+                onConfirm = { config ->
+                    installTarget = null
+                    // Abre o terminal com uma aba de log para acompanhar a instalação
+                    val logTab = qemu.terminal.addLogTab("Instalando ${info.name}")
+                    onOpenTerminal()
+                    vm.distros.install(info, config, logTab)
+                },
+                onDismiss = { installTarget = null },
+            )
+        }
+
         SnackbarHost(
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
         )
-    }
-}
-
-@Composable
-private fun DistroCard(
-    info: DistroInfo,
-    isActive: Boolean,
-    onClickInstall: () -> Unit,
-    onClickUse: () -> Unit,
-) {
-    val vm = LocalVm.current
-    val palette = LocalThemeController.current.currentPalette()
-    val state = vm.distros.installStates[info.id] ?: com.phantomcode.app.data.vm.DistroInstallState()
-
-    PhantomCard(modifier = Modifier.fillMaxWidth(), glow = isActive) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(info.name, color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    info.badge?.let {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            it,
-                            color = palette.accentBright,
-                            fontSize = 9.sp,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(palette.accentPrimary.copy(alpha = 0.18f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
-                    }
-                    if (state.installed) {
-                        Spacer(Modifier.width(6.dp))
-                        Icon(Icons.Filled.CheckCircle, contentDescription = "Instalada", tint = palette.success, modifier = Modifier.size(14.dp))
-                    }
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "${info.packageManager} · ~${info.sizeMb} MB",
-                    color = palette.textSecondary,
-                    fontSize = 11.sp,
-                )
-                if (state.downloading) {
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = { state.progress },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = palette.accentPrimary,
-                        trackColor = palette.surfaceAlt,
-                    )
-                }
-                state.error?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(it, color = palette.error, fontSize = 10.sp, maxLines = 2)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            when {
-                state.downloading -> Text("…", color = palette.textSecondary, fontSize = 14.sp)
-                state.installed && isActive -> Text("Em uso", color = palette.success, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                state.installed -> PhantomOutlinedButton(text = "Usar", onClick = onClickUse)
-                else -> PhantomOutlinedButton(
-                    text = "Instalar",
-                    icon = Icons.Filled.Download,
-                    onClick = onClickInstall,
-                )
-            }
-        }
     }
 }

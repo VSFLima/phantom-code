@@ -45,6 +45,8 @@ class QemuManager(
     var binaryReady by mutableStateOf(false)
     var binaryInstalling by mutableStateOf(false)
 
+    private val prefs = QemuPrefs(context)
+
     private var process: Process? = null
     private var watcher: Job? = null
 
@@ -54,6 +56,30 @@ class QemuManager(
 
     init {
         binaryReady = binary().exists()
+        preset = prefs.effectivePreset(appContext)
+    }
+
+    /** Persiste o preset escolhido e atualiza o estado (valores custom incluídos). */
+    fun setPreset(p: QemuPreset, customCores: Int? = null, customRamMb: Int? = null) {
+        prefs.presetId = p.id
+        if (customCores != null) prefs.customCores = customCores
+        if (customRamMb != null) prefs.customRamMb = customRamMb
+        preset = prefs.effectivePreset(appContext)
+    }
+
+    /** Resumo dos limites do aparelho (para a UI guiar o usuário). */
+    fun deviceSummary(): String {
+        val cores = DeviceCapabilities.cores(appContext)
+        val ram = DeviceCapabilities.totalRamMb(appContext)
+        val maxRam = DeviceCapabilities.maxRamMb(appContext)
+        return "$cores núcleos · $ram MB RAM · até $maxRam MB para a VM"
+    }
+
+    /** Tamanho atual do HD da distro (MB), padrão 3 GB. */
+    fun diskSizeMb(): Int = prefs.diskSizeMb
+
+    fun setDiskSizeMb(sizeMb: Int) {
+        prefs.diskSizeMb = sizeMb
     }
 
     /** Baixa o binário QEMU arm64 (com checksum se informado) e marca como executável. */

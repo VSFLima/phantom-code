@@ -15,15 +15,33 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 
-/** Distro do catálogo (D1 — o usuário escolhe; Phantom Base é a oficial). */
+/** Nível de risco/peso de uma distro (lentidão, armazenamento) — mostrado no card. */
+enum class DistroRisk(val label: String) {
+    LOW("Leve"),
+    MEDIUM("Moderada"),
+    HIGH("Pesada"),
+}
+
+/**
+ * Distro do catálogo (D1 — o usuário escolhe; Phantom Base é a oficial).
+ *
+ * Todas rodam headless (modo terminal apenas) — sem área gráfica.
+ */
 data class DistroInfo(
     val id: String,
     val name: String,
     val badge: String? = null,          // "Oficial · Recomendada" para a Phantom Base
+    val description: String,            // o que é, em 1-2 linhas
+    val recommendedFor: String,         // para quem é indicada
     val url: String,
     val sha256: String? = null,
-    val sizeMb: Int,
+    val sizeMb: Int,                    // download (~)
+    val installSizeMb: Int,             // espaço em disco instalada (~)
+    val ramMb: Int,                     // RAM mínima recomendada
+    val risk: DistroRisk,               // nível de lentidão/peso
+    val available: Boolean = true,      // false = "Em breve" (artefato não publicado)
     val packageManager: String,         // apt / apk
+    val headless: Boolean = true,       // sempre true — terminal apenas
 )
 
 object DistroCatalog {
@@ -31,32 +49,71 @@ object DistroCatalog {
         DistroInfo(
             id = "phantom-base",
             name = "Phantom Base",
-            badge = "Oficial · Recomendada",
+            badge = "Oficial",
+            description = "Nossa distro oficial, feita sob medida para o app: Debian bookworm arm64 com python3, node/npm e git. Configurada automaticamente pelo app.",
+            recommendedFor = "Uso geral — o padrão do Phantom-Code",
             url = PhantomMirror.PHANTOM_BASE_URL,
             sha256 = PhantomMirror.PHANTOM_BASE_SHA256,
             sizeMb = 500,
+            installSizeMb = 2048,
+            ramMb = 1024,
+            risk = DistroRisk.LOW,
+            available = false, // ⚠️ artefato ainda não publicado — "Em breve"
             packageManager = "apt",
         ),
         DistroInfo(
             id = "ubuntu",
             name = "Ubuntu 24.04 minimal",
+            badge = "Recomendada · padrão",
+            description = "Ubuntu LTS 24.04 em versão mínima (arm64). Máxima compatibilidade com tutoriais e pacotes do ecossistema.",
+            recommendedFor = "Quem já conhece Ubuntu e quer um uso geral sólido",
             url = PhantomMirror.UBUNTU_URL,
             sizeMb = 400,
+            installSizeMb = 1600,
+            ramMb = 1024,
+            risk = DistroRisk.LOW,
+            available = true,
             packageManager = "apt",
         ),
         DistroInfo(
             id = "debian",
             name = "Debian bookworm slim",
+            description = "Debian 12 em versão enxuta (arm64). Muito estável e leve — base do Ubuntu e da própria Phantom Base.",
+            recommendedFor = "Servidores de dev, builds e quem quer estabilidade máxima",
             url = PhantomMirror.DEBIAN_URL,
             sizeMb = 300,
+            installSizeMb = 1200,
+            ramMb = 512,
+            risk = DistroRisk.LOW,
+            available = false, // ⚠️ artefato não publicado — "Em breve"
             packageManager = "apt",
         ),
         DistroInfo(
             id = "alpine",
             name = "Alpine mini",
+            description = "Distro ultra-leve (musl/busybox), ~20 MB de download. Consome pouquíssimo disco e RAM.",
+            recommendedFor = "Aparelhos fracos e quem quer o mínimo possível",
             url = PhantomMirror.ALPINE_URL,
             sizeMb = 20,
+            installSizeMb = 200,
+            ramMb = 256,
+            risk = DistroRisk.LOW,
+            available = false, // ⚠️ artefato não publicado — "Em breve"
             packageManager = "apk",
+        ),
+        DistroInfo(
+            id = "kali",
+            name = "Kali Linux arm64",
+            badge = "Pentest",
+            description = "Distro de segurança ofensiva (base Debian) com centenas de ferramentas de pentest pré-instaladas: Nmap, Metasploit, Wireshark, sqlmap e mais.",
+            recommendedFor = "Estudos e labs de segurança — usuários avançados",
+            url = PhantomMirror.KALI_URL,
+            sizeMb = 2500,
+            installSizeMb = 8000,
+            ramMb = 4096,
+            risk = DistroRisk.HIGH,
+            available = false, // ⚠️ imagem grande — "Em breve"
+            packageManager = "apt",
         ),
     )
 }
@@ -78,6 +135,13 @@ data class DistroInstallState(
  *   linux/<id>/kernel       → Image arm64 + linux/<id>/initrd.img (boot por -kernel)
  *   linux/<id>/rootfs/      → rootfs extraída (precisa de kernel/imagem p/ bootar)
  */
+/** Configurações iniciais escolhidas pelo usuário antes da instalação automática. */
+data class DistroConfig(
+    val hostname: String = "phantom",
+    val user: String = "user",
+    val diskSizeMb: Int = QemuPrefs.DEFAULT_DISK_MB,
+)
+
 class DistroManager(context: Context) {
 
     private val appContext: Context = context.applicationContext
@@ -125,10 +189,25 @@ class DistroManager(context: Context) {
 
     /** Baixa, valida (SHA-256) e instala a distro em background. */
     fun install(info: DistroInfo) {
+        install(info, DistroConfig(), null)
+    }
+
+    /**
+     * Baixa e instala com as configurações do usuário ([DistroConfig]).
+     *
+     * O progresso é acompanhado em tempo real pelo terminal (aba de log) quando
+     * [logSession] é informado — a instalação vira um processo visível, igual
+     * ao console da VM.
+     */
+    fun install(
+        info: DistroInfo,
+        config: DistroConfig,
+        logSession: LogTermSession?,
+    ) {
         if (installStates[info.id]?.downloading == true) return
         installStates[info.id] = DistroInstallState(downloading = true)
         scope.launch {
-            val result = runCatching { downloadAndInstall(info) }
+            val result = runCatching { downloadAndInstall(info, config, logSession) }
             val err = result.exceptionOrNull()
             withContext(Dispatchers.Main) {
                 val current = installStates[info.id] ?: DistroInstallState()
@@ -137,6 +216,7 @@ class DistroManager(context: Context) {
                         downloading = false,
                         error = err.message ?: "Falha no download",
                     )
+                    logSession?.append("\n\u001b[31m✗ ${err.message ?: "Falha na instalação"}\u001b[0m\n")
                 } else {
                     installStates[info.id] = current.copy(
                         downloading = false,
@@ -145,6 +225,7 @@ class DistroManager(context: Context) {
                         message = "Instalada",
                     )
                     activeId = info.id
+                    logSession?.append("\n\u001b[32m✓ Distro instalada e configurada.\u001b[0m\n")
                 }
             }
         }
@@ -154,11 +235,19 @@ class DistroManager(context: Context) {
         if (isInstalled(info.id)) activeId = info.id
     }
 
-    private suspend fun downloadAndInstall(info: DistroInfo): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun downloadAndInstall(
+        info: DistroInfo,
+        config: DistroConfig,
+        logSession: LogTermSession?,
+    ): Boolean = withContext(Dispatchers.IO) {
+        fun log(msg: String) = logSession?.append(msg)
         val targetDir = dirFor(info.id).apply { mkdirs() }
         // Formato detectado pelo nome real do artefato na URL
         val artifactName = info.url.substringAfterLast('/').lowercase()
         val tmp = File(targetDir, "artifact.tmp")
+
+        log("Instalando ${info.name}…\n")
+        log("[phantom] hostname: ${config.hostname} · user: ${config.user}\n")
 
         // Download com progresso
         val conn = (URL(info.url).openConnection() as HttpURLConnection).apply {
@@ -176,23 +265,32 @@ class DistroManager(context: Context) {
                 val buf = ByteArray(64 * 1024)
                 var read: Int
                 var done = 0L
+                var lastPct = -1
                 while (input.read(buf).also { read = it } != -1) {
                     out.write(buf, 0, read)
                     done += read
                     digest?.update(buf, 0, read)
                     if (total > 0) {
                         val p = done.toFloat() / total.toFloat()
-                        installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
+                        val pct = (p * 100).toInt()
+                        if (pct != lastPct) {
+                            lastPct = pct
+                            log("\rBaixando… $pct% (${done / (1024 * 1024)} MB / ${total / (1024 * 1024)} MB)")
+                            installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
+                        }
                     }
                 }
             }
         }
+        log("\n")
         if (digest != null) {
             val got = digest.digest().joinToString("") { "%02x".format(it) }
             check(got.equals(info.sha256, ignoreCase = true)) { "SHA-256 inválido" }
+            log("[phantom] SHA-256 ok ✓\n")
         }
 
         // Instala: extrai tarball ou move imagem (pelo nome real do artefato)
+        log("[phantom] extraindo arquivos…\n")
         when {
             artifactName.endsWith(".tar.gz") || artifactName.endsWith(".tgz") -> extractTarGz(tmp, targetDir)
             artifactName.endsWith(".gz") -> extractGz(tmp, File(targetDir, "rootfs.img"))
@@ -204,8 +302,29 @@ class DistroManager(context: Context) {
             }
         }
         tmp.delete()
+        applyDiskSize(targetDir, config)
+        writeConfig(targetDir, config)
         copyInitScript(targetDir)
+        log("[phantom] pronto.\n")
         true
+    }
+
+    /** Expande o rootfs.img para o tamanho escolhido (padrão 3 GB) via setLength. */
+    private fun applyDiskSize(targetDir: File, config: DistroConfig) {
+        val img = File(targetDir, "rootfs.img")
+        if (!img.exists() || img.length() >= config.diskSizeMb.toLong() * 1024 * 1024) return
+        runCatching {
+            img.setLength(config.diskSizeMb.toLong() * 1024 * 1024)
+        }
+    }
+
+    /** Grava dark-code.conf (hostname/user) — lido pelo dark-code-init.sh no boot. */
+    private fun writeConfig(targetDir: File, config: DistroConfig) {
+        runCatching {
+            File(targetDir, "dark-code.conf").writeText(
+                "HOSTNAME=${config.hostname}\nUSER=${config.user}\n",
+            )
+        }
     }
 
     /** Copia o dark-code-init.sh (T18) para dentro da distro instalada. */

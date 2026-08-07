@@ -38,7 +38,7 @@ jobs:
               bash ca-certificates curl wget git \
               python3 python3-pip nodejs npm \
               openssh-client tzdata nano vim-tiny htop file \
-              linux-image-arm64 initramfs-tools
+              linux-image-arm64 initramfs-tools e2fsprogs
             rm -rf /var/lib/apt/lists/*
           '
           docker export phantom > /tmp/rootfs.tar

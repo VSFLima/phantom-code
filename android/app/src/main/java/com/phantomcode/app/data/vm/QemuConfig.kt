@@ -6,14 +6,22 @@ data class QemuPreset(
     val label: String,
     val cpu: Int,
     val ramMb: Int,
-)
+    val custom: Boolean = false,
+) {
+    /** Tamanho real usado no QEMU (para CUSTOM, o valor do usuário). */
+    fun effective(cores: Int, memoryMb: Int) = if (custom) copy(cpu = cores, ramMb = memoryMb) else this
+}
 
 object QemuPresets {
     val ECO = QemuPreset("eco", "Econômico", 2, 1024)
     val BALANCED = QemuPreset("balanced", "Equilibrado", 4, 2048)
-    val MAX = QemuPreset("max", "Máximo (todos os cores)", 8, 4096)
+    val HIGH = QemuPreset("high", "Alto", 6, 4096)
+    val MAX = QemuPreset("max", "Máximo", 8, 8192)
+    val CUSTOM = QemuPreset("custom", "Custom", 4, 2048, custom = true)
 
-    val ALL = listOf(ECO, BALANCED, MAX)
+    val ALL = listOf(ECO, BALANCED, HIGH, MAX, CUSTOM)
+
+    fun byId(id: String): QemuPreset = ALL.firstOrNull { it.id == id } ?: BALANCED
 }
 
 /**
@@ -39,4 +47,5 @@ object PhantomMirror {
     const val UBUNTU_URL = "https://example.com/phantom-code/ubuntu-24.04-minimal.tar.gz"
     const val DEBIAN_URL = "https://example.com/phantom-code/debian-bookworm-slim.tar.gz"
     const val ALPINE_URL = "https://example.com/phantom-code/alpine-mini.tar.gz"
+    const val KALI_URL = "https://example.com/phantom-code/kali-linux-arm64.tar.gz"
 }

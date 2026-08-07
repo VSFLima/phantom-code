@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,7 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.data.StorageHelper
+import com.phantomcode.app.data.vm.DeviceCapabilities
 import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.QemuPrefs
 import com.phantomcode.app.data.vm.QemuPresets
 import com.phantomcode.app.ui.components.BorderStylePreview
 import com.phantomcode.app.ui.components.ButtonStylePreview
@@ -263,6 +267,12 @@ fun SettingsScreen() {
         val vm = LocalVm.current
         val qemu = vm.qemu
         val scope = rememberCoroutineScope()
+        val qemuContext = LocalContext.current
+        var localCores by remember { mutableStateOf(qemu.preset.cpu) }
+        var localRam by remember { mutableStateOf(qemu.preset.ramMb) }
+        var localDiskMb by remember { mutableStateOf(qemu.diskSizeMb()) }
+        val maxCores = DeviceCapabilities.cores(qemuContext)
+        val maxRam = DeviceCapabilities.maxRamMb(qemuContext)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Memory, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -295,6 +305,12 @@ fun SettingsScreen() {
             }
             Spacer(Modifier.height(12.dp))
             Text("Preset de recursos (D13)", color = palette.textSecondary, fontSize = 12.sp)
+            Text(
+                "Seu aparelho: ${qemu.deviceSummary()}",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+            )
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier
@@ -314,7 +330,11 @@ fun SettingsScreen() {
                                 if (selected) palette.accentPrimary else palette.border.copy(alpha = 0.4f),
                                 RoundedCornerShape(3.dp),
                             )
-                            .clickable { qemu.preset = preset }
+                            .clickable {
+                                qemu.setPreset(preset)
+                                localCores = qemu.preset.cpu
+                                localRam = qemu.preset.ramMb
+                            }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         color = if (selected) palette.accentPrimary else palette.textPrimary,
                         fontSize = 12.sp,
@@ -329,6 +349,86 @@ fun SettingsScreen() {
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
             )
+
+            if (qemu.preset.custom) {
+                Spacer(Modifier.height(10.dp))
+                Text("Núcleos (até $maxCores)", color = palette.textSecondary, fontSize = 11.sp)
+                Slider(
+                    value = localCores.toFloat(),
+                    onValueChange = {
+                        localCores = it.toInt().coerceIn(1, maxCores)
+                        qemu.setPreset(QemuPresets.CUSTOM, customCores = localCores, customRamMb = localRam)
+                    },
+                    valueRange = 1f..maxCores.toFloat(),
+                    steps = maxCores - 2,
+                    colors = SliderDefaults.colors(
+                        thumbColor = palette.accentPrimary,
+                        activeTrackColor = palette.accentPrimary,
+                        inactiveTrackColor = palette.surfaceAlt,
+                    ),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("RAM (MB — até $maxRam)", color = palette.textSecondary, fontSize = 11.sp)
+                Slider(
+                    value = localRam.toFloat(),
+                    onValueChange = {
+                        localRam = it.toInt().coerceIn(512, maxRam)
+                        qemu.setPreset(QemuPresets.CUSTOM, customCores = localCores, customRamMb = localRam)
+                    },
+                    valueRange = 512f..maxRam.toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = palette.accentPrimary,
+                        activeTrackColor = palette.accentPrimary,
+                        inactiveTrackColor = palette.surfaceAlt,
+                    ),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Custom: ${qemu.preset.cpu} cores · ${qemu.preset.ramMb} MB RAM",
+                    color = palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("Tamanho do HD da distro (padrão 3 GB)", color = palette.textSecondary, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                (listOf(qemu.diskSizeMb()) + QemuPrefs(qemuContext).diskOptions()).distinct().sorted().forEach { sizeMb ->
+                    val selected = localDiskMb == sizeMb
+                    Text(
+                        text = if (sizeMb >= 1024) "${sizeMb / 1024} GB" else "${sizeMb} MB",
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (selected) palette.accentPrimary.copy(alpha = 0.18f) else palette.surfaceAlt)
+                            .border(
+                                1.dp,
+                                if (selected) palette.accentPrimary else palette.border.copy(alpha = 0.4f),
+                                RoundedCornerShape(3.dp),
+                            )
+                            .clickable {
+                                localDiskMb = sizeMb
+                                qemu.setDiskSizeMb(sizeMb)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = if (selected) palette.accentPrimary else palette.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Espaço do disco Linux no aparelho. Aplicado no 1º boot da VM (resize2fs).",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
+            )
             Spacer(Modifier.height(6.dp))
             Text(
                 "Distros (Phantom Base oficial): Toolbox → baixar/trocar",
@@ -336,7 +436,6 @@ fun SettingsScreen() {
                 fontSize = 11.sp,
             )
         }
-
         Spacer(Modifier.height(20.dp))
 
         // ── Armazenamento (pasta pública do app) ────────────────

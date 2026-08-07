@@ -1,7 +1,6 @@
 package com.phantomcode.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,14 +35,14 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 
 /**
  * Onboarding de 1º uso (T24 · D20): apresenta o app e os primeiros passos —
- * conceder armazenamento, instalar a Phantom Base e iniciar o Linux.
+ * conceder armazenamento, escolher a distro e iniciar o Linux.
  */
 @Composable
 fun OnboardingScreen(
     storageGranted: Boolean,
     distroInstalled: Boolean,
     onRequestStorage: () -> Unit,
-    onInstallDistro: () -> Unit,
+    onChooseDistro: () -> Unit,
     onStartLinux: () -> Unit,
     onFinish: () -> Unit,
 ) {
@@ -87,11 +86,11 @@ fun OnboardingScreen(
 
         OnboardingStep(
             number = 2,
-            title = "Instale a Phantom Base",
-            desc = "Baixa o sistema Linux oficial (aarch64) — alguns MB, feito uma vez.",
+            title = "Escolha sua distro",
+            desc = "Toque para ver descrição, consumo e riscos de cada uma (modo terminal apenas). O app instala e configura tudo para você.",
             done = distroInstalled,
-            actionLabel = "Instalar",
-            onAction = onInstallDistro,
+            actionLabel = "Escolher",
+            onAction = onChooseDistro,
         )
         Spacer(Modifier.height(12.dp))
 

@@ -2,9 +2,11 @@
 # ─────────────────────────────────────────────────────────────
 # dark-code-init.sh — inicialização do guest Phantom-Code (T18)
 # Roda no boot da VM (Phantom Base e demais distros):
+#   · lê dark-code.conf (hostname/user definidos na instalação)
 #   · rede SLIRP (DHCP)
 #   · usuário + skel padrão
 #   · mount do workspace via virtio-9p em /home/user/workspace
+#   · redimensiona o rootfs (resize2fs) no 1º boot
 #   · prompt no projeto ativo
 # ─────────────────────────────────────────────────────────────
 set -e
@@ -12,10 +14,26 @@ set -e
 WORKSPACE_TAG="darkcode-ws"
 WORKSPACE_MOUNT="/home/user/workspace"
 USER_NAME="user"
+HOSTNAME="phantom"
+
+# ── Config do usuário (gravada pelo app na instalação) ───────
+CONF="$(dirname "$0")/dark-code.conf"
+if [ -r "$CONF" ]; then
+  . "$CONF"
+  [ -n "$USER" ] && USER_NAME="$USER"
+fi
 
 log() { echo "[phantom] $*"; }
 
 log "Inicializando Phantom-Code (guest)…"
+hostname "$HOSTNAME" 2>/dev/null || true
+
+# ── Redimensiona o rootfs no 1º boot (tamanho do HD escolhido) ──
+if command -v resize2fs >/dev/null 2>&1 && ! [ -f /var/run/phantom-resized ]; then
+  log "Redimensionando o sistema de arquivos (HD configurado)…"
+  e2fsck -fp /dev/vda 2>/dev/null || true
+  resize2fs /dev/vda 2>/dev/null && touch /var/run/phantom-resized
+fi
 
 # ── 1. Rede (SLIRP) ─────────────────────────────────────────
 if command -v ip >/dev/null 2>&1; then
