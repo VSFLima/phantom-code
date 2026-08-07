@@ -1,6 +1,6 @@
 # Arquitetura — Fase 3 (Motor da VM QEMU)
 
-> Status: 🔶 motor pronto (T14 ✅ · T15 ✅ · T17 ✅ · T18 ✅ · T29 infra/catálogo ✅) — artefatos pendentes de publicação
+> Status: 🔶 motor pronto (T14 ✅ · T15 ✅ · T16 ✅ · T17 ✅ · T18 ✅ · T29 infra/catálogo ✅) — artefatos pendentes de publicação
 
 ## O que foi implementado
 
@@ -12,6 +12,8 @@
 | `data/vm/DistroManager.kt` | Catálogo (Phantom Base + Ubuntu/Debian/Alpine/Kali), download, SHA-256, extração, `applyDiskSize` (setLength), `writeConfig` (`dark-code.conf`), instalação com log ao vivo |
 | `data/vm/DistroConfig.kt` *(no DistroManager)* | Hostname/usuário/tamanho do disco escolhidos antes da instalação |
 | `data/vm/TerminalManager.kt` | Console VT100 (jackpal) com abas QEMU/shell/**log** — aba `LOG` para o app escrever na tela |
+| `data/vm/SocketTermSession.kt` | Ponte VT100 ↔ **virtio-serial** (T16): conecta no socket do QEMU via `LocalSocket` |
+| `data/vm/ProcessTermSession.kt` | Fallback stdio: sessão ligada às streams do processo QEMU/shell |
 | `data/vm/LogTermSession.kt` | Sessão de terminal sem processo: `append()` escreve a saída da instalação em tempo real |
 | `data/vm/VmController.kt` | Estado global exposto via `LocalVm` (UI reativa) |
 | `ui/components/DistroCard.kt` | Card expansível: descrição, para quem, consumo, risco (leve/moderada/pesada), aviso terminal-only, "Em breve" |
@@ -49,12 +51,17 @@ Tamanho do HD da distro: padrão **3 GB**, opções 3/4/8/16/32/64 GB, alteráve
 
 ```
 qemu-system-aarch64 -M virt,accel=tcg -cpu cortex-a72 -smp N -m XM
-  [-kernel Image -initrd initrd.img -append "root=/dev/vda rw console=ttyAMA0"]
+  [-kernel Image -initrd initrd.img -append "root=/dev/vda rw console=ttyAMA0 console=hvc0"]
   [-drive file=rootfs.img,id=hd0 -device virtio-blk-device,drive=hd0]
   -virtfs local,path=<workspace>,mount_tag=darkcode-ws,security_model=none
   -netdev user,id=net0 -device virtio-net-device,netdev=net0
-  -nographic   → stdio = console serial do guest (→ terminal do app)
+  -chardev socket,id=term0,path=<filesDir>/qemu/term.sock,server=on,wait=off
+  -device virtio-serial-device -device virtconsole,chardev=term0
+  -nographic
 ```
+
+- **Ponte de terminal (T16):** QEMU cria o socket unix (`server=on,wait=off`); o app conecta via `LocalSocket` (`SocketTermSession`) e mostra o console `hvc0` no terminal VT100. Se o socket falhar, cai no stdio (`ProcessTermSession`).
+- **virtio-9p:** workspace do Android montado no guest (`/home/user/workspace` pelo `dark-code-init.sh`).
 
 ## ⚠️ Pendências (artefatos reais)
 

@@ -54,8 +54,10 @@
   - `QemuManager`: `-M virt,accel=tcg -cpu cortex-a72` · virtio-blk · SLIRP · `-nographic` · presets D13 · download do binário + SHA-256 · ciclo de vida
 - [x] **T15. Gerenciador de distros (D1)** ✅
   - `DistroManager`: catálogo (Phantom Base oficial + Ubuntu/Debian/Alpine), download com progresso, checksum, extração tar.gz / imagem .img · UI no Toolbox
-- [x] **T16. virtio-9p + virtio-serial** 🔶 (comando pronto)
-  - `-virtfs` do workspace montado no guest · console stdio → terminal · validação real depende dos artefatos
+- [x] **T16. virtio-9p + virtio-serial** ✅ código pronto — validação real depende dos artefatos
+  - **virtio-9p**: `-virtfs local,path=<workspace>,mount_tag=darkcode-ws,security_model=none,id=ws0` → montado no guest pelo `dark-code-init.sh`
+  - **virtio-serial**: `-chardev socket,id=term0,path=term.sock,server=on,wait=off` + `-device virtio-serial-device` + `-device virtconsole,chardev=term0`; kernel boota com `console=ttyAMA0 console=hvc0`
+  - App conecta no socket via `LocalSocket` (`SocketTermSession`, ponte VT100 → terminal); **fallback** para stdio (`ProcessTermSession`) se o socket falhar; stdout drenado p/ o pipe não travar a VM
 - [x] **T17. Widget de terminal VT100 + abas múltiplas (D11)** ✅ emulador real **jackpal `emulatorview` v1.0.70** (JitPack, API clássica `TermSession`/`EmulatorView`, embutido no APK): aba `Linux (QEMU)` = console do guest + abas `Shell N` (mksh local com TERM/PATH) + barra de abas com fechar/nova aba
 - [x] **T18. `dark-code-init.sh`** ✅
   - `assets/linux/dark-code-init.sh` (rede SLIRP, user, mount 9p, prompt) · copiado na instalação da distro

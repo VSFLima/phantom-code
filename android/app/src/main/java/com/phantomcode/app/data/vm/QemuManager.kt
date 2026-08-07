@@ -1,6 +1,8 @@
 package com.phantomcode.app.data.vm
 
 import android.content.Context
+import android.net.LocalSocket
+import android.net.LocalSocketAddress
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -49,6 +51,9 @@ class QemuManager(
 
     private var process: Process? = null
     private var watcher: Job? = null
+
+    /** Socket unix do console via virtio-serial (T16) — removido no stop. */
+    private var serialSocket: File? = null
 
     val terminal = TerminalManager()
 
@@ -151,7 +156,9 @@ class QemuManager(
         if (kernel != null) {
             cmd += listOf("-kernel", kernel.absolutePath)
             distros.activeInitrd()?.let { cmd += listOf("-initrd", it.absolutePath) }
-            cmd += listOf("-append", "root=/dev/vda rw console=ttyAMA0")
+            // console=hvc0: kernel boota o console no virtio-serial (T16);
+            // ttyAMA0 mantido como redundância no stdio.
+            cmd += listOf("-append", "root=/dev/vda rw console=ttyAMA0 console=hvc0")
         }
         if (rootfs != null) {
             cmd += listOf(
@@ -159,20 +166,44 @@ class QemuManager(
                 "-device", "virtio-blk-device,drive=hd0",
             )
         }
+        // Ponte de terminal (T16): virtio-serial → socket local → terminal do app.
+        // QEMU cria o socket (server=on, wait=off) e o app conecta como cliente.
+        val sock = File(qemuDir, "term.sock")
+        sock.delete()
+        serialSocket = sock
         cmd += listOf(
             // Ponte de arquivos: workspace do Android dentro do guest (D3)
             "-virtfs", "local,path=${workspace.root.absolutePath},mount_tag=darkcode-ws,security_model=none,id=ws0",
             // Rede SLIRP (NAT) — internet no guest sem root
             "-netdev", "user,id=net0",
             "-device", "virtio-net-device,netdev=net0",
-            // Console headless via stdio → terminal do app
+            // Console do guest pelo socket unix (hvc0) — o widget de terminal do app
+            "-chardev", "socket,id=term0,path=${sock.absolutePath},server=on,wait=off",
+            "-device", "virtio-serial-device",
+            "-device", "virtconsole,chardev=term0",
+            // Monitor QEMU + uart0 no stdio (headless)
             "-nographic",
         )
 
         return@withContext runCatching {
             val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
             process = p
-            terminal.attach(p)
+            val serial = connectSerialSocket(sock)
+            if (serial != null) {
+                terminal.attach(serial)
+                // Consome o stdout (console ttyAMA0 redundante) para o pipe não
+                // encher e travar a VM quando o terminal usa o socket.
+                scope.launch {
+                    try {
+                        val buf = ByteArray(4096)
+                        val input = p.inputStream
+                        while (input.read(buf) != -1) { /* descarta */ }
+                    } catch (_: Exception) {
+                    }
+                }
+            } else {
+                terminal.attach(p)
+            }
             onMain {
                 running = true
                 statusText = "RUNNING"
@@ -181,6 +212,7 @@ class QemuManager(
             }
             watcher = scope.launch {
                 p.waitFor()
+                runCatching { sock.delete() }
                 onMain {
                     running = false
                     statusText = "STOPPED"
@@ -195,10 +227,31 @@ class QemuManager(
         }
     }
 
+    /**
+     * Conecta ao socket do console (virtio-serial). QEMU cria o socket com
+     * `server=on,wait=off`; tenta por ~5s. Null se falhar → fallback p/ stdio.
+     */
+    private fun connectSerialSocket(sock: File): SocketTermSession? {
+        repeat(50) {
+            if (sock.exists()) {
+                val s = LocalSocket()
+                val ok = runCatching {
+                    s.connect(LocalSocketAddress(sock.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
+                }.isSuccess
+                if (ok) return runCatching { SocketTermSession(s) }.getOrNull()
+                runCatching { s.close() }
+            }
+            Thread.sleep(100)
+        }
+        return null
+    }
+
     fun stop() {
         runCatching { process?.destroy() }
         watcher?.cancel()
         terminal.stop()
+        runCatching { serialSocket?.delete() }
+        serialSocket = null
         running = false
         statusText = "STOPPED"
         VmForegroundService.stop(appContext)

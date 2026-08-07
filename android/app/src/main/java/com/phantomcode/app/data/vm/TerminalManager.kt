@@ -41,8 +41,13 @@ class TerminalManager {
 
     /** Anexa o console do processo QEMU (substitui abas antigas). */
     fun attach(process: Process) {
+        attach(ProcessTermSession(process))
+    }
+
+    /** Anexa uma sessão de terminal qualquer (ex.: console via socket da VM). */
+    fun attach(session: TermSession, title: String = "Linux (QEMU)") {
         stop()
-        val tab = TerminalTab(TerminalTabKind.QEMU, "Linux (QEMU)", ProcessTermSession(process))
+        val tab = TerminalTab(TerminalTabKind.QEMU, title, session)
         tabs += tab
         activeIndex = tabs.lastIndex
         active = true
