@@ -82,6 +82,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ToolboxScreen(
     onOpenTerminal: () -> Unit = {},
+    onOpenBrowser: (String) -> Unit = {},
 ) {
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
@@ -302,6 +303,10 @@ fun ToolboxScreen(
                     scope.launch { snackbar.showSnackbar("Chave salva com segurança") }
                 },
                 onDismiss = { addKeyDialog = false },
+                onOpenService = { url ->
+                    addKeyDialog = false
+                    onOpenBrowser(url)
+                },
             )
         }
 

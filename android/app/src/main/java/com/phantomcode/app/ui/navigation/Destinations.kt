@@ -18,11 +18,16 @@ object Routes {
     const val SETTINGS = "settings"
     const val TERMINAL = "terminal"
     const val BROWSER = "browser"
+    const val BROWSER_URL = "browser?url={url}"
 
     const val EDITOR = "editor/{path}"
 
     /** Monta a rota do editor com o caminho do arquivo (URL-encoded). */
     fun editorRoute(relPath: String): String = "editor/${Uri.encode(relPath)}"
+
+    /** Monta a rota do navegador com uma URL inicial (URL-encoded, opcional).
+     *  Sempre inclui o parâmetro para casar com a rota registrada `browser?url={url}`. */
+    fun browserRoute(url: String? = null): String = "browser?url=${Uri.encode(url ?: "")}"
 }
 
 data class NavItem(

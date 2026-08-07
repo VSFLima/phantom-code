@@ -15,6 +15,7 @@ enum class SecretCategory(val id: String, val label: String) {
     GIT("git", "Git"),
     IA("ia", "IA"),
     CLOUD("cloud", "Cloud"),
+    SERVER("server", "Servidor"),
     OUTROS("outros", "Outros"),
 }
 

@@ -61,13 +61,13 @@ private fun Int.asHexColor(): String = "#%06X".format(this and 0xFFFFFF)
  * progresso do carregamento — tudo nas cores do usuário.
  */
 @Composable
-fun BrowserScreen(onBack: () -> Unit) {
+fun BrowserScreen(onBack: () -> Unit, initialUrl: String? = null) {
     val palette = LocalThemeController.current.currentPalette()
     val ui = LocalUiStyleController.current.ui
     val corner = ui.cornerStyle.shape()
 
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var urlInput by remember { mutableStateOf("") }
+    var urlInput by remember { mutableStateOf(initialUrl ?: "") }
     var progress by remember { mutableFloatStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
@@ -250,7 +250,11 @@ fun BrowserScreen(onBack: () -> Unit) {
                             progress = newProgress / 100f
                         }
                     }
-                    loadDataWithBaseURL(null, startPage, "text/html", "UTF-8", null)
+                    if (initialUrl.isNullOrBlank()) {
+                        loadDataWithBaseURL(null, startPage, "text/html", "UTF-8", null)
+                    } else {
+                        loadUrl(initialUrl)
+                    }
                     webView = this
                 }
             },

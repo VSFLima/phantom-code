@@ -232,14 +232,19 @@ fun PhantomApp() {
                 composable(Routes.TOOLBOX) {
                     ToolboxScreen(
                         onOpenTerminal = { navController.navigate(Routes.TERMINAL) },
+                        onOpenBrowser = { url -> navController.navigate(Routes.browserRoute(url)) },
                     )
                 }
                 composable(Routes.SETTINGS) { SettingsScreen() }
                 composable(Routes.TERMINAL) {
                     TerminalScreen(onBack = { navController.popBackStack() })
                 }
-                composable(Routes.BROWSER) {
-                    BrowserScreen(onBack = { navController.popBackStack() })
+                composable(
+                    route = Routes.BROWSER_URL,
+                    arguments = listOf(navArgument("url") { type = NavType.StringType; defaultValue = "" }),
+                ) { entry ->
+                    val url = Uri.decode(entry.arguments?.getString("url") ?: "").ifBlank { null }
+                    BrowserScreen(onBack = { navController.popBackStack() }, initialUrl = url)
                 }
                 composable(
                     route = Routes.EDITOR,
