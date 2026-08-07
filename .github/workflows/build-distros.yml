@@ -5,11 +5,16 @@ name: Build Distro Artifacts
 # O app baixa o artefato internamente (Toolbox → Distros → Instalar) com
 # barra de progresso e validação SHA-256, via PhantomMirror.PHANTOM_URL.
 #
+# AUTÔNOMO (t30): o QEMU estático é COMPILADO dentro deste mesmo workflow
+# (cross-compile nativo x86_64 → aarch64) e embutido no tarball — NÃO depende
+# da Release `qemu-aarch64` (que pode ser apagada). Uma única release
+# (`distro-phantom`) alimenta o app: rootfs + kernel + initrd + qemu.
+#
 # Artefato gerado:  phantom.tar.gz
 #   ├── rootfs.img   (ext2 de 1 GiB — Debian bookworm arm64 com ferramentas)
 #   ├── kernel       (vmlinuz do linux-image-arm64)
 #   ├── initrd.img   (initramfs do pacote)
-#   └── qemu-system-aarch64 (QEMU estático oficial do projeto)
+#   └── qemu-system-aarch64 (QEMU estático oficial do projeto, compilado aqui)
 #
 # Boot no app:  -kernel kernel -initrd initrd.img -drive rootfs.img \
 #               -append "root=/dev/vda rw console=ttyAMA0"
@@ -62,18 +67,120 @@ jobs:
           cp -L /tmp/rootfs/boot/initrd.img-* /tmp/initrd.img
           ls -la /tmp/kernel /tmp/initrd.img
 
-      - name: Grab QEMU binary
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # ─────────────────────────────────────────────────────────────────────
+      # QEMU ESTÁTICO (cross-compile nativo) — embutido no tarball da distro
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Install cross toolchain + build tools
         run: |
-          gh release download qemu-aarch64 \
-            --repo VSFLima/phantom-code \
-            --pattern qemu-system-aarch64 \
-            --output /tmp/qemu-system-aarch64 \
-            --clobber
-          chmod +x /tmp/qemu-system-aarch64
-          ls -lh /tmp/qemu-system-aarch64
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+            ninja-build pkg-config python3 python3-pip \
+            autoconf automake libtool make wget ca-certificates \
+            bison flex gettext
+          # glib 2.80 exige meson >= 1.1; o do Ubuntu 22.04 é 0.61.
+          sudo pip3 install --break-system-packages meson
 
+      - name: Build static deps for aarch64 (zlib, libffi, pcre2, pixman)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export CROSS=aarch64-linux-gnu
+          sudo mkdir -p $PREFIX
+          cd /tmp
+          # fetch <dest> <url1> <url2…>: tenta fontes em ordem (GitHub primeiro — mais estável)
+          fetch() { local d="$1"; shift; for u in "$@"; do
+            if wget -q -O "$d" "$u" 2>/dev/null && [ -s "$d" ]; then echo "✓ $u"; return 0; fi
+            rm -f "$d"; done; echo "❌ falhou download"; exit 1; }
+          fetch zlib.tar.gz \
+            "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz" \
+            "https://zlib.net/fossils/zlib-1.3.1.tar.gz"
+          tar xzf zlib.tar.gz && cd zlib-1.3.1
+          CC=${CROSS}-gcc AR=${CROSS}-ar RANLIB=${CROSS}-ranlib \
+            ./configure --static --prefix=$PREFIX
+          make -j2 && sudo make install
+          cd /tmp
+          fetch libffi.tar.gz \
+            "https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz"
+          tar xzf libffi.tar.gz && cd libffi-3.4.6
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static
+          make -j2 && sudo make install
+          cd /tmp
+          fetch pcre2.tar.gz \
+            "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.44/pcre2-10.44.tar.gz"
+          tar xzf pcre2.tar.gz && cd pcre2-10.44
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static
+          make -j2 && sudo make install
+          cd /tmp
+          fetch pixman.tar.gz \
+            "https://www.cairographics.org/releases/pixman-0.42.2.tar.gz" \
+            "https://gitlab.freedesktop.org/pixman/pixman/-/archive/pixman-0.42.2/pixman-0.42.2.tar.gz"
+          tar xzf pixman.tar.gz && cd pixman-0.42.2
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static \
+            --disable-arm-simd --disable-arm-neon --disable-arm-iwmmxt --disable-arm-iwmmxt2
+          make -j2 && sudo make install
+          cd /tmp
+
+      - name: Build static glib for aarch64 (meson cross)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
+          cat > /tmp/arm-cross.txt <<'EOF'
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkg-config = 'pkg-config'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+          EOF
+          cd /tmp
+          fetch() { local d="$1"; shift; for u in "$@"; do
+            if wget -q -O "$d" "$u" 2>/dev/null && [ -s "$d" ]; then echo "✓ $u"; return 0; fi
+            rm -f "$d"; done; echo "❌ falhou download"; exit 1; }
+          fetch glib.tar.xz \
+            "https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz" \
+            "https://github.com/GNOME/glib/archive/refs/tags/2.80.4.tar.gz"
+          tar xf glib.tar.xz && cd glib-2.80.4
+          meson setup build --cross-file /tmp/arm-cross.txt --prefix=$PREFIX \
+            --default-library=static \
+            -Dnls=disabled -Dtests=false -Dinstalled_tests=false \
+            -Dgtk_doc=false -Dman=false -Dlibmount=disabled -Dlibelf=disabled
+          ninja -C build && sudo ninja -C build install
+          cd /tmp
+
+      - name: Build static QEMU (aarch64-softmmu, cross)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export PKG_CONFIG=pkg-config
+          export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
+          cd /tmp
+          fetch() { local d="$1"; shift; for u in "$@"; do
+            if wget -q -O "$d" "$u" 2>/dev/null && [ -s "$d" ]; then echo "✓ $u"; return 0; fi
+            rm -f "$d"; done; echo "❌ falhou download"; exit 1; }
+          fetch qemu.tar.xz \
+            "https://download.qemu.org/qemu-9.1.0.tar.xz" \
+            "https://github.com/qemu/qemu/archive/refs/tags/v9.1.0.tar.gz"
+          tar xf qemu.tar.xz && cd qemu-9.1.0
+          ./configure --cross-prefix=aarch64-linux-gnu- \
+            --target-list=aarch64-softmmu --static --disable-werror --prefix=/usr \
+            --disable-gnutls --disable-nettle --disable-gcrypt \
+            --disable-gtk --disable-sdl --disable-vnc --disable-spice --disable-xen \
+            --disable-libnfs --disable-smartcard --disable-usb-redir --disable-glusterfs \
+            --disable-curl --disable-snappy --disable-bzip2 --disable-lzo --disable-seccomp
+          make -j2
+          cp build/qemu-system-aarch64 /tmp/qemu-system-aarch64
+          ls -la /tmp/qemu-system-aarch64
+          sha256sum /tmp/qemu-system-aarch64
+
+      # ─────────────────────────────────────────────────────────────────────
       - name: Create rootfs.img (mkfs.ext2 -d — imagem ext2 populada direto do dir)
         run: |
           # `du -s` subconta hardlinks (docker export) — usamos -l e ainda sobramos
@@ -91,6 +198,7 @@ jobs:
           tar czf phantom.tar.gz rootfs.img kernel initrd.img qemu-system-aarch64
           echo "=== phantom.tar.gz ==="
           ls -la phantom.tar.gz
+          sha256sum phantom.tar.gz
 
       - name: Publish as Release (tag fixa para o app)
         env:
@@ -99,6 +207,4 @@ jobs:
           gh release delete distro-phantom --yes 2>/dev/null || true
           gh release create distro-phantom /tmp/phantom.tar.gz \
             --title "Phantom rootfs (arm64) $(date +%Y-%m-%d)" \
-            --notes "Phantom — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img + qemu-system-aarch64. O app baixa um pacote unificado (Toolbox → Distros)."
-
-# O binário também é publicado separadamente pela Release `qemu-aarch64`.
+            --notes "Phantom — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img + qemu-system-aarch64 (compilado no próprio build). O app baixa um pacote unificado (Toolbox → Distros)."

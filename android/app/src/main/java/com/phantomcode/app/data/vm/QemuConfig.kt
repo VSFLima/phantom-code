@@ -33,10 +33,9 @@ object QemuPresets {
  */
 object PhantomMirror {
     // Binário QEMU arm64 (estático/musl) publicado na Release `qemu-aarch64`
-    // pelo workflow `Build QEMU Binary`. O workflow `Build APK` injeta este
-    // binário em assets/qemu/ — o QEMU vem DE FÁBRICA no APK (T30) e é extraído
-    // na 1ª execução (QemuManager.ensureBinary). Este URL é só o fallback para
-    // builds antigos ou quando a Release do binário não existir no build.
+    // pelo workflow `Build QEMU Binary`. É o FALLBACK para distros de terceiros:
+    // a distro oficial Phantom já traz o qemu-system-aarch64 DENTRO do pacote
+    // (QemuManager.binary() prioriza o da distro) — nada vem embutido no APK.
     const val QEMU_BINARY_URL = "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
     const val QEMU_BINARY_SHA256 = "6bf5d271e3392aad412e60ec8646a15bb7ecca61e2e3ac57bc0c770436a67da1"
 

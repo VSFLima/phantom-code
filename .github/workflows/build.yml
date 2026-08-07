@@ -33,26 +33,6 @@ jobs:
           echo "$PHANTOM_KEYSTORE_BASE64" | base64 -d > android/release.keystore
           echo "keystore restaurado ($(wc -c < android/release.keystore) bytes)"
 
-      - name: Bundle native QEMU binary (embutido no APK)
-        run: |
-          set -e
-          mkdir -p android/app/src/main/assets/qemu
-          # 1) Binário direto da Release qemu-aarch64 (se publicada)
-          if curl -sfL --retry 3 --retry-delay 2 -o /tmp/qemu-system-aarch64 \
-            "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"; then
-            cp /tmp/qemu-system-aarch64 android/app/src/main/assets/qemu/qemu-system-aarch64
-          else
-            # 2) Fallback: extrai o qemu do pacote unificado (Release distro-phantom)
-            curl -sfL --retry 3 --retry-delay 2 -o /tmp/phantom.tar.gz \
-              "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
-            mkdir -p /tmp/phantom-tar
-            tar -xzf /tmp/phantom.tar.gz -C /tmp/phantom-tar
-            find /tmp/phantom-tar -name 'qemu-system-aarch64' -size +1M -exec cp {} android/app/src/main/assets/qemu/qemu-system-aarch64 \;
-          fi
-          test -s android/app/src/main/assets/qemu/qemu-system-aarch64
-          ls -la android/app/src/main/assets/qemu/
-          echo "QEMU embutido: $(wc -c < android/app/src/main/assets/qemu/qemu-system-aarch64) bytes"
-
       - name: Build release APK
         env:
           PHANTOM_SIGNING: "true"

@@ -71,12 +71,9 @@ class QemuManager(
 
     val terminal = TerminalManager()
 
-    /** Binário QEMU usado no boot: 1º o embutido no app (extraído), 2º o da distro, 3º fallback. */
-    fun binary(): File {
-        val native = File(qemuDir, "qemu-system-aarch64")
-        if (native.exists()) return native
-        return distros.activeQemu() ?: native
-    }
+    /** Binário QEMU: a distro traz o seu (a Phantom vem com qemu no pacote); o
+     *  fallback global (extraído/baixado) só entra quando não há distro instalada. */
+    fun binary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
 
     init {
         binaryReady = binary().exists()
@@ -106,20 +103,20 @@ class QemuManager(
         prefs.diskSizeMb = sizeMb
     }
 
-    /** Garante o binário QEMU: 1º embutido no APK, 2º o da distro, 3º download (fallback). */
+    /** Garante o binário QEMU: 1º o da distro instalada (Phantom traz no pacote),
+     *  2º extraído de APK antigo (assets/qemu), 3º download (fallback). */
     suspend fun ensureBinary(onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         if (binaryReady) return@withContext true
-        // 1) QEMU nativo embutido no APK (assets/qemu — T30): extrai na 1ª execução,
-        //    sem depender de download nem de o pacote da distro trazer o binário.
-        if (extractNativeQemu()) {
+        // 1) QEMU que já vem dentro do pacote da distro instalada (ex.: Phantom).
+        if (distros.activeQemu() != null) {
             onMain {
                 binaryInstalling = false
                 binaryReady = true
             }
             return@withContext true
         }
-        // 2) QEMU que já vem dentro do pacote da distro instalada.
-        if (distros.activeQemu() != null) {
+        // 2) QEMU extraído de um APK antigo que ainda tinha assets/qemu (compat).
+        if (extractNativeQemu()) {
             onMain {
                 binaryInstalling = false
                 binaryReady = true
@@ -168,9 +165,9 @@ class QemuManager(
     }
 
     /**
-     * Extrai o QEMU embutido no APK (assets/qemu/qemu-system-aarch64, T30)
-     * para filesDir/qemu/ e marca como executável. O binário vem de fábrica no
-     * APK (o workflow Build APK o injeta em assets) — nada de download.
+     * Compat: extrai o QEMU de assets/qemu/ (APKs antigos que ainda embutiam
+     * o binário) para filesDir/qemu/. Nos APKs novos o asset não existe e este
+     * método falha rápido — o caminho normal é o QEMU do pacote da distro.
      */
     private fun extractNativeQemu(): Boolean {
         val target = File(qemuDir, "qemu-system-aarch64")
