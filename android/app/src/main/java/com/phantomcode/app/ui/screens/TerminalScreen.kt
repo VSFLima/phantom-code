@@ -169,7 +169,12 @@ fun TerminalScreen(onBack: () -> Unit) {
         // ── Terminal VT100 real (jackpal emulatorview) ──
         AndroidView(
             factory = { ctx ->
-                EmulatorView(ctx, null, ctx.resources.displayMetrics).apply {
+                // Construção em 2 passos: o construtor (ctx, session, metrics) chama
+                // attachSession internamente e CRASHA com session null. Usamos o
+                // construtor XML (sem session) + setDensity/attachSession manuais —
+                // a sessão é anexada no `update` abaixo quando há aba ativa.
+                EmulatorView(ctx, null).apply {
+                    setDensity(ctx.resources.displayMetrics)
                     // Terminal segue a paleta do usuário (Design System v2):
                     // fundo e texto nas cores do app, com o verde de sucesso no prompt.
                     setColorScheme(

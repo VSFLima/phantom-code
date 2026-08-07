@@ -159,14 +159,18 @@ class QemuManager(
         if (running) return@withContext true
         autoStartSuppressed = false
         lastError = null
-        if (!binaryReady && !ensureBinary()) {
-            onMain { lastError = "Binário QEMU não instalado: ${lastError ?: "erro desconhecido"}" }
-            return@withContext false
-        }
+        // 1) A distro vem PRIMEIRO: o QEMU já está dentro do pacote Phantom
+        //    (rootfs.img + kernel + initrd.img + qemu-system-aarch64).
         val rootfs = distros.activeRootfsImage()
         val kernel = distros.activeKernel()
         if (rootfs == null && kernel == null) {
-            onMain { lastError = "Nenhuma distro instalada — instale a Phantom no Toolbox" }
+            onMain { lastError = "Nenhuma distro instalada — instale a Phantom no Toolbox (o QEMU vem junto na instalação)" }
+            return@withContext false
+        }
+        // 2) Binário: a Phantom traz o qemu dentro da distro; só distros
+        //    de terceiros usam o fallback global baixado da nuvem.
+        if (!binaryReady && !ensureBinary()) {
+            onMain { lastError = "Binário QEMU não disponível: ${lastError ?: "erro desconhecido"}" }
             return@withContext false
         }
 
