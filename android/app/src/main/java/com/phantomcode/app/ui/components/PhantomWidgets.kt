@@ -84,7 +84,8 @@ fun PhantomLogo(
     }
 
     Canvas(modifier = base) {
-        val w = size.width
+        val canvasSize = this.size
+        val w = canvasSize.width
         val h = w * 1.15f
         val shield = Path().apply {
             moveTo(w / 2f, h * 0.06f)
