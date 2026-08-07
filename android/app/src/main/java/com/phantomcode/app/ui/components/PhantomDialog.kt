@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -44,6 +46,7 @@ fun PhantomDialog(
     title: String,
     placeholder: String = "",
     initialValue: String = "",
+    isSecret: Boolean = false,
     confirmText: String = "OK",
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -82,6 +85,7 @@ fun PhantomDialog(
                     modifier = Modifier.weight(1f),
                     textStyle = TextStyle(color = palette.textPrimary, fontSize = 14.sp),
                     cursorBrush = SolidColor(palette.accentSecondary),
+                    visualTransformation = if (isSecret) PasswordVisualTransformation() else VisualTransformation.None,
                     singleLine = true,
                     decorationBox = { inner ->
                         if (text.isEmpty()) {

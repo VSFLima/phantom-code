@@ -126,14 +126,10 @@ fun GitScreen() {
                     fontSize = 10.sp,
                 )
                 Spacer(Modifier.weight(1f))
-                Icon(
-                    Icons.Filled.Key,
-                    contentDescription = "Token GitHub",
-                    tint = palette.accentPrimary,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clickable { tokenDialog = true }
-                        .padding(8.dp),
+                PhantomOutlinedButton(
+                    text = if (git.token == null) "Autenticar GitHub" else "GitHub conectado",
+                    icon = Icons.Filled.Key,
+                    onClick = { tokenDialog = true },
                 )
             }
 
@@ -337,6 +333,7 @@ fun GitScreen() {
                 title = "Token GitHub (PAT)",
                 placeholder = "ghp_xxxxxxxxxxxx",
                 confirmText = "Salvar",
+                isSecret = true,
                 onConfirm = { value ->
                     tokenDialog = false
                     git.token = value
