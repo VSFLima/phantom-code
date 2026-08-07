@@ -71,7 +71,8 @@ class QemuManager(
 
     val terminal = TerminalManager()
 
-    fun binary(): File = File(qemuDir, "qemu-system-aarch64")
+    /** Usa o QEMU que vem no pacote Phantom; demais distros usam o fallback global. */
+    fun binary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
 
     init {
         binaryReady = binary().exists()
@@ -104,18 +105,13 @@ class QemuManager(
     /** Baixa o binário QEMU arm64 (com checksum se informado) e marca como executável. */
     suspend fun ensureBinary(onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         if (binaryReady) return@withContext true
-        // A Phantom já traz o QEMU no mesmo pacote da distro; evita um segundo download.
-        distros.activeQemu()?.let { bundled ->
-            runCatching {
-                bundled.copyTo(binary(), overwrite = true)
-                binary().setExecutable(true)
-            }.onSuccess {
-                onMain {
-                    binaryInstalling = false
-                    binaryReady = true
-                }
-                return@withContext true
+        // A Phantom já traz o QEMU no mesmo pacote da distro; não duplica os 127 MB.
+        if (distros.activeQemu() != null) {
+            onMain {
+                binaryInstalling = false
+                binaryReady = true
             }
+            return@withContext true
         }
         binaryInstalling = true
         val target = binary()
