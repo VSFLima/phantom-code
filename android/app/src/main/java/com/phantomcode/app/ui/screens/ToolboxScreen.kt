@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -176,6 +177,11 @@ fun ToolboxScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── Pacotes do Linux (T20) ───────────────────────────
+            GuestPackagesSection(qemu = qemu, onOpenTerminal = onOpenTerminal)
 
             Spacer(Modifier.height(20.dp))
 
@@ -351,6 +357,237 @@ fun ToolboxScreen(
         SnackbarHost(
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
+    }
+}
+
+/** Formata o tamanho em KB → "1,2 MB" / "340 KB". */
+private fun sizeText(sizeKb: Long?): String {
+    val kb = sizeKb ?: return "—"
+    return if (kb >= 1024) String.format("%.1f MB", kb / 1024f) else "$kb KB"
+}
+
+/** InfoRow dos detalhes de um pacote. */
+@Composable
+private fun PkgInfoRow(label: String, value: String, palette: PhantomPalette) {
+    Row {
+        Text("$label: ", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text(value, color = palette.textPrimary, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun GuestPackageCard(
+    pkg: GuestPackage,
+    palette: PhantomPalette,
+    onClickDetails: () -> Unit,
+    onClickRemove: () -> Unit,
+    onClickTerminal: () -> Unit,
+) {
+    PhantomCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .background(if (pkg.running) palette.success else palette.border, CircleShape),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        pkg.name,
+                        color = palette.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${pkg.version} · ${sizeText(pkg.sizeKb)}",
+                    color = palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (pkg.running) {
+                Text(
+                    "rodando",
+                    color = palette.success,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = onClickTerminal) {
+                Icon(Icons.Filled.Restore, "Abrir no terminal", tint = palette.textSecondary, modifier = Modifier.size(18.dp))
+            }
+            PhantomOutlinedButton(text = "Detalhes", onClick = onClickDetails)
+            if (pkg.category != PackageCategory.SYS) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onClickRemove) {
+                    Icon(Icons.Filled.Delete, "Desinstalar", tint = palette.error, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Scanner de pacotes do guest (T20): IAs, Linguagens, Ferramentas, Sistema.
+ * Busca + refresh manual + auto-atualização (o scanner re-escaneia a cada 20s
+ * enquanto a VM roda — pega instalações via apt/pip).
+ */
+@Composable
+private fun GuestPackagesSection(
+    qemu: QemuManager,
+    onOpenTerminal: () -> Unit,
+) {
+    val palette = LocalThemeController.current.currentPalette()
+    val scanner = qemu.scanner
+    var query by remember { mutableStateOf("") }
+    var details by remember { mutableStateOf<GuestPackage?>(null) }
+    var confirmRemove by remember { mutableStateOf<GuestPackage?>(null) }
+
+    SectionLabel(text = "Pacotes do Linux")
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Scanner do guest: IAs, linguagens, ferramentas e sistema (T20).",
+        color = palette.textSecondary,
+        fontSize = 11.sp,
+    )
+    Spacer(Modifier.height(8.dp))
+
+    if (!qemu.running) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Disponível quando o Linux estiver ativo — inicie a VM acima.",
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        return
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(4.dp))
+                .background(palette.surfaceAlt)
+                .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null, tint = palette.textSecondary, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                cursorBrush = SolidColor(palette.accentSecondary),
+                singleLine = true,
+                decorationBox = { inner ->
+                    if (query.isEmpty()) Text("Buscar…", color = palette.textSecondary, fontSize = 13.sp)
+                    inner()
+                },
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        PhantomOutlinedButton(text = "Atualizar", icon = Icons.Filled.Refresh, onClick = { scanner.refresh() })
+    }
+
+    Spacer(Modifier.height(8.dp))
+
+    if (scanner.scanning && scanner.packages.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Escaneando o guest…", color = palette.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = palette.accentPrimary, trackColor = palette.surfaceAlt)
+        }
+        return
+    }
+
+    val queryNorm = query.trim()
+    val filtered = scanner.packages.filter { queryNorm.isEmpty() || it.name.contains(queryNorm, ignoreCase = true) }
+
+    if (filtered.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                if (scanner.packages.isEmpty())
+                    "Nenhum pacote detectado — confira o phantom-agent.sh no guest (dark-code-init.sh)."
+                else
+                    "Nada encontrado para \"$queryNorm\".",
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+            )
+        }
+        return
+    }
+
+    PackageCategory.entries.forEach { cat ->
+        val items = filtered.filter { it.category == cat }
+        if (items.isEmpty()) return@forEach
+        Text(
+            cat.label,
+            color = palette.accentSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+        )
+        items.forEach { pkg ->
+            GuestPackageCard(
+                pkg = pkg,
+                palette = palette,
+                onClickDetails = { details = pkg },
+                onClickRemove = { confirmRemove = pkg },
+                onClickTerminal = onOpenTerminal,
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+
+    details?.let { pkg ->
+        AlertDialog(
+            onDismissRequest = { details = null },
+            containerColor = palette.surface,
+            title = { Text(pkg.name, color = palette.textPrimary, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    PkgInfoRow("Categoria", pkg.category.label, palette)
+                    PkgInfoRow("Versão", pkg.version, palette)
+                    PkgInfoRow("Tamanho", sizeText(pkg.sizeKb), palette)
+                    PkgInfoRow("Status", if (pkg.running) "Rodando" else "Parado", palette)
+                }
+            },
+            confirmButton = { TextButton(onClick = { details = null }) { Text("Fechar", color = palette.accentPrimary) } },
+            dismissButton = {
+                if (pkg.category != PackageCategory.SYS) {
+                    TextButton(onClick = { details = null; confirmRemove = pkg }) { Text("Desinstalar", color = palette.error) }
+                }
+            },
+        )
+    }
+
+    confirmRemove?.let { pkg ->
+        AlertDialog(
+            onDismissRequest = { confirmRemove = null },
+            containerColor = palette.surface,
+            title = { Text("Desinstalar ${pkg.name}?", color = palette.textPrimary) },
+            text = { Text("Roda apt-get remove -y ${pkg.name} no guest.", color = palette.textSecondary, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRemove = null
+                    scanner.run("apt-get remove -y ${pkg.name}")
+                }) { Text("Desinstalar", color = palette.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancelar", color = palette.textSecondary) } },
         )
     }
 }

@@ -51,6 +51,7 @@ class PackageScanner {
     private var inScan = false
     private val scanBuffer = StringBuilder()
     private var awaitingResponse = false
+    private var scanTimeoutJob: Job? = null
 
     val packages = mutableStateListOf<GuestPackage>()
     var scanning by mutableStateOf(false)
@@ -88,6 +89,8 @@ class PackageScanner {
 
     fun disconnect() {
         onMainDisconnected()
+        scanTimeoutJob?.cancel()
+        scanTimeoutJob = null
         readJob?.cancel()
         readJob = null
         runCatching { socket?.close() }
@@ -104,7 +107,20 @@ class PackageScanner {
         if (!connected || scanning || awaitingResponse) return
         scanning = true
         awaitingResponse = true
+        lastError = null
         send("SCAN\n")
+        // Se o agente do guest não responder (ainda bootando / ausente), solta a
+        // trava depois de um tempo para a UI não ficar "Escaneando…" para sempre.
+        scanTimeoutJob = scope.launch {
+            delay(8_000)
+            if (inScan || awaitingResponse) {
+                inScan = false
+                scanBuffer.clear()
+                awaitingResponse = false
+                scanning = false
+                lastError = "Agente do guest sem resposta"
+            }
+        }
     }
 
     /** Executa um comando no guest (ex.: apt remove -y git). */
@@ -135,6 +151,7 @@ class PackageScanner {
                 if (line == "PHANTOM-SCAN-END") {
                     inScan = false
                     awaitingResponse = false
+                    scanTimeoutJob?.cancel()
                     parseScan(scanBuffer.toString())
                     scanBuffer.clear()
                     scanning = false
@@ -146,7 +163,10 @@ class PackageScanner {
                 inScan = true
                 scanBuffer.clear()
             }
-            line == "OK" || line == "ERR" -> awaitingResponse = false
+            line == "OK" || line == "ERR" -> {
+                awaitingResponse = false
+                scanTimeoutJob?.cancel()
+            }
         }
     }
 
