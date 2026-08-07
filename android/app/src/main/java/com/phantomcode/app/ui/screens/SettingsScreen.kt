@@ -38,7 +38,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,7 +72,6 @@ import com.phantomcode.app.ui.theme.PhantomButtonStyle
 import com.phantomcode.app.ui.theme.PhantomCornerStyle
 import com.phantomcode.app.ui.theme.PhantomFontStyle
 import com.phantomcode.app.ui.theme.PhantomPreset
-import kotlinx.coroutines.launch
 
 private data class CustomField(val key: String, val label: String)
 
@@ -269,7 +267,6 @@ fun SettingsScreen() {
         // ── Ambiente VM (D13) ───────────────────────────────────
         val vm = LocalVm.current
         val qemu = vm.qemu
-        val scope = rememberCoroutineScope()
         val qemuContext = LocalContext.current
         var localCores by remember { mutableStateOf(qemu.preset.cpu) }
         var localRam by remember { mutableStateOf(qemu.preset.ramMb) }
@@ -297,15 +294,12 @@ fun SettingsScreen() {
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f),
                 )
-                if (qemu.running) {
-                    PhantomOutlinedButton(text = "Parar", onClick = { qemu.stop() })
-                } else {
-                    PhantomPrimaryButton(
-                        text = "Iniciar",
-                        onClick = { scope.launch { qemu.start() } },
-                    )
-                }
             }
+            Text(
+                "Use Toolbox para iniciar ou parar o Linux.",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
+            )
             Spacer(Modifier.height(12.dp))
             Text("Preset de recursos (D13)", color = palette.textSecondary, fontSize = 12.sp)
             Text(
