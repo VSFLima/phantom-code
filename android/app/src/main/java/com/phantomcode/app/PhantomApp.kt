@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -123,6 +127,24 @@ fun PhantomApp() {
             },
         )
         return
+    }
+
+    // ── Auto-início da VM (como o Termux) ───────────────────────
+    // Ao abrir o app, a distro ativa sobe sozinha em background; o usuário
+    // encerra a sessão no app (Terminal/Toolbox) ou pela notificação. Após um
+    // encerramento explícito, não volta a subir sozinha até o usuário iniciar.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val active = vm.distros.activeId
+                if (active != null && !vm.qemu.running && !vm.qemu.autoStartSuppressed) {
+                    scope.launch { vm.qemu.start() }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val paletteCommands = listOf(

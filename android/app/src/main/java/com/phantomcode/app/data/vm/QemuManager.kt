@@ -37,6 +37,10 @@ class QemuManager(
     private val scope = CoroutineScope(Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    init {
+        instance = this
+    }
+
     /** Publica uma mudança de estado na main thread (seguro para a UI). */
     private fun onMain(block: () -> Unit) = mainHandler.post(block)
 
@@ -46,6 +50,9 @@ class QemuManager(
     var lastError by mutableStateOf<String?>(null)
     var binaryReady by mutableStateOf(false)
     var binaryInstalling by mutableStateOf(false)
+
+    /** Bloqueia o auto-início após um encerramento explícito (app ou notificação). */
+    var autoStartSuppressed by mutableStateOf(false)
 
     private val prefs = QemuPrefs(context)
 
@@ -134,6 +141,7 @@ class QemuManager(
     /** Sobe a VM com a distro ativa. Retorna erro legível quando não dá. */
     suspend fun start(): Boolean = withContext(Dispatchers.IO) {
         if (running) return@withContext true
+        autoStartSuppressed = false
         lastError = null
         if (!binaryReady && !ensureBinary()) {
             onMain { lastError = "Binário QEMU não instalado: ${lastError ?: "erro desconhecido"}" }
@@ -254,6 +262,12 @@ class QemuManager(
         serialSocket = null
         running = false
         statusText = "STOPPED"
+        autoStartSuppressed = true
         VmForegroundService.stop(appContext)
+    }
+
+    companion object {
+        /** Referência do manager ativo — usada pela notificação (VmForegroundService) para parar a sessão. */
+        var instance: QemuManager? = null
     }
 }

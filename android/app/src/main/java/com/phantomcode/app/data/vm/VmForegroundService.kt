@@ -22,6 +22,11 @@ class VmForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            // Botão "Parar sessão" da notificação → encerra a VM.
+            QemuManager.instance?.stop()
+            return START_NOT_STICKY
+        }
         startAsForeground()
         return START_STICKY
     }
@@ -58,6 +63,15 @@ class VmForegroundService : Service() {
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val stopIntent = Intent(this, VmForegroundService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPi = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setContentTitle("Phantom-Code")
@@ -67,6 +81,13 @@ class VmForegroundService : Service() {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(
+                NotificationCompat.Action(
+                    android.R.drawable.ic_media_pause,
+                    "Parar sessão",
+                    stopPi,
+                ),
+            )
             .build()
     }
 
@@ -78,6 +99,7 @@ class VmForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "phantom_vm"
         private const val NOTIFICATION_ID = 1001
+        const val ACTION_STOP = "com.phantomcode.app.action.STOP_VM"
 
         /** Inicia o FGS (API 26+ usa startForegroundService). */
         fun start(context: Context) {

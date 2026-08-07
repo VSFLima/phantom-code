@@ -81,6 +81,10 @@
   - `VmForegroundService`: notificação persistente "Phantom-Code · ambiente Linux ativo", canal API 26+, `specialUse` (API 34+), START_STICKY
   - Manifest: `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` + `POST_NOTIFICATIONS` (Android 13+)
   - `QemuManager` inicia/para o FGS junto com a VM (start/watcher/stop)
+  - **Ação "Parar sessão" na notificação**: botão encerra a VM direto pela barra de notificações (`ACTION_STOP` → `QemuManager.instance?.stop()`)
+- [x] **Auto-início da VM ao abrir o app (estilo Termux)** ✅
+  - `ON_RESUME` → se há distro ativa, VM não está rodando e não houve encerramento explícito, `start()` sobe sozinha
+  - Encerramento explícito (app ou notificação) marca `autoStartSuppressed` → não volta a subir sozinha até o usuário iniciar
 - [x] **T24. Onboarding + Command Palette (D14)** ✅
   - `OnboardingScreen` (D20): 3 passos — armazenamento · instalar Phantom Base · iniciar Linux; flag `onboardingDone` (só 1ª vez)
   - `CommandPalette` (D14): overlay estilo VS Code com busca, aberta pelo ícone de menu no topo; comandos: Home/Explorer/Terminal/Iniciar-Parar Linux/Git/Toolbox/Settings
