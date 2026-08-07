@@ -60,7 +60,7 @@ fun LogoPickerSection() {
     ) {
         LogoOption(
             selected = logos.selected == null,
-            onClick = { logos.setSelected(null) },
+            onClick = { logos.choose(null) },
         ) {
             PhantomLogo(size = 44.dp)
         }
@@ -71,7 +71,7 @@ fun LogoPickerSection() {
             if (bitmap != null) {
                 LogoOption(
                     selected = logos.selected == name,
-                    onClick = { logos.setSelected(name) },
+                    onClick = { logos.choose(name) },
                 ) {
                     Image(
                         bitmap = bitmap,

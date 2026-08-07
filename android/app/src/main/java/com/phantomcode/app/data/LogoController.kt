@@ -33,7 +33,7 @@ class LogoController(context: Context) {
 
     private val imageExtensions = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
 
-    fun setSelected(name: String?) {
+    fun choose(name: String?) {
         selected = name
         if (name == null) {
             prefs.edit().remove(KEY).apply()
