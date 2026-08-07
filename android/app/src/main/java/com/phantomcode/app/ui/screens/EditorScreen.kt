@@ -245,6 +245,27 @@ fun EditorScreen(
                         },
                     )
                     DropdownMenuItem(
+                        text = { Text("Desfazer") },
+                        onClick = {
+                            actionsOpen = false
+                            webView?.evaluateJavascript("window.PhantomEditor.undo()", null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Refazer") },
+                        onClick = {
+                            actionsOpen = false
+                            webView?.evaluateJavascript("window.PhantomEditor.redo()", null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Selecionar tudo") },
+                        onClick = {
+                            actionsOpen = false
+                            webView?.evaluateJavascript("window.PhantomEditor.selectAll()", null)
+                        },
+                    )
+                    DropdownMenuItem(
                         text = { Text("Salvar como…") },
                         onClick = {
                             actionsOpen = false
