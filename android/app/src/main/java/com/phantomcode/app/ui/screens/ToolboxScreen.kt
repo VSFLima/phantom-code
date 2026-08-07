@@ -109,6 +109,7 @@ fun ToolboxScreen(
 
     // ── Distros (D1) — instalação com config + terminal ──
     var installTarget by remember { mutableStateOf<DistroInfo?>(null) }
+    var configureOnly by remember { mutableStateOf(false) }
 
     // ── Backup (T21 · D2) ──
     val backup = remember { BackupManager(context) }
@@ -224,6 +225,7 @@ fun ToolboxScreen(
                     state = vm.distros.installStates[info.id] ?: com.phantomcode.app.data.vm.DistroInstallState(),
                     onClickInstall = { installTarget = info },
                     onClickUse = { vm.distros.setActive(info) },
+                    onClickConfigure = { configureOnly = true; installTarget = info },
                 )
                 Spacer(Modifier.height(10.dp))
             }
@@ -407,10 +409,26 @@ fun ToolboxScreen(
             DistroConfigDialog(
                 info = info,
                 initialDiskMb = qemu.diskSizeMb(),
+                initialPresetId = qemu.preset.id,
+                initialCores = qemu.preset.cpu,
+                initialRamMb = qemu.preset.ramMb,
                 githubAuthenticated = !git.token.isNullOrBlank(),
                 onOpenGit = onOpenGit,
                 onConfirm = { config ->
                     installTarget = null
+                    qemu.setPreset(
+                        com.phantomcode.app.data.vm.QemuPresets.byId(config.presetId),
+                        customCores = config.cores,
+                        customRamMb = config.ramMb,
+                    )
+                    qemu.setDiskSizeMb(config.diskSizeMb)
+                    if (configureOnly) {
+                        configureOnly = false
+                        vm.distros.configure(info, config)
+                        scope.launch { snackbar.showSnackbar("Configuração da Phantom atualizada") }
+                        return@DistroConfigDialog
+                    }
+                    configureOnly = false
                     // Abre o terminal com uma aba de log para acompanhar a instalação
                     val logTab = qemu.terminal.addLogTab("Instalando ${info.name}")
                     onOpenTerminal()

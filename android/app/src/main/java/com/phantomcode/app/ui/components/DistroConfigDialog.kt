@@ -59,6 +59,9 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 fun DistroConfigDialog(
     info: DistroInfo,
     initialDiskMb: Int,
+    initialPresetId: String = QemuPresets.BALANCED.id,
+    initialCores: Int = QemuPresets.BALANCED.cpu,
+    initialRamMb: Int = QemuPresets.BALANCED.ramMb,
     githubAuthenticated: Boolean = true,
     onOpenGit: () -> Unit = {},
     onConfirm: (DistroConfig) -> Unit,
@@ -71,13 +74,13 @@ fun DistroConfigDialog(
 
     var hostname by remember { mutableStateOf("phantom") }
     var user by remember { mutableStateOf("user") }
-    var presetId by remember { mutableStateOf(QemuPresets.BALANCED.id) }
+    var presetId by remember { mutableStateOf(initialPresetId) }
     var diskMb by remember { mutableStateOf(initialDiskMb) }
 
     val maxCores = DeviceCapabilities.cores(context)
     val maxRam = DeviceCapabilities.maxRamMb(context)
-    var cores by remember { mutableStateOf(4) }
-    var ramMb by remember { mutableStateOf(2048) }
+    var cores by remember { mutableStateOf(initialCores) }
+    var ramMb by remember { mutableStateOf(initialRamMb) }
 
     Dialog(onDismissRequest = onDismiss) {
         AnimatedVisibility(

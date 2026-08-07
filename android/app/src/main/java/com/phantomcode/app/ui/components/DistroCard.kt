@@ -55,6 +55,7 @@ fun DistroCard(
     state: DistroInstallState,
     onClickInstall: () -> Unit,
     onClickUse: () -> Unit,
+    onClickConfigure: () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
     var expanded by remember(info.id) { mutableStateOf(false) }
@@ -116,8 +117,15 @@ fun DistroCard(
                         Text("Em breve", color = palette.warning, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                state.installed && isActive -> Text("Em uso", color = palette.success, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                state.installed -> PhantomOutlinedButton(text = "Usar", onClick = onClickUse)
+                state.installed -> Column(horizontalAlignment = Alignment.End) {
+                    PhantomOutlinedButton(text = "Configurar", onClick = onClickConfigure)
+                    if (!isActive) {
+                        Spacer(Modifier.height(4.dp))
+                        PhantomOutlinedButton(text = "Usar", onClick = onClickUse)
+                    } else {
+                        Text("Em uso", color = palette.success, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
                 else -> PhantomOutlinedButton(text = "Instalar", icon = Icons.Filled.Download, onClick = onClickInstall)
             }
             Spacer(Modifier.width(6.dp))

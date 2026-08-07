@@ -91,6 +91,9 @@ data class DistroConfig(
     val hostname: String = "phantom",
     val user: String = "user",
     val diskSizeMb: Int = QemuPrefs.DEFAULT_DISK_MB,
+    val presetId: String = QemuPresets.BALANCED.id,
+    val cores: Int = QemuPresets.BALANCED.cpu,
+    val ramMb: Int = QemuPresets.BALANCED.ramMb,
 )
 
 class DistroManager(context: Context) {
@@ -197,6 +200,11 @@ class DistroManager(context: Context) {
 
     fun setActive(info: DistroInfo) {
         if (isInstalled(info.id)) activeId = info.id
+    }
+
+    /** Atualiza hostname/usuário da distro sem baixar ou reinstalar arquivos. */
+    fun configure(info: DistroInfo, config: DistroConfig) {
+        if (isInstalled(info.id)) writeConfig(dirFor(info.id), config)
     }
 
     private suspend fun downloadAndInstall(
