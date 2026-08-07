@@ -306,7 +306,27 @@ fun ToolboxScreen(
                     // Abre o terminal com uma aba de log para acompanhar a instalação
                     val logTab = qemu.terminal.addLogTab("Instalando ${info.name}")
                     onOpenTerminal()
-                    vm.distros.install(info, config, logTab)
+                    scope.launch {
+                        // T29: o binário QEMU é instalado junto com a distro (da nuvem).
+                        // Sem passos manuais separados — o usuário só escolhe a distro.
+                        if (!qemu.binaryReady) {
+                            logTab.append("[phantom] Binário QEMU ausente — baixando do servidor…\n")
+                            var lastPct = -1
+                            val ok = qemu.ensureBinary { pct ->
+                                val p = (pct * 100).toInt()
+                                if (p != lastPct && p % 5 == 0) {
+                                    lastPct = p
+                                    logTab.append("[phantom] binário QEMU: $p%…\n")
+                                }
+                            }
+                            if (!ok) {
+                                logTab.append("\n\u001b[31m✗ Binário QEMU não instalado: ${qemu.lastError ?: "erro desconhecido"}\u001b[0m\n")
+                                return@launch
+                            }
+                            logTab.append("[phantom] ✓ Binário QEMU pronto — instalando a distro…\n\n")
+                        }
+                        vm.distros.install(info, config, logTab)
+                    }
                 },
                 onDismiss = { installTarget = null },
             )

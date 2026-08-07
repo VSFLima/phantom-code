@@ -33,9 +33,11 @@ object QemuPresets {
  *   linux/<id>/{ rootfs.img | kernel | initrd.img | rootfs/ } — ver DistroManager.
  */
 object PhantomMirror {
-    // ⚠️ TODO: publicar o binário QEMU arm64 (Release `qemu-aarch64`) e preencher o checksum.
-    const val QEMU_BINARY_URL = "https://example.com/phantom-code/qemu-system-aarch64"
-    val QEMU_BINARY_SHA256: String? = null
+    // Binário QEMU arm64 (estático/musl) publicado na Release `qemu-aarch64`
+    // pelo workflow `Build Distro Artifacts`. O app baixa automaticamente ao
+    // instalar uma distro (Toolbox → Distros) — nada vem embutido no APK.
+    const val QEMU_BINARY_URL = "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
+    val QEMU_BINARY_SHA256: String? = null // preenchido após o 1º build real (Release publica qemu-system-aarch64.sha256)
 
     // Artefato real: construído pelo workflow `Build Distro Artifacts`
     // (.github/workflows/build-distros.yml) → Release `distro-phantom-base`.

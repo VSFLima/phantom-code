@@ -85,3 +85,42 @@ jobs:
           gh release create distro-phantom-base /tmp/phantom-base.tar.gz \
             --title "Phantom Base rootfs (arm64) $(date +%Y-%m-%d)" \
             --notes "Phantom Base — Debian bookworm arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img. Baixado pelo app com download interno (Toolbox → Distros)."
+
+  # ── T29 · Binário QEMU ─────────────────────────────────────────────
+  # Compila o qemu-system-aarch64 ESTÁTICO (musl/Alpine) — roda nativo no
+  # Android sem libs externas. Publicado na Release `qemu-aarch64`; o app
+  # baixa automaticamente quando o usuário instala uma distro.
+  qemu-binary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Register binfmt (qemu arm64)
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Build static QEMU (aarch64-softmmu, musl)
+        run: |
+          docker run --platform linux/arm64 --rm -v "$PWD:/out" alpine:edge sh -c '
+            set -e
+            apk add --no-cache build-base gcc g++ make pkgconf \
+              glib-dev pixman-dev zlib-dev ninja python3 py3-pip \
+              gettext bison flex util-linux-dev
+            wget -q https://download.qemu.org/qemu-9.1.0.tar.xz
+            tar xf qemu-9.1.0.tar.xz && cd qemu-9.1.0
+            ./configure --target-list=aarch64-softmmu --static --disable-werror --prefix=/usr
+            make -j2
+            cp build/qemu-system-aarch64 /out/qemu-system-aarch64
+          '
+          ls -la qemu-system-aarch64
+          sha256sum qemu-system-aarch64 | tee qemu-system-aarch64.sha256
+
+      - name: Publish as Release (tag fixa para o app)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete qemu-aarch64 --yes 2>/dev/null || true
+          gh release create qemu-aarch64 qemu-system-aarch64 qemu-system-aarch64.sha256 \
+            --title "QEMU arm64 estático (musl) $(date +%Y-%m-%d)" \
+            --notes "qemu-system-aarch64 estático — roda direto no Android sem libs externas. Baixado automaticamente pelo app ao instalar uma distro."
