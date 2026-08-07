@@ -117,3 +117,4 @@
 | Design System | `DesignSystem.kt` (botões/cantos/bordas/letras) + `UiStyleController` persistido — Settings → UI & Botões |
 | Navegador | `BrowserScreen.kt` — WebView interno (W2) |
 | Editor | CodeMirror 6 (WebView) |
+| AI Suite | **`docs/roteador-ias.md`** — roteador de comunicação entre IAs (spec pronta: registro de agentes, Shared Context Bus, Conflict Guard com locks W/R/S/D/G, delegação com aprovação humana obrigatória, threads de conversação, fases A/B/C de implementação) |
