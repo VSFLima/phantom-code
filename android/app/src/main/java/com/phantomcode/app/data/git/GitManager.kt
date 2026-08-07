@@ -9,6 +9,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.MergeResult
 import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteRefUpdate
+import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -150,7 +151,7 @@ class GitManager(context: Context) {
                     }
                     if (ok) {
                         // Configura o upstream para o próximo Pull funcionar sem argumentos
-                        runCatching { git.branchSetUpstream().setName(branch).setUpstreamName("$remoteName/$branch").call() }
+                        runCatching { setUpstream(git, branch, remoteName) }
                         "push ok"
                     } else {
                         r.messages.trim().ifBlank { "falha no push" }
@@ -321,12 +322,12 @@ class GitManager(context: Context) {
                 val created = createGithubRepo(repoName, description, isPrivate).getOrElse { return@withContext "Erro ao criar: ${it.message}" }
                 val login = githubLogin().getOrElse { return@withContext "Erro ao obter usuário: ${it.message}" }
                 val remoteUrl = "https://github.com/$created.git"
-                git.remoteAdd().setName("origin").setUri(remoteUrl).call()
+                git.remoteAdd().setName("origin").setUri(URIish(remoteUrl)).call()
 
                 // 3) Branch main + commit inicial se não houver nenhum.
                 val branch = git.repository.branch ?: "main"
                 if (branch != "main") {
-                    git.branchCreate().setName("main").force(true).call()
+                    git.branchCreate().setName("main").setForce(true).call()
                     git.checkout().setName("main").call()
                 }
                 if (git.log().call().asSequence().none()) {
@@ -344,13 +345,21 @@ class GitManager(context: Context) {
                     u.status == RemoteRefUpdate.Status.OK || u.status == RemoteRefUpdate.Status.UP_TO_DATE
                 } }
                 if (ok) {
-                    runCatching { git.branchSetUpstream().setName(branch).setUpstreamName("origin/$branch").call() }
+                    runCatching { setUpstream(git, branch, "origin") }
                     "✓ Repositório $login/$repoName criado e projeto enviado"
                 } else {
                     "Repositório criado, mas o push falhou — tente Push depois"
                 }
             }
         }.getOrElse { it.message ?: "Falha na sincronização" }
+    }
+
+    /** Configura o upstream da branch via config (remote + merge) — compatível com qualquer JGit. */
+    private fun setUpstream(git: Git, branch: String, remoteName: String) {
+        val config = git.repository.config
+        config.setString("branch", branch, "remote", remoteName)
+        config.setString("branch", branch, "merge", "refs/heads/$branch")
+        config.save()
     }
 
     private fun apiGet(url: String): Result<String> = runCatching {
