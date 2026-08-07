@@ -34,6 +34,13 @@ jobs:
           docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
             set -e
             apt-get update
+            # O python3.11 segfaulta sob o qemu-user do runner (postinst py3compile).
+            # Desviamos py3compile/pycompile para /bin/true: no guest o python roda
+            # de verdade no aparelho; o byte-compile no build só dispara o crash.
+            dpkg-divert --local --add --rename /usr/bin/py3compile
+            ln -sf /bin/true /usr/bin/py3compile
+            dpkg-divert --local --add --rename /usr/bin/pycompile
+            ln -sf /bin/true /usr/bin/pycompile
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \

@@ -1,7 +1,14 @@
 name: Build QEMU Binary
 
-# 🐧 Compila o qemu-system-aarch64 ESTÁTICO (glibc/Debian arm64) — roda nativo
-# no Android sem libs externas — e publica na Release `qemu-aarch64`.
+# 🐧 Compila o qemu-system-aarch64 ESTÁTICO para Android via CROSS-COMPILE
+# (host x86_64 → aarch64, SEM emulação qemu-user).
+#
+# Motivo: o runner só executa arm64 por emulação (qemu-user), e o python3.11
+# do Debian segfaulta sob esse emulador (postinst py3compile) — o que derrubava
+# o build em container. Aqui não há emulador: toolchain cruzado
+# (gcc-aarch64-linux-gnu) + deps estáticas compiladas de fonte, tudo rodando
+# nativo no host. Saída: binário totalmente estático (glibc) que roda direto
+# no Android, publicado na Release `qemu-aarch64`.
 #
 # O app baixa automaticamente quando o usuário instala uma distro
 # (Toolbox → Distros → Instalar), via PhantomMirror.QEMU_BINARY_URL.
@@ -18,38 +25,107 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Register binfmt (qemu arm64)
+      - name: Install cross toolchain + build tools
         run: |
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+            ninja-build pkg-config python3 python3-pip \
+            autoconf automake libtool make wget ca-certificates \
+            bison flex gettext
+          # glib 2.80 exige meson >= 1.1; o do Ubuntu 22.04 é 0.61.
+          sudo pip3 install --break-system-packages meson
 
-      - name: Build static QEMU (aarch64-softmmu, static glibc)
+      - name: Build static deps for aarch64 (zlib, libffi, pcre2, pixman)
         run: |
-          docker run --platform linux/arm64 --rm -v "$PWD:/out" debian:bookworm-slim bash -c '
-            set -e
-            apt-get update
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              build-essential pkg-config ninja-build python3 bison flex gettext git \
-              wget ca-certificates \
-              zlib1g-dev libglib2.0-dev libpixman-1-dev libpcre2-dev libffi-dev \
-              libmount-dev libblkid-dev libudev-dev libattr1-dev libselinux1-dev
-            wget -q https://download.qemu.org/qemu-9.1.0.tar.xz
-            tar xf qemu-9.1.0.tar.xz && cd qemu-9.1.0
-            ./configure --target-list=aarch64-softmmu --static --disable-werror --prefix=/usr \
-              --disable-gnutls --disable-nettle --disable-gcrypt \
-              --disable-gtk --disable-sdl --disable-vnc --disable-spice --disable-xen \
-              --disable-libnfs --disable-smartcard --disable-usb-redir --disable-glusterfs \
-              --disable-curl --disable-snappy --disable-bzip2 --disable-lzo --disable-seccomp
-            make -j2
-            cp build/qemu-system-aarch64 /out/qemu-system-aarch64
-          '
-          ls -la qemu-system-aarch64
-          sha256sum qemu-system-aarch64 | tee qemu-system-aarch64.sha256
+          set -e
+          export PREFIX=/opt/arm
+          export CROSS=aarch64-linux-gnu
+          sudo mkdir -p $PREFIX
+          cd /tmp
+          wget -q https://zlib.net/fossils/zlib-1.3.1.tar.gz
+          tar xzf zlib-1.3.1.tar.gz && cd zlib-1.3.1
+          CC=${CROSS}-gcc AR=${CROSS}-ar RANLIB=${CROSS}-ranlib \
+            ./configure --static --prefix=$PREFIX
+          make -j2 && sudo make install
+          cd /tmp
+          wget -q https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz
+          tar xzf libffi-3.4.6.tar.gz && cd libffi-3.4.6
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static
+          make -j2 && sudo make install
+          cd /tmp
+          wget -q https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.44/pcre2-10.44.tar.gz
+          tar xzf pcre2-10.44.tar.gz && cd pcre2-10.44
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static
+          make -j2 && sudo make install
+          cd /tmp
+          wget -q https://www.cairographics.org/releases/pixman-0.42.2.tar.gz
+          tar xzf pixman-0.42.2.tar.gz && cd pixman-0.42.2
+          ./configure --host=${CROSS} --prefix=$PREFIX --disable-shared --enable-static \
+            --disable-arm-simd --disable-arm-neon --disable-arm-iwmmxt --disable-arm-iwmmxt2
+          make -j2 && sudo make install
+          cd /tmp
+
+      - name: Build static glib for aarch64 (meson cross)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
+          cat > /tmp/arm-cross.txt <<'EOF'
+          [binaries]
+          c = 'aarch64-linux-gnu-gcc'
+          cpp = 'aarch64-linux-gnu-g++'
+          ar = 'aarch64-linux-gnu-ar'
+          strip = 'aarch64-linux-gnu-strip'
+          pkg-config = 'pkg-config'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'aarch64'
+          cpu = 'aarch64'
+          endian = 'little'
+          EOF
+          cd /tmp
+          wget -q https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz
+          tar xf glib-2.80.4.tar.xz && cd glib-2.80.4
+          meson setup build --cross-file /tmp/arm-cross.txt --prefix=$PREFIX \
+            --default-library=static \
+            -Dnls=disabled -Dtests=false -Dinstalled_tests=false \
+            -Dgtk_doc=false -Dman=false -Dlibmount=disabled -Dlibelf=disabled \
+            -Dpcre2=static
+          ninja -C build && sudo ninja -C build install
+          cd /tmp
+
+      - name: Build static QEMU (aarch64-softmmu, cross)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
+          cd /tmp
+          wget -q https://download.qemu.org/qemu-9.1.0.tar.xz
+          tar xf qemu-9.1.0.tar.xz && cd qemu-9.1.0
+          ./configure --cross-prefix=aarch64-linux-gnu- \
+            --target-list=aarch64-softmmu --static --disable-werror --prefix=/usr \
+            --disable-gnutls --disable-nettle --disable-gcrypt \
+            --disable-gtk --disable-sdl --disable-vnc --disable-spice --disable-xen \
+            --disable-libnfs --disable-smartcard --disable-usb-redir --disable-glusterfs \
+            --disable-curl --disable-snappy --disable-bzip2 --disable-lzo --disable-seccomp
+          make -j2
+          cp build/qemu-system-aarch64 /tmp/qemu-system-aarch64
+          ls -la /tmp/qemu-system-aarch64
+          sha256sum /tmp/qemu-system-aarch64 | tee /tmp/qemu-system-aarch64.sha256
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-system-aarch64
+          path: /tmp/qemu-system-aarch64
 
       - name: Publish as Release (tag fixa para o app)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete qemu-aarch64 --yes 2>/dev/null || true
-          gh release create qemu-aarch64 qemu-system-aarch64 qemu-system-aarch64.sha256 \
-            --title "QEMU arm64 estático (musl) $(date +%Y-%m-%d)" \
-            --notes "qemu-system-aarch64 estático — roda direto no Android sem libs externas. Baixado automaticamente pelo app ao instalar uma distro."
+          gh release create qemu-aarch64 /tmp/qemu-system-aarch64 /tmp/qemu-system-aarch64.sha256 \
+            --title "QEMU arm64 estático $(date +%Y-%m-%d)" \
+            --notes "qemu-system-aarch64 estático (glibc) — roda direto no Android sem libs externas. Baixado automaticamente pelo app ao instalar uma distro."
