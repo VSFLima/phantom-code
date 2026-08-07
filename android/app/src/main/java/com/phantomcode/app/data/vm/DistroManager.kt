@@ -224,6 +224,7 @@ class DistroManager(context: Context) {
             withContext(Dispatchers.Main) {
                 val current = installStates[info.id] ?: DistroInstallState()
                 if (err != null) {
+                    File(dirFor(info.id), "artifact.tmp").delete()
                     installStates[info.id] = current.copy(
                         downloading = false,
                         error = err.message ?: "Falha no download",
@@ -372,6 +373,7 @@ class DistroManager(context: Context) {
 object TarExtractor {
     fun extract(input: java.io.InputStream, dest: File) {
         dest.mkdirs()
+        val root = dest.canonicalFile
         val header = ByteArray(512)
         val data = ByteArray(512)
         while (true) {
@@ -383,7 +385,10 @@ object TarExtractor {
                 .trimEnd('\u0000', ' ')
                 .toLongOrNull() ?: 0L
             val type = header[156].toInt().toChar()
-            val target = File(dest, name.trimStart('.', '/'))
+            val target = File(dest, name.trimStart('.', '/')).canonicalFile
+            check(target == root || target.path.startsWith(root.path + File.separator)) {
+                "Entrada TAR inválida: $name"
+            }
             when {
                 type == '5' || name.endsWith("/") -> target.mkdirs()
                 else -> {
