@@ -217,6 +217,7 @@ fun PhantomApp() {
                     EditorScreen(
                         path = path,
                         onClose = { navController.popBackStack() },
+                        onOpenFile = { newPath -> navController.navigate(Routes.editorRoute(newPath)) },
                     )
                 }
             }

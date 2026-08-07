@@ -22,7 +22,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -46,16 +49,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.components.PhantomDialog
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
  * Editor (T12/T13): CodeMirror 6 no WebView + ponte JS↔Kotlin.
- * Auto-save com debounce de 800ms (JS) e salvar antes de fechar.
+ * Auto-save com debounce de 800ms (JS), salvar como e salvar antes de fechar.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun EditorScreen(path: String, onClose: () -> Unit) {
+fun EditorScreen(path: String, onClose: () -> Unit, onOpenFile: (String) -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalThemeController.current.currentPalette()
     val workspace = remember { WorkspaceManager(context) }
@@ -67,6 +71,20 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     var saved by remember { mutableStateOf(true) }
+    var actionsOpen by remember { mutableStateOf(false) }
+    var saveAsOpen by remember { mutableStateOf(false) }
+
+    val language = when (fileName.substringAfterLast('.', "").lowercase()) {
+        "kt", "kts" -> "Kotlin"
+        "js", "mjs", "ts", "tsx" -> "JavaScript / TypeScript"
+        "py" -> "Python"
+        "html", "htm" -> "HTML"
+        "css" -> "CSS"
+        "json" -> "JSON"
+        "md" -> "Markdown"
+        "sh", "bash" -> "Shell"
+        else -> "Texto"
+    }
 
     // Ponte exposta ao JS como window.AndroidBridge
     val bridge = remember(path, workspace) {
@@ -152,6 +170,8 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
                         color = if (saved) palette.success else palette.accentBright,
                         fontSize = 10.sp,
                     )
+                    Spacer(Modifier.width(8.dp))
+                    Text(language, color = palette.textSecondary, fontSize = 10.sp)
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -170,6 +190,36 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
                     }
                     .padding(10.dp),
             )
+            Box {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = "Ações do arquivo",
+                    tint = palette.textSecondary,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable { actionsOpen = true }
+                        .padding(10.dp),
+                )
+                DropdownMenu(
+                    expanded = actionsOpen,
+                    onDismissRequest = { actionsOpen = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Salvar como…") },
+                        onClick = {
+                            actionsOpen = false
+                            saveAsOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Abrir Explorer") },
+                        onClick = {
+                            actionsOpen = false
+                            currentTextAndClose()
+                        },
+                    )
+                }
+            }
         }
 
         // WebView com o CodeMirror 6 (preenche só o espaço abaixo da barra)
@@ -206,6 +256,30 @@ fun EditorScreen(path: String, onClose: () -> Unit) {
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
         )
+
+        if (saveAsOpen) {
+            PhantomDialog(
+                title = "Salvar arquivo como",
+                placeholder = "projeto/src/arquivo.ext",
+                initialValue = path,
+                confirmText = "Salvar cópia",
+                onConfirm = { newPath ->
+                    saveAsOpen = false
+                    webView?.evaluateJavascript("window.PhantomEditor.getValue()") { value ->
+                        runCatching {
+                            val target = workspace.resolve(newPath.trim())
+                            target.parentFile?.mkdirs()
+                            target.writeText(unquoteJs(value))
+                            session.lastOpenPath = newPath.trim()
+                            onOpenFile(newPath.trim())
+                        }.onFailure {
+                            scope.launch { snackbar.showSnackbar("Não foi possível salvar: ${it.message}") }
+                        }
+                    }
+                },
+                onDismiss = { saveAsOpen = false },
+            )
+        }
     }
 }
 
