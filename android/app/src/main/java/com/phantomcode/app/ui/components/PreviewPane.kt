@@ -163,8 +163,9 @@ fun PreviewPane(
                 )
             }
         }
-        if (notice != null) {
-            Text(notice, color = palette.textSecondary, fontSize = 10.sp)
+        val noticeText = notice
+        if (noticeText != null) {
+            Text(noticeText, color = palette.textSecondary, fontSize = 10.sp)
         }
         Box(
             modifier = Modifier
