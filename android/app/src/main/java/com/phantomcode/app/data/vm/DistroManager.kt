@@ -205,6 +205,19 @@ class DistroManager(context: Context) {
         if (isInstalled(info.id)) activeId = info.id
     }
 
+    /** Remove a distro do dispositivo (arquivos + estado) — permite reinstalar. */
+    fun uninstall(id: String) {
+        val d = dirFor(id)
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { d.deleteRecursively() }
+            }
+            if (activeId == id) activeId = null
+            installStates[id] = DistroInstallState()
+            QemuManager.instance?.refreshBinary()
+        }
+    }
+
     /** Atualiza hostname/usuário da distro sem baixar ou reinstalar arquivos. */
     fun configure(info: DistroInfo, config: DistroConfig) {
         if (isInstalled(info.id)) writeConfig(dirFor(info.id), config)
@@ -275,6 +288,22 @@ class DistroManager(context: Context) {
             }
         }
         tmp.delete()
+        // ✅ VALIDAÇÃO pós-extração: sem os arquivos reais o QEMU não sobe
+        // (sintoma: "binário QEMU não instalado" mesmo com a distro "instalada").
+        val hasBootImage = File(targetDir, "rootfs.img").let { it.exists() && it.length() > 0L } ||
+            File(targetDir, "kernel").let { it.exists() && it.length() > 0L }
+        if (!hasBootImage) {
+            throw IllegalStateException(
+                "Extração incompleta — nenhuma imagem de boot (rootfs.img/kernel) foi extraída. Reinstale a distro.",
+            )
+        }
+        if (info.includesQemu && (!File(targetDir, "qemu-system-aarch64").exists() ||
+                File(targetDir, "qemu-system-aarch64").length() < 1_000_000L)
+        ) {
+            throw IllegalStateException(
+                "O QEMU embutido não veio no pacote da distro — extração incompleta. Reinstale a Phantom.",
+            )
+        }
         applyDiskSize(targetDir, config)
         writeConfig(targetDir, config)
         copyInitScript(targetDir)
@@ -357,9 +386,14 @@ object TarExtractor {
             if (header.all { it == 0.toByte() }) break
             val name = String(header, 0, 100, Charsets.UTF_8).trimEnd('\u0000')
             if (name.isEmpty()) break
+            // ⚠️ O campo size do header tar é OCTAL (base 8), não decimal:
+            // "00000000144" octal = 100 bytes. Parsear como decimal (toLongOrNull()
+            // sem radix) superestima o tamanho e faz o extrator engolir os
+            // headers dos arquivos seguintes como dados — kernel/initrd/qemu
+            // eram perdidos e a distro instalava corrompida.
             val size = String(header, 124, 12, Charsets.UTF_8)
                 .trimEnd('\u0000', ' ')
-                .toLongOrNull() ?: 0L
+                .toLongOrNull(8) ?: 0L
             // Modo octal do arquivo (offset 100, 8 bytes) — o qemu embutido na
             // distro precisa do bit de execução para o ProcessBuilder rodar.
             val mode = String(header, 100, 8, Charsets.UTF_8).trimEnd('\u0000', ' ').toIntOrNull(8) ?: 0

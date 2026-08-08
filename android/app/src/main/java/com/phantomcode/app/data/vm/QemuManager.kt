@@ -167,7 +167,11 @@ class QemuManager(
             tmp.renameTo(target)
         }.onFailure {
             tmp.delete()
-            onMain { lastError = it.message }
+            onMain {
+                // A release qemu-aarch64 foi removida — o binário oficial vem
+                // DENTRO do pacote da Phantom. Orientar a reinstalar a distro.
+                lastError = "${it.message ?: "falha no download"} — instale a Phantom no Toolbox (o QEMU vem junto)"
+            }
             onMain { binaryInstalling = false }
             return@withContext false
         }
@@ -205,6 +209,9 @@ class QemuManager(
         if (running) return@withContext true
         autoStartSuppressed = false
         lastError = null
+        // Sincroniza com o estado atual (a distro pode ter sido instalada
+        // enquanto o app estava aberto — o QEMU embutido fica pronto agora).
+        refreshBinary()
         // 1) A distro vem PRIMEIRO: o QEMU já está dentro do pacote Phantom
         //    (rootfs.img + kernel + initrd.img + qemu-system-aarch64).
         val rootfs = distros.activeRootfsImage()
@@ -216,7 +223,10 @@ class QemuManager(
         // 2) Binário: a Phantom traz o qemu dentro da distro; só distros
         //    de terceiros usam o fallback global baixado da nuvem.
         if (!binaryReady && !ensureBinary()) {
-            onMain { lastError = "Binário QEMU não disponível: ${lastError ?: "erro desconhecido"}" }
+            onMain {
+                lastError = "Binário QEMU não disponível. Reinstale a Phantom no Toolbox " +
+                    "(o qemu-system-aarch64 vem DENTRO do pacote da distro): ${lastError ?: "erro desconhecido"}"
+            }
             return@withContext false
         }
 

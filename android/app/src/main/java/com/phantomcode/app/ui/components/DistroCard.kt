@@ -56,6 +56,7 @@ fun DistroCard(
     onClickInstall: () -> Unit,
     onClickUse: () -> Unit,
     onClickConfigure: () -> Unit,
+    onClickUninstall: (() -> Unit)? = null,
 ) {
     val palette = LocalThemeController.current.currentPalette()
     var expanded by remember(info.id) { mutableStateOf(false) }
@@ -124,6 +125,13 @@ fun DistroCard(
                         PhantomOutlinedButton(text = "Usar", onClick = onClickUse)
                     } else {
                         Text("Em uso", color = palette.success, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    if (onClickUninstall != null) {
+                        Spacer(Modifier.height(4.dp))
+                        PhantomOutlinedButton(
+                            text = "Desinstalar",
+                            onClick = onClickUninstall,
+                        )
                     }
                 }
                 else -> PhantomOutlinedButton(text = "Instalar", icon = Icons.Filled.Download, onClick = onClickInstall)

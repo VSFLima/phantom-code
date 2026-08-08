@@ -109,6 +109,7 @@ fun ToolboxScreen(
 
     // ── Distros (D1) — instalação com config + terminal ──
     var installTarget by remember { mutableStateOf<DistroInfo?>(null) }
+    var confirmUninstallDistro by remember { mutableStateOf<DistroInfo?>(null) }
     var configureOnly by remember { mutableStateOf(false) }
 
     // ── Backup (T21 · D2) ──
@@ -226,6 +227,7 @@ fun ToolboxScreen(
                     onClickInstall = { installTarget = info },
                     onClickUse = { vm.distros.setActive(info) },
                     onClickConfigure = { configureOnly = true; installTarget = info },
+                    onClickUninstall = { confirmUninstallDistro = info },
                 )
                 Spacer(Modifier.height(10.dp))
             }
@@ -401,6 +403,33 @@ fun ToolboxScreen(
                 onOpenService = { url ->
                     addKeyDialog = false
                     onOpenBrowser(url)
+                },
+            )
+        }
+
+        confirmUninstallDistro?.let { info ->
+            AlertDialog(
+                onDismissRequest = { confirmUninstallDistro = null },
+                containerColor = palette.surface,
+                title = { Text("Desinstalar ${info.name}?", color = palette.textPrimary) },
+                text = {
+                    Text(
+                        "Remove todos os arquivos da distro (rootfs, kernel, QEMU embutido). " +
+                            "Você poderá reinstalá-la depois pelo mesmo botão Instalar.",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        vm.distros.uninstall(info.id)
+                        confirmUninstallDistro = null
+                    }) { Text("Desinstalar", color = palette.error) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { confirmUninstallDistro = null }) {
+                        Text("Cancelar", color = palette.textSecondary)
+                    }
                 },
             )
         }
