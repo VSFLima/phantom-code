@@ -30,6 +30,15 @@ enum class DistroRisk(val label: String) {
  *
  * Todas rodam headless (modo terminal apenas) — sem área gráfica.
  */
+
+/** Como o QEMU bota a distro — usado na validação por tipo (M1). */
+enum class DistroBoot(val label: String) {
+    /** Kernel + initrd explícitos (arquivos `kernel`, `initrd.img` opcional e `rootfs.img`). */
+    KERNEL_INITRD("kernel + initrd + rootfs"),
+    /** Apenas imagem crua `rootfs.img` (precisa de kernel pareado p/ bootar em virt). */
+    ROOTFS_ONLY("rootfs.img"),
+}
+
 data class DistroInfo(
     val id: String,
     val name: String,
@@ -46,6 +55,7 @@ data class DistroInfo(
     val packageManager: String,         // apt / apk
     val headless: Boolean = true,       // sempre true — terminal apenas
     val includesQemu: Boolean = false,  // true: o pacote já traz o qemu-system-aarch64 (ex.: Phantom)
+    val boot: DistroBoot = DistroBoot.KERNEL_INITRD, // como o QEMU bota esta distro (M1)
 )
 
 object DistroCatalog {
@@ -65,6 +75,7 @@ object DistroCatalog {
             available = true,
             packageManager = "apt",
             includesQemu = true, // o tarball Phantom traz rootfs.img + kernel + initrd.img + qemu-system-aarch64
+            boot = DistroBoot.KERNEL_INITRD,
         ),
     )
 }
@@ -152,6 +163,9 @@ class DistroManager(context: Context) {
     fun activeKernel(): File? = activeId?.let { id -> File(dirFor(id), "kernel").takeIf { it.exists() } }
     fun activeInitrd(): File? = activeId?.let { id -> File(dirFor(id), "initrd.img").takeIf { it.exists() } }
     fun activeQemu(): File? = activeId?.let { id -> File(dirFor(id), "qemu-system-aarch64").takeIf { it.exists() } }
+
+    /** Registro do catálogo da distro ativa (null se não houver ou for instalação legada). */
+    fun activeInfo(): DistroInfo? = activeId?.let { id -> DistroCatalog.ALL.firstOrNull { it.id == id } }
 
     /** Baixa, valida (SHA-256) e instala a distro em background. */
     fun install(info: DistroInfo) {
@@ -288,13 +302,26 @@ class DistroManager(context: Context) {
             }
         }
         tmp.delete()
-        // ✅ VALIDAÇÃO pós-extração: sem os arquivos reais o QEMU não sobe
-        // (sintoma: "binário QEMU não instalado" mesmo com a distro "instalada").
-        val hasBootImage = File(targetDir, "rootfs.img").let { it.exists() && it.length() > 0L } ||
-            File(targetDir, "kernel").let { it.exists() && it.length() > 0L }
-        if (!hasBootImage) {
+        // ✅ VALIDAÇÃO pós-extração POR TIPO DE BOOT (M1): cada tipo exige os seus
+        // arquivos. Antes bastava rootfs OU kernel — uma distro rootfs-only instalava
+        // e o QEMU subia sem kernel (tela morta em silêncio).
+        val rootfsFile = File(targetDir, "rootfs.img")
+        val kernelFile = File(targetDir, "kernel")
+        val initrdFile = File(targetDir, "initrd.img")
+        val hasRootfs = rootfsFile.exists() && rootfsFile.length() > 0L
+        val missing = when (info.boot) {
+            DistroBoot.KERNEL_INITRD -> listOfNotNull(
+                // Alinhado com o start(): kernel + (rootfs.img OU initrd.img) — initramfs bota sem rootfs.img.
+                "rootfs.img/initrd.img".takeUnless { hasRootfs || (initrdFile.exists() && initrdFile.length() > 0L) },
+                "kernel".takeUnless { kernelFile.exists() && kernelFile.length() > 0L },
+            )
+            DistroBoot.ROOTFS_ONLY -> listOfNotNull(
+                "rootfs.img".takeUnless { hasRootfs },
+            )
+        }
+        if (missing.isNotEmpty()) {
             throw IllegalStateException(
-                "Extração incompleta — nenhuma imagem de boot (rootfs.img/kernel) foi extraída. Reinstale a distro.",
+                "Extração incompleta (tipo ${info.boot.label}) — faltou: ${missing.joinToString(", ")}. Reinstale a distro.",
             )
         }
         if (info.includesQemu && (!File(targetDir, "qemu-system-aarch64").exists() ||

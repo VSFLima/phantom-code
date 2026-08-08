@@ -216,9 +216,39 @@ class QemuManager(
         //    (rootfs.img + kernel + initrd.img + qemu-system-aarch64).
         val rootfs = distros.activeRootfsImage()
         val kernel = distros.activeKernel()
+        // Nenhuma distro instalada (nenhum arquivo): orientação inicial.
         if (rootfs == null && kernel == null) {
             onMain { lastError = "Nenhuma distro instalada — instale a Phantom no Toolbox (o QEMU vem junto na instalação)" }
             return@withContext false
+        }
+        // ✅ Validação POR TIPO DE BOOT (M1): cada distro exige seus arquivos —
+        // antes só se exigia rootfs OU kernel, então uma distro rootfs-only subia
+        // o QEMU sem kernel e o boot morria em silêncio (tela morta).
+        val info = distros.activeInfo()
+        val boot = info?.boot ?: DistroBoot.KERNEL_INITRD
+        val distroLabel = info?.name ?: "a distro"
+        when (boot) {
+            DistroBoot.KERNEL_INITRD -> {
+                if (kernel == null) {
+                    onMain { lastError = "Distro incompleta: kernel ausente. Desinstale e reinstale $distroLabel no Toolbox." }
+                    return@withContext false
+                }
+                // rootfs.img OU initrd.img — kernel+initrd sozinhos já botam (initramfs).
+                if (rootfs == null && distros.activeInitrd() == null) {
+                    onMain { lastError = "Distro incompleta: rootfs.img/initrd.img ausentes. Desinstale e reinstale $distroLabel no Toolbox." }
+                    return@withContext false
+                }
+            }
+            DistroBoot.ROOTFS_ONLY -> {
+                if (rootfs == null) {
+                    onMain { lastError = "Distro incompleta: rootfs.img ausente. Desinstale e reinstale $distroLabel no Toolbox." }
+                    return@withContext false
+                }
+                if (kernel == null) {
+                    onMain { lastError = "Esta distro (apenas rootfs.img) ainda não pode iniciar: o QEMU virt exige um kernel pareado. Use a Phantom (padrão) ou uma distro que traga kernel+initrd." }
+                    return@withContext false
+                }
+            }
         }
         // 2) Binário: a Phantom traz o qemu dentro da distro; só distros
         //    de terceiros usam o fallback global baixado da nuvem.
