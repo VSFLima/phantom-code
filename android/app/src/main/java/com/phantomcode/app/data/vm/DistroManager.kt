@@ -192,6 +192,9 @@ class DistroManager(context: Context) {
                         message = "Instalada",
                     )
                     activeId = info.id
+                    // A distro traz o qemu-system-aarch64 — informa o motor QEMU
+                    // que o binário embutido já está disponível (binaryReady=true).
+                    QemuManager.instance?.refreshBinary()
                     logSession?.append("\n\u001b[32m✓ Distro instalada e configurada.\u001b[0m\n")
                 }
             }
@@ -275,6 +278,9 @@ class DistroManager(context: Context) {
         applyDiskSize(targetDir, config)
         writeConfig(targetDir, config)
         copyInitScript(targetDir)
+        // Defensivo: garante +x no QEMU embutido (o extrator preserva o bit do
+        // cabeçalho tar, mas alguns arquivos/APKs antigos podem vir sem ele).
+        runCatching { File(targetDir, "qemu-system-aarch64").takeIf { it.exists() }?.setExecutable(true) }
         log("[phantom] pronto.\n")
         true
     }
@@ -354,6 +360,9 @@ object TarExtractor {
             val size = String(header, 124, 12, Charsets.UTF_8)
                 .trimEnd('\u0000', ' ')
                 .toLongOrNull() ?: 0L
+            // Modo octal do arquivo (offset 100, 8 bytes) — o qemu embutido na
+            // distro precisa do bit de execução para o ProcessBuilder rodar.
+            val mode = String(header, 100, 8, Charsets.UTF_8).trimEnd('\u0000', ' ').toIntOrNull(8) ?: 0
             val type = header[156].toInt().toChar()
             val target = File(dest, name.trimStart('.', '/')).canonicalFile
             check(target == root || target.path.startsWith(root.path + File.separator)) {
@@ -372,6 +381,9 @@ object TarExtractor {
                             remaining -= n
                         }
                     }
+                    // Preserva o bit de execução do cabeçalho tar (ex.: o
+                    // qemu-system-aarch64 da Phantom — sem +x o QEMU não inicia).
+                    if ((mode and 0x40) != 0) runCatching { target.setExecutable(true) }
                 }
             }
             // padding para alinhamento de 512 bytes

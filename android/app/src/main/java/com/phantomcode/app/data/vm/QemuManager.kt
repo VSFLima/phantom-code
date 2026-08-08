@@ -79,8 +79,16 @@ class QemuManager(
     fun binary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
 
     init {
-        binaryReady = binary().exists()
+        refreshBinary()
         preset = prefs.effectivePreset(appContext)
+    }
+
+    /** Recalcula binaryReady (ex.: chamado após instalar a Phantom no Toolbox).
+     *  Requer EXISTÊNCIA + PERMISSÃO DE EXECUÇÃO — sem +x o ProcessBuilder
+     *  falha com "Permission denied" e o QEMU nunca sobe. */
+    fun refreshBinary() {
+        val b = binary()
+        binaryReady = b.exists() && b.canExecute()
     }
 
     /** Persiste o preset escolhido e atualiza o estado (valores custom incluídos). */
@@ -112,6 +120,9 @@ class QemuManager(
         if (binaryReady) return@withContext true
         // 1) QEMU que já vem dentro do pacote da distro instalada (ex.: Phantom).
         if (distros.activeQemu() != null) {
+            // Defensivo: garante +x no binário vindo da distro (extrator preserva
+            // o bit do tar, mas nunca custa confirmar antes de subir a VM).
+            runCatching { distros.activeQemu()?.setExecutable(true) }
             onMain {
                 binaryInstalling = false
                 binaryReady = true
@@ -258,21 +269,13 @@ class QemuManager(
         )
 
         return@withContext runCatching {
+            // Defensivo: garante +x antes de executar (evita Permission denied).
+            runCatching { binary().setExecutable(true) }
             val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
             process = p
             val serial = connectSerialSocket(sock)
             if (serial != null) {
                 terminal.attach(serial)
-                // Consome o stdout (console ttyAMA0 redundante) para o pipe não
-                // encher e travar a VM quando o terminal usa o socket.
-                scope.launch {
-                    try {
-                        val buf = ByteArray(4096)
-                        val input = p.inputStream
-                        while (input.read(buf) != -1) { /* descarta */ }
-                    } catch (_: Exception) {
-                    }
-                }
             } else {
                 terminal.attach(p)
             }
@@ -283,19 +286,42 @@ class QemuManager(
                 // FGS (T23): mantém a VM viva em background + notificação persistente
                 VmForegroundService.start(appContext)
             }
+            // Drena o stdout em buffer rotativo: mantém as ÚLTIMAS linhas do
+            // processo (console + erros) para diagnóstico se o QEMU morrer rápido.
+            // ⚠️ Só quando o terminal usa o SOCKET — no fallback por stdio o
+            // jackpal já consome esse mesmo stream (ler aqui roubaria os dados
+            // do terminal).
+            val tail = StringBuilder()
             watcher = scope.launch {
-                p.waitFor()
+                if (serial != null) {
+                    val buf = ByteArray(4096)
+                    val input = p.inputStream
+                    while (true) {
+                        val n = runCatching { input.read(buf) }.getOrDefault(-1)
+                        if (n <= 0) break
+                        tail.append(String(buf, 0, n, Charsets.UTF_8))
+                        if (tail.length > 8192) tail.delete(0, tail.length - 4096)
+                    }
+                } else {
+                    p.waitFor()
+                }
                 runCatching { sock.delete() }
+                val exit = p.exitValue()
                 onMain {
                     running = false
                     statusText = "STOPPED"
+                    // QEMU morreu rápido (falha de boot/config) — expõe a saída
+                    // real do processo para o usuário ver o porquê.
+                    if (exit != 0) {
+                        lastError = "QEMU saiu (código $exit): ${tail.trim().takeLast(200).ifBlank { "sem saída — veja o log" }}"
+                    }
                     VmForegroundService.stop(appContext)
                 }
                 terminal.stop()
             }
             true
         }.getOrElse {
-            onMain { lastError = it.message }
+            onMain { lastError = it.message ?: "Falha ao iniciar o QEMU" }
             false
         }
     }
