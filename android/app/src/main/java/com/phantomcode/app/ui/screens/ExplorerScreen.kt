@@ -119,6 +119,17 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
     var pendingOp by remember { mutableStateOf<PendingOp?>(null) }
     var downloadTarget by remember { mutableStateOf<FileEntry?>(null) }
 
+    // Abre automaticamente o projeto ativo (vindo da Home)
+    LaunchedEffect(Unit) {
+        session.activeProject?.let { project ->
+            expanded[project] = true
+            tick++
+            session.activeProject = null
+        }
+    }
+
+    fun notify(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
+
     // SAF: salvar arquivo em local escolhido pelo usuário (P2.2 · download)
     val downloadLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
@@ -138,17 +149,6 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
             }
         }
     }
-
-    // Abre automaticamente o projeto ativo (vindo da Home)
-    LaunchedEffect(Unit) {
-        session.activeProject?.let { project ->
-            expanded[project] = true
-            tick++
-            session.activeProject = null
-        }
-    }
-
-    fun notify(msg: String) = scope.launch { snackbar.showSnackbar(msg) }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {

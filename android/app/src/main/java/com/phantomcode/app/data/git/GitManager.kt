@@ -157,7 +157,9 @@ class GitManager(context: Context) {
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     // O zipball vem com uma pasta raiz "owner-repo-branch/" — descarta o 1º segmento.
-                    val rel = entry.name.substringAfter('/').ifBlank {
+                    val raw = entry.name
+                    val rel = raw.substringAfter('/')
+                    if (rel.isBlank()) {
                         zip.closeEntry()
                         continue
                     }

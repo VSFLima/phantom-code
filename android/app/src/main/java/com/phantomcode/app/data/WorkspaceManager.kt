@@ -151,7 +151,11 @@ class WorkspaceManager(context: Context) {
         if (!destDir.isDirectory || src == destDir) return false
         if (src.isDirectory && src.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) return false
         val target = uniqueTarget(destDir, src.name)
-        return if (src.isDirectory) copyDirRecursive(src, target) else src.copyTo(target, overwrite = false)
+        return if (src.isDirectory) {
+            copyDirRecursive(src, target)
+        } else {
+            runCatching { src.copyTo(target, overwrite = false) }.isSuccess
+        }
     }
 
     /** Próximo nome livre dentro de um diretório (foo.txt → foo (2).txt). */
@@ -171,8 +175,15 @@ class WorkspaceManager(context: Context) {
     private fun copyDirRecursive(src: File, dest: File): Boolean {
         if (!dest.mkdirs()) return false
         src.listFiles()?.forEach { child ->
-            val ok = if (child.isDirectory) copyDirRecursive(child, File(dest, child.name))
-            else child.copyTo(File(dest, child.name), overwrite = false)
+            val ok = if (child.isDirectory) {
+                copyDirRecursive(child, File(dest, child.name))
+            } else {
+                // copyTo retorna o arquivo de destino — a operação é válida se
+                // o destino existe (não houve exceção durante a cópia).
+                runCatching {
+                    child.copyTo(File(dest, child.name), overwrite = false)
+                }.isSuccess
+            }
             if (!ok) return false
         }
         return true
