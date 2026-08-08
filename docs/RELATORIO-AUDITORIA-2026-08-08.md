@@ -81,11 +81,9 @@
 
 ### 🟠 MÉDIA
 
-**M1 — Distro de terceiros com SÓ `rootfs.img` não inicia**
-- Onde: `QemuManager.kt` → `start()`, linha `if (rootfs == null && kernel == null)`
-- O que: o guard só reclama quando **ambos** faltam. Se uma distro futura (ex.: T29 Ubuntu/Alpine) vier apenas com `rootfs.img` (sem `-kernel/-append/-initrd`), o QEMU inicia **sem kernel** → tela preta/morte silenciosa.
-- Hoje não afeta (só a Phantom é real e ela traz kernel+initrd). **Vira bug quando T29 for implementada.**
-- Recomendação: ao preparar T29, exigir `kernel`+`initrd` no `DistroCatalog` ou passar kernel genérico; adicionar validação por tipo de distro.
+**M1 — ~~Distro de terceiros com SÓ `rootfs.img` não inicia~~** ✅ **CORRIGIDO** (commit `578f10c`)
+- **Correção:** novo enum `DistroBoot` (`KERNEL_INITRD` / `ROOTFS_ONLY`) com campo `boot` no `DistroInfo`; `QemuManager.start()` valida **por tipo de boot** (kernel + rootfs.img **ou** initrd.img) com mensagens claras de "distro incompleta" em vez de subir o QEMU sem kernel; `DistroManager` valida a extração **por tipo**, alinhado com o `start()`.
+- **Pendente:** validar em build (aguardando aprovação do usuário) e no device (T25).
 
 **M2 — Projeto clonado via ZIP não vira repositório Git**
 - Onde: `GitManager.cloneViaZip()` / `GitScreen.cloneRemote()` (fallback)
@@ -130,7 +128,7 @@ Consultar `docs/TASKS-EM-ABERTO.md` (documento único): **14 em aberto** — blo
 ## 🎯 7. PRÓXIMOS PASSOS RECOMENDADOS
 
 1. **Device (desbloqueia tudo):** instalar `apk-20260808-1538` → validar T25 (instalar Phantom, terminal digita, QEMU inicia + console, Git traz todos os arquivos, editor, Preview Hub). Bugs achados viram novas tasks.
-2. **Código:** T29 (publicar distros — obrigatório resolver **M1** antes) e Fase B (UI de conversa entre IAs).
+2. **Código:** T29 (publicar distros — **M1** já resolvido, validar no build/device) e Fase B (UI de conversa entre IAs).
 3. **Código:** P3.1 completar (PDF/CSV/SQL + PHP no guest) e "Executar código na VM".
 4. **Housekeeping:** limpar imports órfãos (B1), excluir release órfã (aguarda OK), manter 3 releases.
 5. **UI:** qualquer polish **somente com aprovação prévia** (regra R12).
