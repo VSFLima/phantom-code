@@ -28,13 +28,27 @@ class EditorPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_WRAP, false)
         set(value) = prefs.edit().putBoolean(KEY_WRAP, value).apply()
 
+    /** Família da fonte do editor (P3.2): id no editor-actions.js. */
+    var fontFamily: String
+        get() = prefs.getString(KEY_FONT_FAMILY, DEFAULT_FONT_FAMILY) ?: DEFAULT_FONT_FAMILY
+        set(value) = prefs.edit().putString(KEY_FONT_FAMILY, value).apply()
+
     companion object {
         private const val PREFS_NAME = "phantom_editor"
         private const val KEY_THEME = "theme"
         private const val KEY_FONT_SIZE = "font_size_px"
         private const val KEY_WRAP = "word_wrap"
+        private const val KEY_FONT_FAMILY = "font_family"
         const val MIN_FONT_SIZE_PX = 8
         const val MAX_FONT_SIZE_PX = 36
         const val DEFAULT_FONT_SIZE_PX = 14
+        const val DEFAULT_FONT_FAMILY = "mono"
+
+        /** Presets de fonte exibidos no Settings (id → rótulo). */
+        val FONT_FAMILIES = listOf(
+            "mono" to "Monospace (JetBrains Mono)",
+            "droid" to "Droid Sans Mono",
+            "sans" to "Sans-serif",
+        )
     }
 }

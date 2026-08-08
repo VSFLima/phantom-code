@@ -2,6 +2,7 @@ package com.phantomcode.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,16 +12,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +48,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.navigation.BottomNavItems
 import com.phantomcode.app.ui.navigation.Routes
 import com.phantomcode.app.ui.theme.LocalThemeController
@@ -55,6 +64,7 @@ fun PhantomScaffold(
     onNavigate: (String) -> Unit,
     onHome: () -> Unit,
     onToggleLinux: () -> Unit,
+    onOpenTerminal: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -93,6 +103,7 @@ fun PhantomScaffold(
                 content()
             }
         }
+        TerminalDock(onOpen = onOpenTerminal)
     }
 }
 
@@ -126,6 +137,127 @@ private fun PhantomTopBar(running: Boolean, onHome: () -> Unit, onToggleLinux: (
         )
         Spacer(Modifier.weight(1f))
         QemuStatusPill(running = running, onClick = onToggleLinux)
+    }
+}
+
+/** Terminal dock no rodapé — mostra as abas do terminal (QEMU/Linux e shell) e abre a tela do terminal (D4/D11). */
+@Composable
+fun TerminalDock(onOpen: () -> Unit) {
+    val palette = LocalThemeController.current.currentPalette()
+    val vm = LocalVm.current
+    val terminal = vm.qemu.terminal
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(palette.surface)
+            .drawBehind {
+                drawLine(
+                    color = palette.border.copy(alpha = 0.5f),
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Terminal,
+            contentDescription = null,
+            tint = palette.accentSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (terminal.tabs.isEmpty()) {
+                Text(
+                    "Nenhum terminal aberto",
+                    color = palette.textSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.clickable(onClick = onOpen),
+                )
+            } else {
+                terminal.tabs.forEachIndexed { index, tab ->
+                    TermTab(
+                        name = tab.title,
+                        active = index == terminal.activeIndex,
+                        onClick = {
+                            terminal.selectTab(index)
+                            onOpen()
+                        },
+                        onClose = {
+                            if (tab.kind == TerminalTabKind.QEMU) vm.qemu.stop()
+                            else terminal.closeTab(index)
+                        },
+                    )
+                }
+            }
+        }
+        Icon(
+            imageVector = Icons.Filled.Add,
+            contentDescription = "Novo terminal",
+            tint = palette.textSecondary,
+            modifier = Modifier
+                .size(28.dp)
+                .clickable {
+                    terminal.addShellTab()
+                    onOpen()
+                }
+                .padding(6.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = if (terminal.activeTab?.kind == TerminalTabKind.QEMU) "Linux · workspace" else "Android shell",
+            color = palette.textSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+        )
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowUp,
+            contentDescription = "Abrir terminal",
+            tint = palette.textSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+private fun TermTab(name: String, active: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
+    val palette = LocalThemeController.current.currentPalette()
+    Row(
+        modifier = Modifier
+            .padding(end = 6.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(if (active) palette.surfaceAlt else Color.Transparent),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+            fontSize = 10.sp,
+            color = if (active) palette.accentPrimary else palette.textSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+        )
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = "Fechar $name",
+            tint = palette.textSecondary,
+            modifier = Modifier
+                .size(16.dp)
+                .clickable(onClick = onClose)
+                .padding(3.dp),
+        )
     }
 }
 

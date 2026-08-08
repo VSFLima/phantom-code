@@ -133,6 +133,51 @@ class WorkspaceManager(context: Context) {
 
     fun delete(relPath: String): Boolean = resolve(relPath).deleteRecursively()
 
+    /** Move um arquivo/pasta para dentro de um diretório, resolvendo conflitos de nome. */
+    fun moveTo(srcRelPath: String, destDirRel: String): Boolean {
+        val src = resolve(srcRelPath)
+        if (!src.exists()) return false
+        val destDir = resolve(destDirRel)
+        if (!destDir.isDirectory || src == destDir) return false
+        if (src.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) return false
+        return src.renameTo(uniqueTarget(destDir, src.name))
+    }
+
+    /** Copia um arquivo/pasta (recursivo) para dentro de um diretório, resolvendo conflitos. */
+    fun copyTo(srcRelPath: String, destDirRel: String): Boolean {
+        val src = resolve(srcRelPath)
+        if (!src.exists()) return false
+        val destDir = resolve(destDirRel)
+        if (!destDir.isDirectory || src == destDir) return false
+        if (src.isDirectory && src.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) return false
+        val target = uniqueTarget(destDir, src.name)
+        return if (src.isDirectory) copyDirRecursive(src, target) else src.copyTo(target, overwrite = false)
+    }
+
+    /** Próximo nome livre dentro de um diretório (foo.txt → foo (2).txt). */
+    private fun uniqueTarget(dir: File, name: String): File {
+        var candidate = File(dir, name)
+        var i = 1
+        while (candidate.exists()) {
+            val dot = name.lastIndexOf('.')
+            val stem = if (dot > 0) name.substring(0, dot) else name
+            val ext = if (dot > 0) name.substring(dot) else ""
+            candidate = File(dir, "$stem ($i)$ext")
+            i++
+        }
+        return candidate
+    }
+
+    private fun copyDirRecursive(src: File, dest: File): Boolean {
+        if (!dest.mkdirs()) return false
+        src.listFiles()?.forEach { child ->
+            val ok = if (child.isDirectory) copyDirRecursive(child, File(dest, child.name))
+            else child.copyTo(File(dest, child.name), overwrite = false)
+            if (!ok) return false
+        }
+        return true
+    }
+
     fun readText(relPath: String): String =
         runCatching { resolve(relPath).readText() }.getOrDefault("")
 

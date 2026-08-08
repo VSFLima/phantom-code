@@ -217,6 +217,7 @@ fun PhantomApp() {
                 }
             },
             onToggleLinux = { scope.launch { if (vm.qemu.running) vm.qemu.stop() else vm.qemu.start() } },
+            onOpenTerminal = { navController.navigate(Routes.TERMINAL) { launchSingleTop = true } },
         ) {
             NavHost(navController = navController, startDestination = Routes.HOME) {
                 composable(

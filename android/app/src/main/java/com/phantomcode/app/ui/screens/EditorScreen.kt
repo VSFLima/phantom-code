@@ -143,6 +143,7 @@ fun EditorScreen(
     var actionsOpen by remember { mutableStateOf(false) }
     var themePickerOpen by remember { mutableStateOf(false) }
     var fontSizePickerOpen by remember { mutableStateOf(false) }
+    var fontFamilyPickerOpen by remember { mutableStateOf(false) }
     var saveAsOpen by remember { mutableStateOf(false) }
     var renameOpen by remember { mutableStateOf(false) }
     var saveAsInitial by remember { mutableStateOf(path) }
@@ -214,13 +215,15 @@ fun EditorScreen(
         lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
     }
 
-    /** Aplica as preferências do editor (tema/fonte/wrap) ao CodeMirror. */
+    /** Aplica as preferências do editor (tema/fonte/wrap/family) ao CodeMirror. */
     fun applyEditorPrefs(target: WebView? = webView) {
         val wv = target ?: return
         val theme = JSONObject.quote(editorPrefs.theme.id)
+        val family = JSONObject.quote(editorPrefs.fontFamily)
         val js = "window.PhantomEditor.setTheme($theme);" +
             "window.PhantomEditor.setFontSize(${editorPrefs.fontSizePx});" +
-            "window.PhantomEditor.setWordWrap(${editorPrefs.wordWrap});"
+            "window.PhantomEditor.setWordWrap(${editorPrefs.wordWrap});" +
+            "window.PhantomEditor.setFontFamily($family);"
         wv.evaluateJavascript(js, null)
     }
 
@@ -535,6 +538,13 @@ fun EditorScreen(
                             onClick = {
                                 actionsOpen = false
                                 fontSizePickerOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Fonte do editor…") },
+                            onClick = {
+                                actionsOpen = false
+                                fontFamilyPickerOpen = true
                             },
                         )
                         DropdownMenuItem(
@@ -1257,6 +1267,31 @@ fun EditorScreen(
                 fontSizePickerOpen = false
             },
             onDismiss = { fontSizePickerOpen = false },
+        )
+    }
+
+    // ── Seletor de família da fonte do editor (P3.2) ──
+    if (fontFamilyPickerOpen) {
+        val families = EditorPrefs.FONT_FAMILIES
+        StylePickerDialog(
+            title = "Fonte do editor",
+            options = families.map { it.first },
+            selected = editorPrefs.fontFamily,
+            render = { id ->
+                Text(
+                    families.firstOrNull { it.first == id }?.second ?: id,
+                    fontSize = 14.sp,
+                    color = palette.accentPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            onPick = {
+                editorPrefs.fontFamily = it
+                val js = "window.PhantomEditor.setFontFamily(${JSONObject.quote(it)})"
+                webView?.evaluateJavascript(js, null)
+                fontFamilyPickerOpen = false
+            },
+            onDismiss = { fontFamilyPickerOpen = false },
         )
     }
 }

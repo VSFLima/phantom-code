@@ -23,6 +23,30 @@
   window.PhantomEditor.moveLineDown = () => send('ArrowDown', 'ArrowDown', { altKey: true, ctrlKey: false });
   window.PhantomEditor.toggleComment = () => send('/', 'Slash');
 
+  // ── Fonte do editor (P3.2) ──
+  // Aplica a família de fonte no DOM do CodeMirror sem depender do bundle
+  // minificado: seta a fonte no contêiner; o editor-actions roda por último.
+  const FONT_FAMILIES = {
+    mono: '"JetBrains Mono", "Fira Code", monospace',
+    droid: '"Droid Sans Mono", monospace',
+    sans: '-apple-system, "Segoe UI", Roboto, sans-serif',
+  };
+  window.PhantomEditor.setFontFamily = (id) => {
+    const css = FONT_FAMILIES[id] || FONT_FAMILIES.mono;
+    const apply = () => {
+      const cm = document.querySelector('.cm-editor');
+      if (cm) cm.style.fontFamily = css;
+      const content = document.querySelector('.cm-content');
+      if (content) content.style.fontFamily = css;
+    };
+    apply();
+    // O CodeMirror re-renderiza linhas; reaplica após um tick e na próxima
+    // mutação do DOM (defensivo para linhas criadas depois).
+    setTimeout(apply, 50);
+    setTimeout(apply, 300);
+    window.PhantomEditor.getFontFamily = () => id;
+  };
+
   // ── Autocomplete e code folding (P3, estilo SPCK) ──
   // Ctrl+Espaço abre o autocomplete; Ctrl+Shift+[ / ] dobra/desdobra o bloco;
   // Ctrl+Alt+[ / ] dobra/desdobra tudo (keymaps do CodeMirror).

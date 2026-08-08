@@ -1,5 +1,7 @@
 package com.phantomcode.app.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,9 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -65,7 +70,9 @@ import com.phantomcode.app.ui.components.PhantomDialog
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.components.fileTypeIcon
 import com.phantomcode.app.ui.theme.LocalThemeController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class TreeNode(val entry: FileEntry, val depth: Int)
 
@@ -73,6 +80,9 @@ private sealed interface ExplorerDialog {
     data class New(val parentPath: String, val isDir: Boolean) : ExplorerDialog
     data class Rename(val entry: FileEntry) : ExplorerDialog
 }
+
+/** Ação de transferência pendente (cortar/copiar): aguarda uma pasta destino para colar. */
+private data class PendingOp(val srcRelPath: String, val isMove: Boolean)
 
 private fun visibleTree(ws: WorkspaceManager, expanded: Map<String, Boolean>): List<TreeNode> {
     val out = mutableListOf<TreeNode>()
@@ -106,6 +116,28 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
     var actionTarget by remember { mutableStateOf<FileEntry?>(null) }
     var dialog by remember { mutableStateOf<ExplorerDialog?>(null) }
     var deleteTarget by remember { mutableStateOf<FileEntry?>(null) }
+    var pendingOp by remember { mutableStateOf<PendingOp?>(null) }
+    var downloadTarget by remember { mutableStateOf<FileEntry?>(null) }
+
+    // SAF: salvar arquivo em local escolhido pelo usuário (P2.2 · download)
+    val downloadLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val target = downloadTarget
+        downloadTarget = null
+        if (uri != null && target != null && !target.isDir) {
+            scope.launch(Dispatchers.IO) {
+                val ok = runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(workspace.readText(target.relPath).toByteArray())
+                    }
+                }.isSuccess
+                withContext(Dispatchers.Main) {
+                    notify(if (ok) "Baixado: ${target.name}" else "Erro ao baixar ${target.name}")
+                }
+            }
+        }
+    }
 
     // Abre automaticamente o projeto ativo (vindo da Home)
     LaunchedEffect(Unit) {
@@ -216,18 +248,22 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
             }
         }
 
-        // FAB — menu de criação
+        // FAB — menu de criação (raiz do workspace)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
                 .size(52.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(palette.accentPrimary)
+                .background(if (pendingOp != null) palette.accentSecondary else palette.accentPrimary)
                 .clickable { fabMenu = true },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Novo", tint = androidx.compose.ui.graphics.Color.White)
+            Icon(
+                if (pendingOp != null) Icons.Filled.ContentPaste else Icons.Filled.Add,
+                contentDescription = "Novo",
+                tint = androidx.compose.ui.graphics.Color.White,
+            )
             DropdownMenu(expanded = fabMenu, onDismissRequest = { fabMenu = false }) {
                 DropdownMenuItem(
                     text = { Text("Novo arquivo") },
@@ -245,15 +281,41 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
                         dialog = ExplorerDialog.New(parentPath = "", isDir = true)
                     },
                 )
+                if (pendingOp != null) {
+                    DropdownMenuItem(
+                        text = { Text("Colar na raiz (${pendingOp?.srcRelPath ?: ""})") },
+                        leadingIcon = { Icon(Icons.Filled.ContentPaste, null) },
+                        onClick = {
+                            fabMenu = false
+                            pendingOp?.let { op ->
+                                val ok = if (op.isMove) workspace.moveTo(op.srcRelPath, "")
+                                else workspace.copyTo(op.srcRelPath, "")
+                                pendingOp = null
+                                notify(if (ok) "${if (op.isMove) "Movido" else "Copiado"} para a raiz" else "Erro ao colar")
+                                tick++
+                            }
+                        },
+                    )
+                }
             }
         }
 
-        // Menu de contexto (long-press)
+        // Menu de contexto (long-press): abrir, criar aqui (pastas), cortar/copiar/colar, baixar
         actionTarget?.let { target ->
             PhantomActionSheet(
                 title = target.name,
                 actions = buildList {
                     add("Abrir" to if (target.isDir) Icons.Filled.FolderOpen else Icons.Filled.Description)
+                    if (target.isDir) {
+                        add("Novo arquivo aqui" to Icons.Filled.NoteAdd)
+                        add("Nova pasta aqui" to Icons.Filled.CreateNewFolder)
+                        add("Colar aqui" to Icons.Filled.ContentPaste)
+                    }
+                    add("Cortar" to Icons.Filled.ContentCut)
+                    add("Copiar" to Icons.Filled.ContentCopy)
+                    if (!target.isDir) {
+                        add("Baixar" to Icons.Filled.Download)
+                    }
                     add("Renomear" to Icons.Filled.Edit)
                     add("Excluir" to Icons.Filled.Delete)
                     add("Copiar caminho" to Icons.Filled.ContentCopy)
@@ -261,6 +323,8 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
                 onAction = { index ->
                     actionTarget = null
                     when (index) {
+                        // Arquivo: 0=Abrir 1=Cortar 2=Copiar 3=Baixar 4=Renomear 5=Excluir 6=Cam. copiado
+                        // Pasta:   0=Abrir 1=Novo arq 2=Nova pasta 3=Colar 4=Cortar 5=Copiar 6=Renom. 7=Excluir 8=Cam.
                         0 -> {
                             if (target.isDir) {
                                 expanded[target.relPath] = expanded[target.relPath] != true
@@ -269,9 +333,57 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
                                 onOpenFile(target.relPath)
                             }
                         }
-                        1 -> dialog = ExplorerDialog.Rename(target)
-                        2 -> deleteTarget = target
-                        3 -> {
+                        1 -> if (target.isDir) {
+                            dialog = ExplorerDialog.New(parentPath = target.relPath, isDir = false)
+                        } else {
+                            pendingOp = PendingOp(target.relPath, isMove = true)
+                            notify("Cortado: ${target.name} — toque em uma pasta e escolha Colar")
+                        }
+                        2 -> if (target.isDir) {
+                            dialog = ExplorerDialog.New(parentPath = target.relPath, isDir = true)
+                        } else {
+                            pendingOp = PendingOp(target.relPath, isMove = false)
+                            notify("Copiado: ${target.name} — toque em uma pasta e escolha Colar")
+                        }
+                        3 -> if (target.isDir) {
+                            pendingOp?.let { op ->
+                                if (op.srcRelPath == target.relPath) {
+                                    pendingOp = null
+                                    notify("Colar cancelado (mesma pasta)")
+                                } else {
+                                    val ok = if (op.isMove) workspace.moveTo(op.srcRelPath, target.relPath)
+                                    else workspace.copyTo(op.srcRelPath, target.relPath)
+                                    pendingOp = null
+                                    notify(if (ok) "${if (op.isMove) "Movido" else "Copiado"} para ${target.relPath}" else "Erro ao colar")
+                                    tick++
+                                }
+                            } ?: run { notify("Nada para colar") }
+                        } else {
+                            downloadTarget = target
+                            downloadLauncher.launch(target.name)
+                        }
+                        4 -> if (target.isDir) {
+                            pendingOp = PendingOp(target.relPath, isMove = true)
+                            notify("Cortado: ${target.name} — toque em uma pasta e escolha Colar")
+                        } else {
+                            dialog = ExplorerDialog.Rename(target)
+                        }
+                        5 -> if (target.isDir) {
+                            pendingOp = PendingOp(target.relPath, isMove = false)
+                            notify("Copiado: ${target.name} — toque em uma pasta e escolha Colar")
+                        } else {
+                            deleteTarget = target
+                        }
+                        6 -> if (target.isDir) {
+                            dialog = ExplorerDialog.Rename(target)
+                        } else {
+                            clipboard.setText(AnnotatedString(target.relPath))
+                            notify("Caminho copiado: ${target.relPath}")
+                        }
+                        7 -> if (target.isDir) {
+                            deleteTarget = target
+                        }
+                        8 -> {
                             clipboard.setText(AnnotatedString(target.relPath))
                             notify("Caminho copiado: ${target.relPath}")
                         }
