@@ -63,6 +63,7 @@ import com.phantomcode.app.ui.components.PhantomActionSheet
 import com.phantomcode.app.ui.components.PhantomConfirmDialog
 import com.phantomcode.app.ui.components.PhantomDialog
 import com.phantomcode.app.ui.components.SectionLabel
+import com.phantomcode.app.ui.components.fileTypeIcon
 import com.phantomcode.app.ui.theme.LocalThemeController
 import kotlinx.coroutines.launch
 
@@ -188,10 +189,11 @@ fun ExplorerScreen(onOpenFile: (String) -> Unit) {
                                 )
                             } else {
                                 Spacer(Modifier.width(18.dp))
+                                val fileIcon = fileTypeIcon(e.name)
                                 Icon(
-                                    Icons.Filled.Description,
+                                    fileIcon.icon,
                                     contentDescription = null,
-                                    tint = palette.accentSecondary.copy(alpha = 0.8f),
+                                    tint = fileIcon.tint,
                                     modifier = Modifier.size(16.dp),
                                 )
                             }

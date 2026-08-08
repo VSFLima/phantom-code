@@ -53,6 +53,13 @@ class PackageScanner {
     private var awaitingResponse = false
     private var scanTimeoutJob: Job? = null
 
+    // Fila de comandos do canal de controle (SERVER/STOPSERVER/SERVERSTATUS).
+    // O protocolo é serial: cada comando espera UMA linha de resposta
+    // (OK / ERR:… / 0 / 1) antes do próximo.
+    private class Op(val cmd: String, val cb: (String) -> Unit)
+    private val opQueue = ArrayDeque<Op>()
+    private var opBusy = false
+
     val packages = mutableStateListOf<GuestPackage>()
     var scanning by mutableStateOf(false)
     var connected by mutableStateOf(false)
@@ -85,6 +92,8 @@ class PackageScanner {
         scanning = false
         awaitingResponse = false
         inScan = false
+        opBusy = false
+        opQueue.clear()
     }
 
     fun disconnect() {
@@ -136,6 +145,37 @@ class PackageScanner {
         }
     }
 
+    /**
+     * Sobe o servidor web do Preview Hub na VM (D24): PHP/Python/Node servindo
+     * o projeto do workspace. A porta 80 do guest é exposta no app em
+     * http://127.0.0.1:8384 (hostfwd do QEMU). Resposta via callback.
+     */
+    fun startServer(projectDir: String, lang: String, onResult: (String) -> Unit) {
+        sendOp("SERVER:$projectDir|$lang\n", onResult)
+    }
+
+    /** Derruba o servidor web do guest. */
+    fun stopServer(onDone: () -> Unit = {}) {
+        sendOp("STOPSERVER\n") { onDone() }
+    }
+
+    /** Verifica se há servidor escutando na porta 80 do guest. */
+    fun serverStatus(onResult: (Boolean) -> Unit) {
+        sendOp("SERVERSTATUS\n") { line -> onResult(line.trim() == "1") }
+    }
+
+    private fun sendOp(cmd: String, cb: (String) -> Unit) {
+        if (!connected) {
+            cb("ERR")
+            return
+        }
+        opQueue.addLast(Op(cmd, cb))
+        if (!opBusy) {
+            opBusy = true
+            send(cmd)
+        }
+    }
+
     private fun send(cmd: String) {
         runCatching {
             socket?.outputStream?.apply {
@@ -146,6 +186,15 @@ class PackageScanner {
     }
 
     private fun onLine(line: String) {
+        val trimmed = line.trim()
+        // Resposta de um comando do canal de controle (OK / ERR:… / 0 / 1).
+        if (opQueue.isNotEmpty() && (trimmed == "OK" || trimmed.startsWith("ERR") || trimmed == "0" || trimmed == "1")) {
+            val op = opQueue.removeFirst()
+            opBusy = opQueue.isNotEmpty()
+            if (opBusy) send(opQueue.first().cmd)
+            op.cb(trimmed)
+            return
+        }
         when {
             inScan -> {
                 if (line == "PHANTOM-SCAN-END") {

@@ -25,11 +25,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.phantomcode.app.ui.theme.CodeTheme
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.PhantomBorderStyle
 import com.phantomcode.app.ui.theme.PhantomButtonStyle
 import com.phantomcode.app.ui.theme.PhantomCornerStyle
 import com.phantomcode.app.ui.theme.PhantomFontStyle
+import com.phantomcode.app.ui.theme.TerminalPreset
 import com.phantomcode.app.ui.theme.shape
 
 /**
@@ -92,6 +94,9 @@ private fun <T> labelOf(option: T): String = when (option) {
     is PhantomCornerStyle -> option.label
     is PhantomBorderStyle -> option.label
     is PhantomFontStyle -> option.label
+    is CodeTheme -> option.label
+    is TerminalPreset -> option.label
+    is Int -> "$option px"
     else -> option.toString()
 }
 

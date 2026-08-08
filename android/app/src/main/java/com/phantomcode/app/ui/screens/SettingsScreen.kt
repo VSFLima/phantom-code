@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.DeviceCapabilities
 import com.phantomcode.app.data.vm.LocalVm
@@ -556,6 +558,67 @@ fun SettingsScreen() {
 
         Spacer(Modifier.height(20.dp))
 
+        // ── Permissões ────────────────────────────────────────
+        val permContext = LocalContext.current
+        var mediaGranted by remember { mutableStateOf(hasMediaAccess(permContext)) }
+        var allFilesGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(permContext)) }
+        val mediaPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { mediaGranted = hasMediaAccess(permContext) }
+        val allFilesSettingsLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { allFilesGranted = StorageHelper.hasStorageAccess(permContext) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Tune, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            SectionLabel(text = "Permissões")
+        }
+        Spacer(Modifier.height(8.dp))
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsRow(
+                label = "Mídia (fotos, vídeos e áudio)",
+                value = if (mediaGranted) "Concedida" else "Pendente",
+                onClick = {
+                    if (!mediaGranted) {
+                        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            arrayOf(
+                                Manifest.permission.READ_MEDIA_IMAGES,
+                                Manifest.permission.READ_MEDIA_VIDEO,
+                                Manifest.permission.READ_MEDIA_AUDIO,
+                            )
+                        } else {
+                            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                        }
+                        mediaPermissionLauncher.launch(perms)
+                    }
+                },
+            )
+            SettingsRow(
+                label = "Armazenamento completo (todos os arquivos)",
+                value = if (allFilesGranted) "Concedido" else "Pendente",
+                onClick = {
+                    if (!allFilesGranted) {
+                        allFilesSettingsLauncher.launch(Intent(StorageHelper.permissionIntent(permContext)))
+                    }
+                },
+            )
+            SettingsRow(
+                label = "Internet",
+                value = "Concedida",
+            )
+        }
+        if (!mediaGranted || !allFilesGranted) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Mídia: necessário para abrir fotos/vídeos no editor e preview. " +
+                    "Armazenamento completo: libera a pasta ${StorageHelper.APP_DIR_NAME} no celular.",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
         // ── Sobre ───────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Info, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(18.dp))
@@ -583,5 +646,21 @@ private fun currentCustomColor(key: String): Color {
         "text" -> controller.custom.textPrimary
         "success" -> controller.custom.success
         else -> Color.Transparent
+    }
+}
+
+/** Tem acesso de mídia? (READ_MEDIA_* no 13+; READ_EXTERNAL_STORAGE antes). */
+private fun hasMediaAccess(context: android.content.Context): Boolean {
+    val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_AUDIO,
+        )
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+    return perms.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 }

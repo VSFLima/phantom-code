@@ -54,9 +54,27 @@ enum class PhantomFontStyle(val id: String, val label: String) {
     CLASSIC("classic", "Clássica"),
 }
 
+/**
+ * Presets de terminal: "Tema do app" segue o tema de UI; os demais usam o
+ * conjunto de [CodeTheme] (mesmos do editor) + os clássicos legados.
+ * Os ids dos temas de código batem com assets/editor/editor-themes.js.
+ */
 enum class TerminalPreset(val id: String, val label: String) {
     APP("app", "Tema do app"),
+    PHANTOM("phantom", "Phantom"),
+    DEEP_SLATE("deep_slate", "Deep Slate"),
     MATRIX("matrix", "Matrix"),
+    DRACULA("dracula", "Dracula"),
+    NORD("nord", "Nord"),
+    SOLARIZED("solarized", "Solarized"),
+    TOKYONIGHT("tokyonight", "Tokyonight"),
+    EVERFOREST("everforest", "Everforest"),
+    AYU("ayu", "Ayu"),
+    CATPPUCCIN("catppuccin", "Catppuccin"),
+    CATPPUCCIN_MACCHIATO("catppuccin-macchiato", "Catppuccin Macchiato"),
+    GRUVBOX("gruvbox", "Gruvbox"),
+    KANAGAWA("kanagawa", "Kanagawa"),
+    ONE_DARK("one-dark", "One Dark"),
     AMBER("amber", "Amber"),
     ICE("ice", "Ice"),
     PAPER("paper", "Paper"),
@@ -75,13 +93,27 @@ class TerminalStyleController(context: Context) {
         prefs.edit().putString("preset", preset.id).apply()
     }
 
-    fun colors(palette: PhantomPalette): Pair<Color, Color> = when (style) {
-        TerminalPreset.APP -> palette.textPrimary to palette.background
-        TerminalPreset.MATRIX -> Color(0xFF00FF41) to Color(0xFF050A05)
-        TerminalPreset.AMBER -> Color(0xFFFFB000) to Color(0xFF100B00)
-        TerminalPreset.ICE -> Color(0xFFBDEBFF) to Color(0xFF061018)
-        TerminalPreset.PAPER -> Color(0xFF202124) to Color(0xFFF4F1E8)
-    }
+    fun colors(palette: PhantomPalette): TerminalThemeColors = terminalColorsFor(style, palette)
+}
+
+/** Cores de terminal para um [preset] dado — usado no preview do seletor. */
+fun terminalColorsFor(preset: TerminalPreset, palette: PhantomPalette): TerminalThemeColors = when (preset) {
+    TerminalPreset.APP -> TerminalThemeColors(
+        foreground = palette.textPrimary,
+        background = palette.background,
+        cursorForeground = palette.background,
+        cursorBackground = palette.accentPrimary,
+    )
+    TerminalPreset.AMBER -> TerminalThemeColors(
+        Color(0xFFFFB000), Color(0xFF100B00), Color(0xFF100B00), Color(0xFFFFB000),
+    )
+    TerminalPreset.ICE -> TerminalThemeColors(
+        Color(0xFFBDEBFF), Color(0xFF061018), Color(0xFF061018), Color(0xFF38BDF8),
+    )
+    TerminalPreset.PAPER -> TerminalThemeColors(
+        Color(0xFF202124), Color(0xFFF4F1E8), Color(0xFFF4F1E8), Color(0xFF268BD2),
+    )
+    else -> terminalColors(CodeTheme.byId(preset.id))
 }
 
 val LocalTerminalStyleController = staticCompositionLocalOf<TerminalStyleController> {

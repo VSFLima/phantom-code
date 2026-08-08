@@ -46,7 +46,7 @@ class TerminalManager {
     }
 
     /** Anexa uma sessão de terminal qualquer (ex.: console via socket da VM). */
-    fun attach(session: TermSession, title: String = "Linux (QEMU)") {
+    fun attach(session: TermSession, title: String = "Phantom Code") {
         stop()
         val tab = TerminalTab(TerminalTabKind.QEMU, title, session)
         tabs += tab

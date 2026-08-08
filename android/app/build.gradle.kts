@@ -85,5 +85,6 @@ dependencies {
     implementation(libs.slf4j.nop)
     // T17: emulador VT100 (jackpal emulatorview via JitPack — API clássica TermSession)
     implementation(libs.jackpal.emulatorview)
+    implementation(libs.commons.net)
     debugImplementation(libs.androidx.ui.tooling)
 }

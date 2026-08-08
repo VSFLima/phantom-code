@@ -35,6 +35,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import com.phantomcode.app.ui.components.QemuStatusPill
 import com.phantomcode.app.ui.components.SectionLabel
 import com.phantomcode.app.ui.theme.LocalThemeController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -84,6 +86,16 @@ fun HomeScreen(
     val projects = remember(tick) { workspace.projects() }
     val lastOpen = remember(tick) { session.lastOpenPath }
     var newProjectDialog by remember { mutableStateOf(false) }
+
+    // Watcher da grade (P2.4): a cada 5s reescaneia o workspace e atualiza a grade
+    // automaticamente quando novos projetos aparecem (importar, clonar, baixar, etc.).
+    LaunchedEffect(tick) {
+        while (true) {
+            delay(5000)
+            val fresh = workspace.projects()
+            if (fresh != projects) tick++
+        }
+    }
 
     // ── Permissão de armazenamento (pasta pública Phantom-Code) ──
     var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.Icon
@@ -52,8 +53,12 @@ import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomLogo
+import com.phantomcode.app.ui.components.StylePickerDialog
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalTerminalStyleController
+import com.phantomcode.app.ui.theme.TerminalPreset
+import com.phantomcode.app.ui.theme.TerminalThemeColors
+import com.phantomcode.app.ui.theme.terminalColorsFor
 import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
 import jackpal.androidterm.emulatorview.TermSession
@@ -72,7 +77,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
     val terminalStyle = LocalTerminalStyleController.current
-    val terminalColors = terminalStyle.colors(palette)
+    val tc = terminalStyle.colors(palette)
     val keyboard = LocalSoftwareKeyboardController.current
     val terminal = vm.qemu.terminal
     val scope = rememberCoroutineScope()
@@ -81,6 +86,15 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
 
     var termView by remember { mutableStateOf<EmulatorView?>(null) }
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
+    var themePickerOpen by remember { mutableStateOf(false) }
+
+    /** Constrói o ColorScheme do jackpal com as 4 cores do tema atual. */
+    fun schemeOf(colors: TerminalThemeColors): ColorScheme = ColorScheme(
+        colors.foreground.toArgb(),
+        colors.background.toArgb(),
+        colors.cursorForeground.toArgb(),
+        colors.cursorBackground.toArgb(),
+    )
 
     // Ciclo de vida da EmulatorView (IME + blink + redesenho)
     LaunchedEffect(termView, attachedSession) {
@@ -152,6 +166,15 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                     )
                 }
             }
+            Icon(
+                Icons.Filled.Palette,
+                contentDescription = "Tema do terminal",
+                tint = if (themePickerOpen) palette.accentPrimary else palette.textSecondary,
+                modifier = Modifier
+                    .size(34.dp)
+                    .clickable { themePickerOpen = true }
+                    .padding(7.dp),
+            )
         }
 
         // ── Aviso sem abas (VM parada) ──
@@ -211,15 +234,10 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                     // Tamanho da fonte (dp) define as colunas por linha — fonte
                     // menor = mais texto por linha (quebra de linha organizada).
                     runCatching { setTextSize(terminalPrefs.fontSizeSp) }
-                    // Terminal segue a paleta do usuário (Design System v2):
-                    // fundo e texto nas cores do app, com o verde de sucesso no prompt.
+                    // Terminal segue o tema escolhido (Design System v2 + CodeTheme):
+                    // fundo/texto/cursor nas cores do tema, com as 4 cores do ColorScheme.
                     runCatching {
-                        setColorScheme(
-                            ColorScheme(
-                                terminalColors.first.toArgb(),
-                                terminalColors.second.toArgb(),
-                            ),
-                        )
+                        setColorScheme(schemeOf(tc))
                     }
                     termView = this
                 } }.getOrElse {
@@ -234,10 +252,13 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 update = { view ->
                     if (view is EmulatorView) {
                         val tab = terminal.activeTab
+                        // Sempre reaplica tema/fonte (mudança de preset recompõe e repinta).
+                        runCatching {
+                            view.setColorScheme(schemeOf(tc))
+                            view.setTextSize(terminalPrefs.fontSizeSp)
+                        }
                         if (tab != null && attachedSession !== tab.session) {
                             runCatching {
-                                view.setColorScheme(ColorScheme(terminalColors.first.toArgb(), terminalColors.second.toArgb()))
-                                view.setTextSize(terminalPrefs.fontSizeSp)
                                 view.attachSession(tab.session)
                                 attachedSession = tab.session
                                 view.requestFocus()
@@ -271,6 +292,47 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 fontSize = 10.sp,
             )
         }
+    }
+
+    // ── Seletor de tema do terminal (mesmo conjunto do editor) ──
+    if (themePickerOpen) {
+        StylePickerDialog(
+            title = "Tema do terminal",
+            options = TerminalPreset.entries,
+            selected = terminalStyle.style,
+            render = { p ->
+                val preview = terminalColorsFor(p, palette)
+                Row {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(preview.background)
+                            .border(1.dp, palette.border, RoundedCornerShape(4.dp)),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(preview.cursorBackground),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "A",
+                        color = preview.foreground,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            },
+            onPick = {
+                terminalStyle.select(it)
+                themePickerOpen = false
+            },
+            onDismiss = { themePickerOpen = false },
+        )
     }
 }
 

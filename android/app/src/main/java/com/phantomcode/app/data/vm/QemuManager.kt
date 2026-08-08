@@ -241,8 +241,10 @@ class QemuManager(
         cmd += listOf(
             // Ponte de arquivos: workspace do Android dentro do guest (D3)
             "-virtfs", "local,path=${workspace.root.absolutePath},mount_tag=darkcode-ws,security_model=none,id=ws0",
-            // Rede SLIRP (NAT) — internet no guest sem root
-            "-netdev", "user,id=net0",
+            // Rede SLIRP (NAT) — internet no guest sem root.
+            // hostfwd: porta 80 do guest (servidor PHP/Python/Node do Preview
+            // Hub VM) fica acessível no app via http://127.0.0.1:8384 (D24).
+            "-netdev", "user,id=net0,hostfwd=tcp::8384-:80",
             "-device", "virtio-net-device,netdev=net0",
             // Console do guest pelo socket unix (hvc0) — o widget de terminal do app
             "-chardev", "socket,id=term0,path=${sock.absolutePath},server=on,wait=off",
@@ -359,5 +361,14 @@ class QemuManager(
     companion object {
         /** Referência do manager ativo — usada pela notificação (VmForegroundService) para parar a sessão. */
         var instance: QemuManager? = null
+
+        /** Porta do servidor web do guest exposta no app (hostfwd do QEMU, D24). */
+        const val VM_SERVER_PORT = 8384
+
+        /** URL base do servidor web da VM visto pelo app. */
+        const val VM_SERVER_BASE_URL = "http://127.0.0.1:$VM_SERVER_PORT"
+
+        /** Caminho do workspace dentro do guest (montado via virtio-9p). */
+        const val GUEST_WORKSPACE = "/home/user/workspace"
     }
 }
