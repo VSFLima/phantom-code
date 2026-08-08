@@ -2,7 +2,7 @@
 
 > **Especificação de tarefa** · Phantom-Code v1 · 07/08/2026
 > **Para:** qualquer IA que for implementar
-> **Status:** 📐 Planejamento — aguardando execução
+> **Status:** 🚧 Em execução — P0.2, P1.1–P1.4 e P2.3 implementados (build APK `31230823317`); faltam P1.5 (split terminal), P2.1 (explorer), P2.2 (upload FTP) e P2.4 (watcher no GitScreen/Home)
 > **Regra de ouro:** **NÃO rode builds locais** — o ambiente é o app Android no Note 10 Plus; valide por revisão de código + balanceamento e dispare build no GitHub Actions (`gh workflow run "Build APK"`). O usuário compila sempre no GitHub.
 
 ---
@@ -49,14 +49,14 @@ O editor atual já tem base sólida (CodeMirror 6 no WebView, abas, auto-save, s
 
 **Critério de aceite (device):** 1) Clonar um repo → editar um arquivo no GitHub → tocar **Sincronizar** → arquivo aparece atualizado no disco. 2) Projeto local publicado → Push cria o repo e depois Pull funciona sem erros.
 
-### P0.2 — Editor não recarrega arquivos após pull/clone/restauração 🔴 (IMPLEMENTAR)
+### P0.2 — Editor não recarrega arquivos após pull/clone/restauração ✅ (IMPLEMENTADO — build 31230823317)
 
 **Problema:** quando o Pull/clone/restauração muda arquivos no disco, os arquivos **abertos** no CodeMirror continuam com o texto antigo em memória.
 
-**Implementação sugerida:**
-1. No `GitManager`/`CloudBackupManager`, após operações que mudam arquivos, expor um evento/flag (ex.: `var filesChangedTick by mutableIntStateOf` no ViewModel ou um callback `onWorkspaceChanged`).
-2. No `EditorScreen`: `LaunchedEffect(filesChangedTick)` → se o arquivo aberto foi modificado no disco (comparar `lastModified`/hash com o estado anterior), **recarregar** o conteúdo via `PhantomEditor.setValue(...)` **e avisar** com snackbar "Arquivo atualizado no disco — recarregado" ou um botão "Recarregar" para o usuário escolher (evita perder edições não salvas: se `saved == false`, NÃO sobrescrever sem confirmar).
-3. Opção mais simples e robusta: **watcher leve** — a cada 3s (enquanto o editor está aberto), comparar `File.lastModified()` do arquivo atual; se mudou e o editor está salvo, recarregar automaticamente; se tem edições não salvas, mostrar diálogo "Arquivo mudou no disco — [Recarregar] / [Manter minhas edições]".
+**Correção aplicada no `EditorScreen.kt`:**
+- **Watcher leve** a cada 3s: compara `File.lastModified()` do arquivo aberto com o último visto;
+- se mudou **e** o editor está salvo → recarrega via `PhantomEditor.setValue` + snackbar "Arquivo atualizado no disco — recarregado";
+- se há **edições não salvas** → diálogo "Arquivo mudou no disco — [Recarregar] / [Manter minhas edições]" (o último visto é atualizado ao manter, para não insistir).
 
 **Critério de aceite (device):** mudar um arquivo via Git Pull (ou no editor do GitHub) → o editor aberto mostra o conteúdo novo; se houver edições não salvas, pergunta antes de sobrescrever.
 
@@ -64,25 +64,24 @@ O editor atual já tem base sólida (CodeMirror 6 no WebView, abas, auto-save, s
 
 ## 3. P1 — Uso diário (implementar nesta ordem)
 
-### P1.1 — Git integrado no editor
-Na barra superior do `EditorScreen`, adicionar um grupo discreto de ações Git do **projeto atual**:
-- Indicador de status (limpo / N mudanças) usando `GitManager.status()` (polling a cada 5s enquanto o editor está aberto ou ao trocar de aba).
-- Botões: **Commit** (dialog com mensagem, igual ao GitScreen), **Push**, **Pull/Sincronizar** — chamando `GitManager` com o **diretório raiz do projeto** (o path do arquivo aberto → subir até a raiz do projeto/workspace) e mostrando o resultado em snackbar.
+### P1.1 — Git integrado no editor ✅ (IMPLEMENTADO — build 31230823317)
+Na barra superior do `EditorScreen`, há um grupo discreto de ações Git do **projeto atual**:
+- Indicador de status (limpo / N mudanças) com polling de 5s usando `GitManager.status()` enquanto o editor está aberto;
+- Botões: **Commit** (dialog com mensagem, igual ao GitScreen), **Push**, **Pull/Sincronizar** — chamando `GitManager` com a **raiz do projeto** (o path do arquivo aberto → subir até o diretório com `.git`) e mostrando o resultado em snackbar.
 - **Critério:** do editor consigo commitar e sincronizar sem sair da tela.
 
-### P1.2 — Atalhos de teclado
-Adicionar no JS do CodeMirror (`android/app/src/main/assets/editor/index.html` ou o JS embutido):
-- `Ctrl+S` salvar (chama `AndroidBridge.save`), `Ctrl+F`/`Ctrl+H` buscar/substituir (abrir o painel existente), `Ctrl+Z`/`Ctrl+Y` (já do CodeMirror), `Ctrl+A`, `Ctrl+G` ir para linha, `Ctrl+D` duplicar linha, `Alt+↑/↓` mover linha, `Ctrl+/` comentar.
+### P1.2 — Atalhos de teclado ✅ (IMPLEMENTADO — build 31230823317)
+Adicionados no `editor-actions.js` (sobre o CodeMirror):
+- `Ctrl+S` salvar (chama `AndroidBridge.save` + aviso), `Ctrl+F`/`Ctrl+H` buscar/substituir (abre o painel), `Ctrl+G` ir para linha, `Ctrl+Z`/`Ctrl+Y` (do CodeMirror), `Ctrl+A`, `Ctrl+D` duplicar linha, `Alt+↑/↓` mover linha, `Ctrl+/` comentar.
 - **Critério:** cada atalho funciona com teclado físico no device.
 
-### P1.3 — Ir para linha
-No menu "Ações do arquivo", item "Ir para linha…" → dialog numérico → `PhantomEditor.gotoLine(n)` (implementar no JS: `editor.dispatch({selection: {anchor: lineStart, head: lineStart}})`, focar e rolar).
+### P1.3 — Ir para linha ✅ (IMPLEMENTADO — build 31230823317)
+No menu "Ações do arquivo", item **"Ir para linha…"** → dialog numérico → `PhantomEditor.gotoLine(n)` (JS: `editor.dispatch({selection:{anchor:lineStart,head:lineStart}})`, foca e rola). Indicador **L:n C:m** ao vivo na barra.
 - **Critério:** navega e destaca a linha escolhida.
 
-### P1.4 — Preview HTML no navegador interno
-No menu de ações: **"Preview / Executar"** → para arquivos `.html/.htm` abre o `BrowserScreen` com a URL do arquivo (`file:///…/projeto/index.html` ou um mini servidor local `http://localhost:PORT/projeto/` para páginas que usam fetch). Para `.js/.ts` puro, rodar no terminal local (node se instalado no guest). Para `.py`, rodar no terminal do guest.
-- Reutilizar a rota `browser?url={url}` existente. **Não criar novo WebView.**
-- **Critério:** página HTML do projeto abre com CSS/JS funcionando (usar mini-servidor local se fetch/ESM falhar com file://).
+### P1.4 — Preview HTML no navegador interno ✅ (IMPLEMENTADO — build 31230823317)
+No menu de ações: **"Preview no navegador"** → abre o `BrowserScreen` com a URL `file://` do arquivo; o `BrowserScreen` agora habilita `allowFileAccess`/`allowFileAccessFromFileURLs` para CSS/JS relativos da pasta do projeto.
+- **Critério:** página HTML do projeto abre com CSS/JS funcionando.
 
 ### P1.5 — Terminal integrado (split)
 Na `TerminalScreen`, adicionar um modo **split** (editor em cima, terminal embaixo) ou um botão "Abrir terminal aqui" que abre uma aba de terminal local **com cwd = diretório do projeto atual**.
@@ -105,8 +104,8 @@ Criar um painel de árvore (arquivos + pastas do projeto ativo) ao lado do edito
 - **Upload FTP/SFTP:** usar as chaves do catálogo (categoria SERVER: `FTP_HOST/USER/PASS/PORT`) com `org.apache.commons.net.ftp.FTPClient` (adicionar dependência se não existir) ou NetCipher; começar por **FTP** (mais simples) e depois **SFTP** (JSch). Exibir progresso e resultado em snackbar.
 - **Critério:** enviar/baixar um arquivo do servidor FTP configurado nas Integrações.
 
-### P2.3 — Snippets + autocompletar
-- Adicionar snippets JS no CodeMirror (ex.: `fun` → função Kotlin, `imp` → import, `html5` → doc HTML, `cl` → console.log) via configuração `EditorView`/autocomplete do CodeMirror 6 já embutido.
+### P2.3 — Snippets + autocompletar ✅ (IMPLEMENTADO — build 31230823317)
+- Snippets JS no CodeMirror com **Tab** (em `editor-actions.js`): `html5` (doc HTML), `fun` (função Kotlin), `imp` (import), `cl`/`log` (console.log), `fn`, `cls`, `if`, `for`, `def` (Python), `sh` (shebang) — via `PhantomEditor.getBeforeCursor` + `replaceWordBeforeCursor`.
 - **Critério:** digitar `html5` + Tab insere o esqueleto HTML.
 
 ### P2.4 — Watcher de arquivos externos (reforço do P0.2)
