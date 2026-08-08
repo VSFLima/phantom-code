@@ -14,7 +14,6 @@ import com.phantomcode.app.data.git.GithubAssetClient
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 
@@ -75,6 +74,73 @@ object DistroCatalog {
             available = true,
             packageManager = "apt",
             includesQemu = true, // o tarball Phantom traz rootfs.img + kernel + initrd.img + qemu-system-aarch64
+            boot = DistroBoot.KERNEL_INITRD,
+        ),
+        DistroInfo(
+            id = "ubuntu",
+            name = "Ubuntu",
+            badge = "Nova",
+            description = "Ubuntu 24.04 (Noble) arm64 — o clássico da Canonical: completo, estável e com enorme compatibilidade com tutoriais.",
+            recommendedFor = "Compatibilidade máxima com pacotes .deb e guias da comunidade",
+            url = PhantomMirror.UBUNTU_URL,
+            sha256 = PhantomMirror.UBUNTU_SHA256.ifBlank { null }, // preenchido após o build (T29)
+            sizeMb = 350,
+            installSizeMb = 1536,
+            ramMb = 1024,
+            risk = DistroRisk.MEDIUM,
+            available = true,
+            packageManager = "apt",
+            includesQemu = true, // tarball autocontido (rootfs+kernel+initrd+qemu)
+            boot = DistroBoot.KERNEL_INITRD,
+        ),
+        DistroInfo(
+            id = "debian",
+            name = "Debian",
+            description = "Debian bookworm arm64 — a base sólida e minimalista que dá origem a tantas outras distros.",
+            recommendedFor = "Estabilidade e simplicidade no dia a dia",
+            url = PhantomMirror.DEBIAN_URL,
+            sha256 = PhantomMirror.DEBIAN_SHA256.ifBlank { null }, // preenchido após o build (T29)
+            sizeMb = 300,
+            installSizeMb = 1280,
+            ramMb = 1024,
+            risk = DistroRisk.MEDIUM,
+            available = true,
+            packageManager = "apt",
+            includesQemu = true,
+            boot = DistroBoot.KERNEL_INITRD,
+        ),
+        DistroInfo(
+            id = "kali",
+            name = "Kali",
+            badge = "Avançada",
+            description = "Kali Linux rolling arm64 — a distro de segurança e testes de intrusão (muita ferramenta instalada).",
+            recommendedFor = "Auditoria, pentest e estudo de segurança",
+            url = PhantomMirror.KALI_URL,
+            sha256 = PhantomMirror.KALI_SHA256.ifBlank { null }, // preenchido após o build (T29)
+            sizeMb = 450,
+            installSizeMb = 2048,
+            ramMb = 1536,
+            risk = DistroRisk.HIGH,
+            available = true,
+            packageManager = "apt",
+            includesQemu = true,
+            boot = DistroBoot.KERNEL_INITRD,
+        ),
+        DistroInfo(
+            id = "alpine",
+            name = "Alpine",
+            badge = "Leve",
+            description = "Alpine Linux 3.20 arm64 — minúscula e veloz, ideal para quem quer economia de espaço e RAM.",
+            recommendedFor = "Máquinas modestas e tarefas leves",
+            url = PhantomMirror.ALPINE_URL,
+            sha256 = PhantomMirror.ALPINE_SHA256.ifBlank { null }, // preenchido após o build (T29)
+            sizeMb = 150,
+            installSizeMb = 512,
+            ramMb = 512,
+            risk = DistroRisk.LOW,
+            available = true,
+            packageManager = "apk",
+            includesQemu = true,
             boot = DistroBoot.KERNEL_INITRD,
         ),
     )
@@ -342,16 +408,12 @@ class DistroManager(context: Context) {
     }
 
     private fun downloadConnection(info: DistroInfo): HttpURLConnection {
+        // Todas as distros baixam da Release privada via API com o token do GitHub
+        // (URL direta sem token retornaria 404 num repo privado). Formato das
+        // releases: tag `distro-<id>` com asset `<id>.tar.gz`.
         val token = git.token
-        if (info.id == "phantom") {
-            if (token.isNullOrBlank()) error("Autentique o GitHub na aba Git antes de instalar a Phantom")
-            return GithubAssetClient.openReleaseAsset("distro-phantom", "phantom.tar.gz", token)
-        }
-        return (URL(info.url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15000
-            readTimeout = 30000
-            setRequestProperty("User-Agent", "Phantom-Code/0.1.0")
-        }
+        if (token.isNullOrBlank()) error("Autentique o GitHub na aba Git antes de instalar uma distro")
+        return GithubAssetClient.openReleaseAsset("distro-${info.id}", "${info.id}.tar.gz", token)
     }
 
     /** Expande o rootfs.img para o tamanho escolhido (padrão 3 GB) via setLength. */

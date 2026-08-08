@@ -45,4 +45,16 @@ object PhantomMirror {
     const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
     const val PHANTOM_SHA256 = "32e6bc651fa687defa343f0e50bc2876578b91de1c6dd624e24f43efd8d40f39"
 
+    // Distros extras (T29): publicadas pelo workflow `Build Extra Distros`.
+    // SHA-256 preenchido APÓS o build real (o app valida o download contra ele;
+    // vazio = sem checagem até o valor real ser copiado do log do workflow).
+    const val UBUNTU_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-ubuntu/ubuntu.tar.gz"
+    const val UBUNTU_SHA256 = ""
+    const val DEBIAN_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-debian/debian.tar.gz"
+    const val DEBIAN_SHA256 = ""
+    const val KALI_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-kali/kali.tar.gz"
+    const val KALI_SHA256 = ""
+    const val ALPINE_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-alpine/alpine.tar.gz"
+    const val ALPINE_SHA256 = ""
+
 }

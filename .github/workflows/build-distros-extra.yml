@@ -1,0 +1,86 @@
+name: Build Extra Distros (T29)
+
+# 🐧 Publica Ubuntu, Debian, Kali e Alpine (arm64) para o catálogo do app.
+#
+# Cada job monta a rootfs via docker+binfmt (qemu-user), pega kernel+initrd do
+# próprio pacote e empacota o tarball COM o qemu-system-aarch64 embutido
+# (extraído da release distro-phantom — sem recompilar o QEMU).
+#
+# Releases geradas (uma por distro, tag fixa para o app):
+#   distro-ubuntu/ubuntu.tar.gz · distro-debian/debian.tar.gz
+#   distro-kali/kali.tar.gz     · distro-alpine/alpine.tar.gz
+#
+# Depois de rodar: copiar os SHA-256 do log (sha256sum) para
+# PhantomMirror (QemuConfig.kt) — o app valida o download contra eles.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extras:
+    name: "Distro ${{ matrix.id }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ubuntu
+            image: ubuntu:24.04
+            pm: apt
+            divert: "true"
+            extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
+            pkgs: "linux-image-virtual initramfs-tools"
+          - id: debian
+            image: debian:bookworm-slim
+            pm: apt
+            divert: "true"
+            extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
+            pkgs: "linux-image-arm64 initramfs-tools"
+          - id: kali
+            image: kalilinux/kali-rolling
+            pm: apt
+            divert: "true"
+            extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
+            pkgs: "linux-image-arm64 initramfs-tools"
+          - id: alpine
+            image: alpine:3.20
+            pm: apk
+            divert: "false"
+            extra: "bash ca-certificates curl wget git openssh e2fsprogs"
+            pkgs: "linux-virt"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Register binfmt (qemu arm64)
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Grab qemu binary from distro-phantom
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download distro-phantom -p phantom.tar.gz --dir /tmp --clobber
+          tar xzf /tmp/phantom.tar.gz -C /tmp qemu-system-aarch64
+          ls -la /tmp/qemu-system-aarch64
+
+      - name: Build rootfs + package (${{ matrix.id }})
+        run: |
+          chmod +x .github/scripts/build-rootfs.sh
+          .github/scripts/build-rootfs.sh \
+            "${{ matrix.id }}" "${{ matrix.image }}" "${{ matrix.pm }}" \
+            "${{ matrix.extra }}" "${{ matrix.pkgs }}" "${{ matrix.divert }}"
+
+      - name: Publish as Release (tag fixa para o app)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="distro-${{ matrix.id }}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" \
+            "/tmp/${{ matrix.id }}.tar.gz" "/tmp/${{ matrix.id }}.sha256" \
+            --title "${{ matrix.id }} rootfs (arm64) $(date +%Y-%m-%d)" \
+            --notes "Rootfs ${{ matrix.id }} arm64 para QEMU (virt/cortex-a72). Contém rootfs.img + kernel + initrd.img + qemu-system-aarch64 (autocontido). O app baixa com progresso e valida SHA-256 (Toolbox → Distros)."
