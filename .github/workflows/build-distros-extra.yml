@@ -30,24 +30,28 @@ jobs:
             image: ubuntu:24.04
             pm: apt
             divert: "true"
+            shell: bash
             extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
             pkgs: "linux-image-virtual initramfs-tools"
           - id: debian
             image: debian:bookworm-slim
             pm: apt
             divert: "true"
+            shell: bash
             extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
             pkgs: "linux-image-arm64 initramfs-tools"
           - id: kali
             image: kalilinux/kali-rolling
             pm: apt
             divert: "true"
+            shell: bash
             extra: "bash ca-certificates curl wget git openssh-client nano e2fsprogs"
             pkgs: "linux-image-arm64 initramfs-tools"
           - id: alpine
             image: alpine:3.20
             pm: apk
             divert: "false"
+            shell: sh
             extra: "bash ca-certificates curl wget git openssh e2fsprogs"
             pkgs: "linux-virt"
 
@@ -72,7 +76,8 @@ jobs:
           chmod +x .github/scripts/build-rootfs.sh
           .github/scripts/build-rootfs.sh \
             "${{ matrix.id }}" "${{ matrix.image }}" "${{ matrix.pm }}" \
-            "${{ matrix.extra }}" "${{ matrix.pkgs }}" "${{ matrix.divert }}"
+            "${{ matrix.extra }}" "${{ matrix.pkgs }}" "${{ matrix.divert }}" \
+            "${{ matrix.shell }}"
 
       - name: Publish as Release (tag fixa para o app)
         env:

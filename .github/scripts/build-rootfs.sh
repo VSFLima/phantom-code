@@ -2,13 +2,16 @@
 # ============================================================
 # build-rootfs.sh — constrói rootfs arm64 para QEMU (T29)
 #
-# Uso: build-rootfs.sh <id> <image> <pm:apt|apk> <extra> <pkgs> <divert>
+# Uso: build-rootfs.sh <id> <image> <pm:apt|apk> <extra> <pkgs> <divert> <shell:bash|sh>
 #
 # Pipeline:
 #   1. docker (binfmt/qemu-user) instala os pacotes da distro no arm64
 #   2. export → /tmp/rootfs  · kernel + initrd vindos do pacote (linux-image*/linux-virt)
 #   3. rootfs.img via mkfs.ext2 -d (mesmo método da Phantom)
 #   4. tar czf <id>.tar.gz = rootfs.img + kernel + initrd.img + qemu-system-aarch64
+#
+# ⚠️ docker run precisa de `-i` para ler o script via stdin (bash -s) — sem -i o
+# stdin é /dev/null e o container roda um script VAZIO (exit 0) sem instalar nada.
 #
 # O qemu-system-aarch64 DEVE já estar em /tmp (o workflow baixa da release
 # distro-phantom) — assim o pacote fica autocontido e o app não depende do
@@ -22,13 +25,16 @@ PM="$3"
 EXTRA="$4"
 PKGS="$5"
 DIVERT="$6"
+SHELL_BIN="${7:-bash}"
 
-echo "=== [$ID] construindo rootfs a partir de $IMAGE (pm=$PM) ==="
+echo "=== [$ID] construindo rootfs a partir de $IMAGE (pm=$PM, shell=$SHELL_BIN) ==="
 
-docker run --platform linux/arm64 \
+docker run -i --platform linux/arm64 \
   -e PM="$PM" -e DIVERT="$DIVERT" -e EXTRA="$EXTRA" -e PKGS="$PKGS" \
-  --name "$ID" "$IMAGE" bash -s <<'EOF'
-set -euo pipefail
+  --name "$ID" "$IMAGE" "$SHELL_BIN" -s <<'EOF'
+set -eu
+# pipefail é bash-only; ash (alpine) ignora em silêncio.
+set -o pipefail 2>/dev/null || true
 export DEBIAN_FRONTEND=noninteractive
 
 if [ "$PM" = "apt" ]; then
@@ -60,8 +66,8 @@ docker export "$ID" | tar -xf - -C /tmp/rootfs
 docker rm -f "$ID" >/dev/null 2>&1 || true
 
 echo "=== [$ID] capturando kernel + initrd ==="
-K=$(ls /tmp/rootfs/boot/vmlinuz-* 2>/dev/null | head -1)
-I=$(ls /tmp/rootfs/boot/initrd.img-* /tmp/rootfs/boot/initramfs-* 2>/dev/null | head -1)
+K=$(ls /tmp/rootfs/boot/vmlinuz-* 2>/dev/null | head -1 || true)
+I=$(ls /tmp/rootfs/boot/initrd.img-* /tmp/rootfs/boot/initramfs-* 2>/dev/null | head -1 || true)
 if [ -z "$K" ]; then echo "❌ [$ID] kernel não encontrado em /boot"; exit 1; fi
 if [ -z "$I" ]; then echo "❌ [$ID] initrd não encontrado em /boot"; exit 1; fi
 cp -L "$K" /tmp/kernel
