@@ -6,6 +6,7 @@
 > **Build local:** ❌ sem SDK Android no Termux/PRoot → **GitHub Actions**
 >
 > 📋 **TODOS OS PEDIDOS DO USUÁRIO + status real:** ver `docs/REQUESTS-USUARIO.md`
+> ✅ **TODAS AS TAREFAS EM ABERTO (lista definitiva):** ver `docs/TASKS-EM-ABERTO.md`
 > ⚠️ **LEIA ANTES DE MEXER NA UI:** o usuário reverteu um polish automático de UI — consulte sempre antes
 
 ---
