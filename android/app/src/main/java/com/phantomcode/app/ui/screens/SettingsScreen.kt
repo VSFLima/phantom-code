@@ -302,7 +302,8 @@ fun SettingsScreen() {
 
             // ── Tamanho da fonte do terminal (quebra de linha) ──
             Spacer(Modifier.height(14.dp))
-            val terminalPrefs = remember { TerminalPrefs(LocalContext.current) }
+            val terminalContext = LocalContext.current
+            val terminalPrefs = remember { TerminalPrefs(terminalContext) }
             var terminalFontSize by remember { mutableStateOf(terminalPrefs.fontSizeSp) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Tamanho da fonte (${terminalFontSize} dp)", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
