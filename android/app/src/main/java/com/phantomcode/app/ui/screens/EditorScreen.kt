@@ -80,6 +80,7 @@ import com.phantomcode.app.data.LocalServer
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.data.EditorPrefs
+import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.git.GitStatus
 import com.phantomcode.app.data.remote.FtpClient
@@ -131,6 +132,7 @@ fun EditorScreen(
     val workspace = remember { WorkspaceManager(context) }
     val session = remember { SessionManager(context) }
     val editorPrefs = remember { EditorPrefs(context) }
+    val backup = remember { BackupManager(context) }
     val git = remember { GitManager(context) }
     val vm = LocalVm.current
     val fileName = path.substringAfterLast('/')
@@ -168,6 +170,29 @@ fun EditorScreen(
     var serverRunning by remember { mutableStateOf(LocalServer.isRunning()) }
     var vmServerBusy by remember { mutableStateOf(false) }
     var vmServerUp by remember { mutableStateOf(false) }
+
+    // Exportar o PROJETO inteiro como ZIP (P2.2 — SAF): mesmo fluxo do backup,
+    // mas limitado ao projeto do arquivo aberto (leva .git junto p/ histórico).
+    var exportZipBusy by remember { mutableStateOf(false) }
+    val exportZipLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            exportZipBusy = true
+            // O projeto é a 1ª pasta do caminho do arquivo (ex.: "proj/src/main.kt" → "proj");
+            // arquivos na raiz caem no backup do workspace inteiro.
+            val projectName = path.split('/').firstOrNull { it.isNotBlank() }
+            scope.launch {
+                val result = if (projectName != null && workspace.resolve(projectName).isDirectory) {
+                    backup.backupProject(uri, projectName)
+                } else {
+                    backup.createBackup(uri)
+                }
+                exportZipBusy = false
+                snackbar.showSnackbar("${result.message}${if (result.ok) " · ${result.fileCount} arquivos" else ""}")
+            }
+        }
+    }
 
     // Download do arquivo atual para o aparelho (P2.2 — SAF)
     val downloadLauncher = rememberLauncherForActivityResult(
@@ -677,6 +702,15 @@ fun EditorScreen(
                             },
                         )
                         DropdownMenuItem(
+                            text = { Text(if (exportZipBusy) "Exportando projeto…" else "Exportar projeto (ZIP)…") },
+                            enabled = !exportZipBusy,
+                            onClick = {
+                                actionsOpen = false
+                                val base = path.substringBeforeLast('/').substringAfterLast('/').ifBlank { "projeto" }
+                                exportZipLauncher.launch("$base.zip")
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text(if (ftpBusy) "Enviando…" else "Upload FTP") },
                             enabled = !ftpBusy,
                             onClick = {
@@ -946,6 +980,10 @@ fun EditorScreen(
                                 mainHandler.post {
                                     view.evaluateJavascript(js, null)
                                     applyEditorPrefs(view)
+                                    // Foco no editor para o teclado virtual abrir ao tocar (Fix teclado):
+                                    // foca o conteúdo do CodeMirror assim que a página termina de carregar.
+                                    view.evaluateJavascript("window.PhantomEditor.focus()", null)
+                                    runCatching { view.requestFocus() }
                                     lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
                                 }
                             }

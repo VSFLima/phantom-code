@@ -134,7 +134,6 @@ fun PhantomApp() {
     val currentRoute = backStackEntry?.destination?.route ?: Routes.HOME
 
     var editorTabs by remember { mutableStateOf<List<String>>(emptyList()) }
-    var autoOpenedTerminal by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(!session.onboardingDone) }
     var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }
 
@@ -181,22 +180,17 @@ fun PhantomApp() {
     }
 
     // ── Auto-início da VM (como o Termux) ───────────────────────
-    // Ao abrir o app, a distro ativa sobe sozinha em background e o Terminal
-    // fica disponível. A notificação do Foreground Service permite encerrar a
-    // sessão sem transformar o app em um shell permanente.
+    // Ao abrir o app, a distro ativa sobe sozinha em background — o usuário
+    // vê o estado pelo pill do topo / TerminalDock do rodapé e abre o terminal
+    // quando quiser (sem navegação automática intrusiva). A notificação do
+    // Foreground Service permite encerrar a sessão sem shell permanente.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 val active = vm.distros.activeId
-                if (active != null && !vm.qemu.running) {
+                if (active != null && !vm.qemu.running && !vm.qemu.autoStartSuppressed) {
                     scope.launch { vm.qemu.start() }
-                    if (!autoOpenedTerminal) {
-                        autoOpenedTerminal = true
-                        navController.navigate(Routes.TERMINAL) {
-                            launchSingleTop = true
-                        }
-                    }
                 }
             }
         }

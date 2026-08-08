@@ -75,6 +75,45 @@ class BackupManager(context: Context) {
         }.getOrElse { BackupResult(false, it.message ?: "Falha no backup") }
     }
 
+    /**
+     * Gera o ZIP de UM projeto (pasta do workspace) em `uri` (SAF). Mesma
+     * lógica do backup completo, mas limitado a `projectName` — inclui o
+     * repositório Git se existir (para levar histórico junto). Roda em IO.
+     */
+    suspend fun backupProject(uri: Uri, projectName: String): BackupResult = withContext(Dispatchers.IO) {
+        runCatching {
+            val projectDir = workspace.resolve(projectName)
+            if (!projectDir.isDirectory) return@withContext BackupResult(false, "Projeto não encontrado")
+            val out: OutputStream = contentResolver.openOutputStream(uri, "wt")
+                ?: return@withContext BackupResult(false, "Não foi possível abrir o destino")
+            out.use { stream ->
+                ZipOutputStream(stream).use { zip ->
+                    val manifest = JSONObject()
+                        .put("app", "phantom-code")
+                        .put("type", "project-backup")
+                        .put("project", projectName)
+                        .put("created_at", System.currentTimeMillis())
+                    val files = ArrayList<String>()
+
+                    projectDir.walkTopDown().filter { it.isFile && it.name != ".gitkeep" }.forEach { f ->
+                        val rel = f.relativeTo(projectDir).path.replace(File.separatorChar, '/')
+                        files.add(rel)
+                        zip.putNextEntry(ZipEntry(rel))
+                        f.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+
+                    manifest.put("files", files)
+                    zip.putNextEntry(ZipEntry("phantom-manifest.json"))
+                    zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+
+                    BackupResult(true, "Projeto exportado", fileCount = files.size)
+                }
+            }
+        }.getOrElse { BackupResult(false, it.message ?: "Falha ao exportar") }
+    }
+
     /** Restaura de `uri` (SAF) com merge no workspace. Roda em IO. */
     suspend fun restore(uri: Uri): BackupResult = withContext(Dispatchers.IO) {
         runCatching {

@@ -96,13 +96,19 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
         colors.cursorBackground.toArgb(),
     )
 
-    // Ciclo de vida da EmulatorView (IME + blink + redesenho)
+    // Ciclo de vida da EmulatorView (IME + blink + redesenho). O requestFocus
+    // é assíncrono — postamos para garantir que o foco seja aplicado depois do
+    // layout e o teclado virtual (IME) abra de fato ao entrar no terminal.
     LaunchedEffect(termView, attachedSession) {
-        termView?.let {
+        termView?.let { view ->
             runCatching {
-                it.onResume()
-                it.requestFocus()
-                keyboard?.show()
+                view.onResume()
+                view.post {
+                    runCatching {
+                        view.requestFocus()
+                        keyboard?.show()
+                    }
+                }
             }
         }
     }
@@ -261,7 +267,13 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                             runCatching {
                                 view.attachSession(tab.session)
                                 attachedSession = tab.session
-                                view.requestFocus()
+                                // Foco + teclado também após anexar a sessão (novas abas):
+                                view.post {
+                                    runCatching {
+                                        view.requestFocus()
+                                        keyboard?.show()
+                                    }
+                                }
                                 // Recalcula colunas/linhas após o attach — garante que a
                                 // quebra de linha acompanhe a largura real da view.
                                 view.post { runCatching { view.updateSize(true) } }

@@ -16,6 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -103,17 +104,89 @@ class GitManager(context: Context) {
         runCatching { Git.init().setDirectory(dir).call().close() }.isSuccess
     }
 
-    /** Clona em `target`; retorna null em sucesso ou mensagem de erro. */
+    /**
+     * Clona em `target`; retorna null em sucesso ou mensagem de erro.
+     *
+     * O checkout do JGit pode terminar sem materializar os arquivos (só a
+     * árvore de pastas) em alguns dispositivos. Para garantir, após o clone
+     * forçamos um checkout da branch HEAD quando o diretório ficou vazio.
+     */
     suspend fun clone(url: String, target: File): String? = withContext(Dispatchers.IO) {
         runCatching {
-            Git.cloneRepository()
+            val cloned = Git.cloneRepository()
                 .setURI(url.trim())
                 .setDirectory(target)
+                .setCloneAllBranches(true)
                 .setCredentialsProvider(credentials())
                 .call()
-                .close()
+            // Pós-clone: se só existe .git (checkout não materializado), refaz o
+            // checkout forçado da branch atual para trazer TODOS os arquivos.
+            if (materializedCount(target) == 0) {
+                val branch = runCatching { cloned.repository.branch }.getOrNull() ?: "main"
+                cloned.checkout().setName(branch).setForce(true).call()
+            }
+            cloned.close()
             null
         }.getOrElse { it.message }
+    }
+
+    /**
+     * Baixa o projeto inteiro via ZIP da API do GitHub (zipball) e extrai em
+     * `target`. Traz TODOS os arquivos de todas as pastas — é o caminho mais
+     * confiável quando o clone JGit falha ou vem pela metade. Retorna null em
+     * sucesso ou mensagem de erro.
+     */
+    suspend fun cloneViaZip(repo: GithubRepo, target: File): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val branch = repo.defaultBranch.ifBlank { "main" }
+            val url = URL("https://api.github.com/repos/${repo.fullName}/zipball/$branch")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 60000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                token?.let { setRequestProperty("Authorization", "Bearer $it") }
+            }
+            if (conn.responseCode !in 200..299) {
+                throw IllegalStateException("HTTP ${conn.responseCode} — confira o token (repo privado precisa de escopo repo)")
+            }
+            target.mkdirs()
+            ZipInputStream(conn.inputStream).use { zip ->
+                val buffer = ByteArray(64 * 1024)
+                val root = target.canonicalFile
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    // O zipball vem com uma pasta raiz "owner-repo-branch/" — descarta o 1º segmento.
+                    val rel = entry.name.substringAfter('/').ifBlank {
+                        zip.closeEntry()
+                        continue
+                    }
+                    val out = File(target, rel).canonicalFile
+                    check(out == root || out.path.startsWith(root.path + File.separator)) { "Entrada ZIP inválida" }
+                    if (entry.isDirectory) {
+                        out.mkdirs()
+                    } else {
+                        out.parentFile?.mkdirs()
+                        out.outputStream().use { o ->
+                            var count: Int
+                            while (zip.read(buffer).also { count = it } != -1) {
+                                o.write(buffer, 0, count)
+                            }
+                        }
+                    }
+                    zip.closeEntry()
+                }
+            }
+            null
+        }.getOrElse { it.message ?: "Falha no download ZIP" }
+    }
+
+    /** Quantos arquivos (não .git) existem em [dir] — para detectar checkout vazio. */
+    private fun materializedCount(dir: File): Int {
+        val gitDir = File(dir, ".git")
+        return dir.walkTopDown()
+            .onEnter { it != gitDir && !it.path.startsWith(gitDir.path + File.separator) }
+            .count { it.isFile }
     }
 
     suspend fun commit(dir: File, message: String): String? = withContext(Dispatchers.IO) {

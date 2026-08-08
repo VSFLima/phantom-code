@@ -124,15 +124,28 @@ fun GitScreen() {
         }
         busy = true
         scope.launch {
+            // 1º tenta o clone JGit (completo, com .git para push/pull).
             val error = git.clone("https://github.com/${repo.fullName}.git", target)
+            // Se falhou OU veio sem arquivos (só pastas), cai no ZIP da API,
+            // que traz TODOS os arquivos de todas as pastas com certeza.
+            val ok = error == null && runCatching {
+                target.walkTopDown().any { it.isFile && !it.path.contains(File.separator + ".git" + File.separator) }
+            }.getOrDefault(false)
+            val finalError = if (ok) {
+                null
+            } else {
+                // Garante diretório limpo para o ZIP
+                runCatching { target.deleteRecursively() }
+                git.cloneViaZip(repo, target)
+            }
             busy = false
-            if (error == null) {
+            if (finalError == null) {
                 projects = vm.workspace.projects()
                 selected = repo.name
                 tick++
                 notify("Projeto baixado: ${repo.name}")
             } else {
-                notify("Erro ao baixar: $error")
+                notify("Erro ao baixar: $finalError")
             }
         }
     }
@@ -231,7 +244,7 @@ fun GitScreen() {
                             Spacer(Modifier.height(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("branch: ${repo.defaultBranch}", color = palette.textSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.weight(1f))
-                                PhantomPrimaryButton(
+                                                        PhantomPrimaryButton(
                                     text = "Baixar projeto",
                                     icon = Icons.Filled.CloudDownload,
                                     enabled = !busy,
