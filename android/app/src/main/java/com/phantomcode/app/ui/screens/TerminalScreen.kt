@@ -41,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +52,7 @@ import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PhantomLogo
+import com.phantomcode.app.ui.components.PhantomTerminalView
 import com.phantomcode.app.ui.components.StylePickerDialog
 import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.LocalTerminalStyleController
@@ -63,6 +63,8 @@ import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
 import jackpal.androidterm.emulatorview.TermSession
 import kotlinx.coroutines.launch
+import android.view.inputmethod.InputMethodManager
+import android.content.Context
 
 /**
  * Terminal (T17): emulador VT100 real (jackpal emulatorview) com abas.
@@ -78,7 +80,6 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     val palette = LocalThemeController.current.currentPalette()
     val terminalStyle = LocalTerminalStyleController.current
     val tc = terminalStyle.colors(palette)
-    val keyboard = LocalSoftwareKeyboardController.current
     val terminal = vm.qemu.terminal
     val scope = rememberCoroutineScope()
     val tabScroll = rememberScrollState()
@@ -87,6 +88,19 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     var termView by remember { mutableStateOf<EmulatorView?>(null) }
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
     var themePickerOpen by remember { mutableStateOf(false) }
+
+    // Abre o teclado do Android via InputMethodManager (o keyboard?.show() do
+    // Compose falha com a EmulatorView nativa — o IME precisa ser acionado
+    // diretamente depois que a view tem foco).
+    fun forceKeyboard(view: View) {
+        view.post {
+            runCatching {
+                view.requestFocus()
+                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
 
     /** Constrói o ColorScheme do jackpal com as 4 cores do tema atual. */
     fun schemeOf(colors: TerminalThemeColors): ColorScheme = ColorScheme(
@@ -103,12 +117,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
         termView?.let { view ->
             runCatching {
                 view.onResume()
-                view.post {
-                    runCatching {
-                        view.requestFocus()
-                        keyboard?.show()
-                    }
-                }
+                forceKeyboard(view)
             }
         }
     }
@@ -234,7 +243,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 // attachSession internamente e CRASHA com session null. Usamos o
                 // construtor XML (sem session) + setDensity/attachSession manuais —
                 // a sessão é anexada no `update` abaixo quando há aba ativa.
-                runCatching { EmulatorView(ctx, null).apply {
+                runCatching { PhantomTerminalView(ctx).apply {
                     isFocusableInTouchMode = true
                     setDensity(ctx.resources.displayMetrics)
                     // Tamanho da fonte (dp) define as colunas por linha — fonte
@@ -268,12 +277,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                                 view.attachSession(tab.session)
                                 attachedSession = tab.session
                                 // Foco + teclado também após anexar a sessão (novas abas):
-                                view.post {
-                                    runCatching {
-                                        view.requestFocus()
-                                        keyboard?.show()
-                                    }
-                                }
+                                forceKeyboard(view)
                                 // Recalcula colunas/linhas após o attach — garante que a
                                 // quebra de linha acompanhe a largura real da view.
                                 view.post { runCatching { view.updateSize(true) } }
