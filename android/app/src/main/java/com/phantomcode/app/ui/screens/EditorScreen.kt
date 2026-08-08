@@ -10,6 +10,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +20,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +33,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +52,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.phantomcode.app.data.FileEntry
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.data.git.GitManager
@@ -84,6 +98,7 @@ import java.io.File
  *  - Preview no navegador interno (P1.4).
  */
 @SuppressLint("SetJavaScriptEnabled")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     path: String,
@@ -93,6 +108,8 @@ fun EditorScreen(
     onCloseTab: (String) -> Unit = {},
     onOpenFile: (String) -> Unit = {},
     onPreviewUrl: (String) -> Unit = {},
+    onOpenTerminalIn: (String) -> Unit = {},
+    onOpenExplorer: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val palette = LocalThemeController.current.currentPalette()
@@ -117,6 +134,10 @@ fun EditorScreen(
     var cursorLabel by remember { mutableStateOf("") }
     var lastSeenModified by remember { mutableStateOf(0L) }
     var diskChanged by remember { mutableStateOf(false) }
+    var progKeyboardOpen by remember { mutableStateOf(false) }
+    var explorerOpen by remember { mutableStateOf(false) }
+    val explorerExpanded = remember { mutableStateMapOf<String, Boolean>() }
+    var explorerTick by remember { mutableStateOf(0) }
 
     // ── Git integrado (P1.1) ──
     var gitRoot by remember { mutableStateOf<File?>(null) }
@@ -402,6 +423,65 @@ fun EditorScreen(
                             },
                         )
                         DropdownMenuItem(
+                            text = { Text("Autocompletar") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.complete()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Dobrar bloco") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.fold()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Desdobrar bloco") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.unfold()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Dobrar tudo") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.foldAll()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Desdobrar tudo") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.unfoldAll()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Teclado de programação") },
+                            onClick = {
+                                actionsOpen = false
+                                progKeyboardOpen = !progKeyboardOpen
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Terminal aqui (projeto)") },
+                            onClick = {
+                                actionsOpen = false
+                                val dir = runCatching {
+                                    workspace.resolve(path).parentFile?.absolutePath ?: workspace.root.absolutePath
+                                }.getOrDefault(workspace.root.absolutePath)
+                                onOpenTerminalIn(dir)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Explorer do projeto") },
+                            onClick = {
+                                actionsOpen = false
+                                explorerOpen = !explorerOpen
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Selecionar tudo") },
                             onClick = {
                                 actionsOpen = false
@@ -451,6 +531,21 @@ fun EditorScreen(
                         )
                     }
                 }
+            }
+
+            // ── Explorer lateral (P2.1) ──
+            if (explorerOpen) {
+                EditorExplorer(
+                    workspace = workspace,
+                    expanded = explorerExpanded,
+                    tick = explorerTick,
+                    onToggle = { rel ->
+                        explorerExpanded[rel] = explorerExpanded[rel] != true
+                        explorerTick++
+                    },
+                    onRefresh = { explorerTick++ },
+                    onOpenFile = onOpenFile,
+                )
             }
 
             // ── Abas ──
@@ -586,6 +681,36 @@ fun EditorScreen(
                     )
                     IconButton(onClick = { searchOpen = false }) {
                         Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = palette.textSecondary)
+                    }
+                }
+            }
+
+            // ── Teclado extra de programação (barra de símbolos) ──
+            if (progKeyboardOpen) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(palette.surfaceAlt)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val symbols = listOf("{", "}", "(", ")", "[", "]", "<", ">", ";", ":", ",", ".", "=", "+", "-", "*", "/", "!", "?", "&", "|", "\"", "'", "#", "@", "_", "~", "\\", "%", "^")
+                    symbols.forEach { sym ->
+                        Text(
+                            text = sym,
+                            color = palette.textPrimary,
+                            fontSize = 14.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .padding(end = 6.dp)
+                                .border(1.dp, palette.border.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                .clickable {
+                                    val escaped = JSONObject.quote(sym)
+                                    webView?.evaluateJavascript("window.PhantomEditor.insertText($escaped)", null)
+                                }
+                                .padding(horizontal = 7.dp, vertical = 4.dp),
+                        )
                     }
                 }
             }
@@ -754,4 +879,105 @@ private fun unquoteJs(jsonString: String?): String {
     if (jsonString == null || jsonString == "null") return ""
     return runCatching { JSONObject("{\"v\":$jsonString}").getString("v") }
         .getOrDefault(jsonString.removeSurrounding("\""))
+}
+
+/** Nó da árvore do explorer lateral do editor. */
+private data class EditorTreeNode(val entry: FileEntry, val depth: Int)
+
+/** Constrói a árvore visível do workspace (pastas expandidas conforme [expanded]). */
+private fun editorVisibleTree(ws: WorkspaceManager, expanded: Map<String, Boolean>): List<EditorTreeNode> {
+    val out = mutableListOf<EditorTreeNode>()
+    fun walk(rel: String, depth: Int) {
+        ws.list(rel).forEach { e ->
+            out += EditorTreeNode(e, depth)
+            if (e.isDir && expanded[e.relPath] == true) walk(e.relPath, depth + 1)
+        }
+    }
+    walk("", 0)
+    return out
+}
+
+/** Explorer lateral (P2.1): árvore de arquivos ao lado do editor. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun EditorExplorer(
+    workspace: WorkspaceManager,
+    expanded: Map<String, Boolean>,
+    tick: Int,
+    onToggle: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onOpenFile: (String) -> Unit,
+) {
+    val palette = LocalThemeController.current.currentPalette()
+    val tree = remember(tick, expanded) { editorVisibleTree(workspace, expanded) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(palette.surface)
+            .border(width = 1.dp, color = palette.border.copy(alpha = 0.5f), shape = RoundedCornerShape(0.dp)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Projeto", color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Icon(
+                Icons.Filled.Refresh,
+                contentDescription = "Atualizar",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp).clickable(onClick = onRefresh),
+            )
+        }
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp)) {
+            items(tree, key = { it.entry.relPath }) { node ->
+                val e = node.entry
+                val isOpen = e.isDir && expanded[e.relPath] == true
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = {
+                                if (e.isDir) onToggle(e.relPath) else onOpenFile(e.relPath)
+                            },
+                            onLongClick = {},
+                        )
+                        .padding(start = 6.dp + (node.depth * 14).dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (e.isDir) {
+                        Icon(
+                            if (isOpen) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = palette.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Icon(
+                            if (isOpen) Icons.Filled.FolderOpen else Icons.Filled.Folder,
+                            contentDescription = null,
+                            tint = palette.accentPrimary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    } else {
+                        Spacer(Modifier.width(16.dp))
+                        Icon(
+                            Icons.Filled.Description,
+                            contentDescription = null,
+                            tint = palette.accentSecondary.copy(alpha = 0.8f),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        e.name,
+                        color = if (e.isDir) palette.textPrimary else palette.textSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
 }

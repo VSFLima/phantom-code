@@ -277,6 +277,10 @@ fun PhantomApp() {
                         },
                         onOpenFile = ::openEditor,
                         onPreviewUrl = { url -> navController.navigate(Routes.browserRoute(url)) },
+                        onOpenTerminalIn = { cwd ->
+                            vm.qemu.terminal.addShellTab(cwd)
+                            navController.navigate(Routes.TERMINAL)
+                        },
                     )
                 }
             }

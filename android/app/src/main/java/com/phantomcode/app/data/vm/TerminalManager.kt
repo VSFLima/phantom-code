@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import jackpal.androidterm.emulatorview.TermSession
+import java.io.File
 
 /** Tipo de aba do terminal: console da VM, shell local ou log do app. */
 enum class TerminalTabKind { QEMU, SHELL, LOG }
@@ -54,8 +55,9 @@ class TerminalManager {
     }
 
     /** Nova aba com shell local do Android (mksh) com ambiente mínimo (TERM/PATH). */
-    fun addShellTab() {
+    fun addShellTab(cwd: String? = null) {
         val pb = ProcessBuilder("/system/bin/sh").redirectErrorStream(true)
+        if (!cwd.isNullOrBlank()) runCatching { pb.directory(File(cwd)) }
         pb.environment().putAll(
             mapOf(
                 "TERM" to "xterm-256color",

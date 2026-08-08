@@ -23,6 +23,15 @@
   window.PhantomEditor.moveLineDown = () => send('ArrowDown', 'ArrowDown', { altKey: true, ctrlKey: false });
   window.PhantomEditor.toggleComment = () => send('/', 'Slash');
 
+  // ── Autocomplete e code folding (P3, estilo SPCK) ──
+  // Ctrl+Espaço abre o autocomplete; Ctrl+Shift+[ / ] dobra/desdobra o bloco;
+  // Ctrl+Alt+[ / ] dobra/desdobra tudo (keymaps do CodeMirror).
+  window.PhantomEditor.complete = () => send(' ', 'Space');
+  window.PhantomEditor.fold = () => send('[', 'BracketLeft', { shiftKey: true });
+  window.PhantomEditor.unfold = () => send(']', 'BracketRight', { shiftKey: true });
+  window.PhantomEditor.foldAll = () => send('[', 'BracketLeft', { altKey: true });
+  window.PhantomEditor.unfoldAll = () => send(']', 'BracketRight', { altKey: true });
+
   // ── Snippets estilo SPCK: digitar a palavra-chave + Tab insere o bloco ──
   const SNIPPETS = {
     html5: '<!DOCTYPE html>\n<html lang="pt-BR">\n<head>\n  <meta charset="utf-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1" />\n  <title>Novo documento</title>\n</head>\n<body>\n\n</body>\n</html>',
