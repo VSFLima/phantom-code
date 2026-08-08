@@ -276,6 +276,7 @@ fun PhantomApp() {
                             if (tab == path) navController.popBackStack()
                         },
                         onOpenFile = ::openEditor,
+                        onPreviewUrl = { url -> navController.navigate(Routes.browserRoute(url)) },
                     )
                 }
             }

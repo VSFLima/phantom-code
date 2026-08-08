@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.TerminalPrefs
 import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
@@ -66,6 +68,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
+    val context = LocalContext.current
     val vm = LocalVm.current
     val palette = LocalThemeController.current.currentPalette()
     val terminalStyle = LocalTerminalStyleController.current
@@ -74,6 +77,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     val terminal = vm.qemu.terminal
     val scope = rememberCoroutineScope()
     val tabScroll = rememberScrollState()
+    val terminalPrefs = remember { TerminalPrefs(context) }
 
     var termView by remember { mutableStateOf<EmulatorView?>(null) }
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
@@ -204,6 +208,9 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 runCatching { EmulatorView(ctx, null).apply {
                     isFocusableInTouchMode = true
                     setDensity(ctx.resources.displayMetrics)
+                    // Tamanho da fonte (dp) define as colunas por linha — fonte
+                    // menor = mais texto por linha (quebra de linha organizada).
+                    runCatching { setTextSize(terminalPrefs.fontSizeSp) }
                     // Terminal segue a paleta do usuário (Design System v2):
                     // fundo e texto nas cores do app, com o verde de sucesso no prompt.
                     runCatching {
@@ -230,9 +237,13 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                         if (tab != null && attachedSession !== tab.session) {
                             runCatching {
                                 view.setColorScheme(ColorScheme(terminalColors.first.toArgb(), terminalColors.second.toArgb()))
+                                view.setTextSize(terminalPrefs.fontSizeSp)
                                 view.attachSession(tab.session)
                                 attachedSession = tab.session
                                 view.requestFocus()
+                                // Recalcula colunas/linhas após o attach — garante que a
+                                // quebra de linha acompanhe a largura real da view.
+                                view.post { runCatching { view.updateSize(true) } }
                             }
                         }
                     }

@@ -229,6 +229,11 @@ fun BrowserScreen(onBack: () -> Unit, initialUrl: String? = null) {
                     settings.domStorageEnabled = true
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
+                    // Preview de arquivos locais (editor → navegador): permite
+                    // abrir file:// com CSS/JS relativos na pasta do projeto.
+                    settings.setAllowFileAccess(true)
+                    settings.setAllowFileAccessFromFileURLs(true)
+                    settings.setAllowUniversalAccessFromFileURLs(true)
                     setBackgroundColor(palette.background.toArgb())
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = false

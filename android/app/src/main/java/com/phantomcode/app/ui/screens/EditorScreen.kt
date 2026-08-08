@@ -8,6 +8,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,21 +52,36 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
+import com.phantomcode.app.data.git.GitManager
+import com.phantomcode.app.data.git.GitStatus
 import com.phantomcode.app.ui.theme.LocalThemeController
+import com.phantomcode.app.ui.components.PhantomConfirmDialog
 import com.phantomcode.app.ui.components.PhantomDialog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Editor (T12/T13): CodeMirror 6 no WebView + ponte JS↔Kotlin.
- * Auto-save com debounce de 800ms (JS), salvar como e salvar antes de fechar.
+ *
+ * Funcionalidades estilo SPCK (docs/TAREFA-EDITOR-IDE.md):
+ *  - Auto-save com debounce de 800ms (JS);
+ *  - Ir para linha, indicador linha/coluna;
+ *  - Atalhos de teclado (Ctrl+S/F/G/H/D, Alt+setas, Ctrl+/);
+ *  - Snippets com Tab;
+ *  - Watcher de disco (P0.2): recarrega quando o arquivo muda fora do editor;
+ *  - Git integrado (P1.1): status + commit/push/pull do projeto atual;
+ *  - Preview no navegador interno (P1.4).
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -75,11 +92,13 @@ fun EditorScreen(
     onClose: () -> Unit,
     onCloseTab: (String) -> Unit = {},
     onOpenFile: (String) -> Unit = {},
+    onPreviewUrl: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val palette = LocalThemeController.current.currentPalette()
     val workspace = remember { WorkspaceManager(context) }
     val session = remember { SessionManager(context) }
+    val git = remember { GitManager(context) }
     val fileName = path.substringAfterLast('/')
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val snackbar = remember { SnackbarHostState() }
@@ -94,6 +113,16 @@ fun EditorScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var replacement by remember { mutableStateOf("") }
+    var gotoOpen by remember { mutableStateOf(false) }
+    var cursorLabel by remember { mutableStateOf("") }
+    var lastSeenModified by remember { mutableStateOf(0L) }
+    var diskChanged by remember { mutableStateOf(false) }
+
+    // ── Git integrado (P1.1) ──
+    var gitRoot by remember { mutableStateOf<File?>(null) }
+    var gitStatus by remember { mutableStateOf<GitStatus?>(null) }
+    var commitOpen by remember { mutableStateOf(false) }
+    var gitBusy by remember { mutableStateOf(false) }
 
     val language = when (fileName.substringAfterLast('.', "").lowercase()) {
         "kt", "kts" -> "Kotlin"
@@ -105,6 +134,14 @@ fun EditorScreen(
         "md" -> "Markdown"
         "sh", "bash" -> "Shell"
         else -> "Texto"
+    }
+
+    fun reloadFromDisk() {
+        val wv = webView ?: return
+        val content = runCatching { workspace.readText(path) }.getOrDefault("")
+        val js = "window.PhantomEditor.setValue(${JSONObject.quote(content)});window.PhantomEditor.focus();"
+        wv.evaluateJavascript(js, null)
+        lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
     }
 
     fun replaceAll() {
@@ -129,12 +166,34 @@ fun EditorScreen(
             fun save(text: String) {
                 runCatching { workspace.writeText(path, text) }
                 session.lastOpenPath = path
-                mainHandler.post { saved = true }
+                val lm = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
+                mainHandler.post {
+                    saved = true
+                    lastSeenModified = lm
+                }
             }
 
             @JavascriptInterface
             fun dirty() {
                 mainHandler.post { saved = false }
+            }
+
+            /** Ctrl+S no JS → aviso de salvo. */
+            @JavascriptInterface
+            fun saved() {
+                scope.launch { snackbar.showSnackbar("Salvo") }
+            }
+
+            /** Ctrl+F / Ctrl+H no JS → abre o painel de busca. */
+            @JavascriptInterface
+            fun openSearch() {
+                mainHandler.post { searchOpen = true }
+            }
+
+            /** Ctrl+G no JS → abre o diálogo "ir para linha". */
+            @JavascriptInterface
+            fun openGoto() {
+                mainHandler.post { gotoOpen = true }
             }
         }
     }
@@ -152,6 +211,61 @@ fun EditorScreen(
         }
     }
 
+    // Watcher de disco (P0.2): a cada 3s compara o lastModified do arquivo.
+    LaunchedEffect(path) {
+        while (true) {
+            delay(3000)
+            val f = runCatching { workspace.resolve(path) }.getOrNull() ?: continue
+            val lm = f.lastModified()
+            if (lm != 0L && lastSeenModified != 0L && lm != lastSeenModified) {
+                if (saved) {
+                    reloadFromDisk()
+                    scope.launch { snackbar.showSnackbar("Arquivo atualizado no disco — recarregado") }
+                } else {
+                    diskChanged = true
+                }
+            }
+        }
+    }
+
+    // Indicador linha/coluna (P1.3) — polling leve a cada 1s.
+    LaunchedEffect(path) {
+        while (true) {
+            delay(1000)
+            webView?.evaluateJavascript("window.PhantomEditor.getCursor()") { value ->
+                runCatching {
+                    val obj = JSONObject("{\"c\":$value}").getJSONObject("c")
+                    val line = obj.getInt("line")
+                    val col = obj.getInt("col")
+                    cursorLabel = "L:$line C:$col"
+                }
+            }
+        }
+    }
+
+    // Descobre a raiz do projeto Git a partir do arquivo aberto (P1.1).
+    LaunchedEffect(path) {
+        gitRoot = runCatching {
+            var dir = workspace.resolve(path).parentFile ?: workspace.root
+            while (dir != null && dir != workspace.root.parentFile) {
+                if (File(dir, ".git").isDirectory) return@runCatching dir
+                dir = dir.parentFile
+            }
+            null
+        }.getOrNull()
+    }
+
+    // Polling do status Git (P1.1) — a cada 5s.
+    LaunchedEffect(gitRoot) {
+        while (true) {
+            val root = gitRoot
+            if (root != null) {
+                gitStatus = git.status(root)
+            }
+            delay(5000)
+        }
+    }
+
     // Destrói o WebView ao sair (evita vazamento de memória)
     DisposableEffect(Unit) {
         onDispose {
@@ -164,263 +278,349 @@ fun EditorScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(palette.background)) {
-            // Barra do editor: voltar · nome · indicador de salvo · salvar
-         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(palette.surface)
-                .drawBehind {
-                    val y = size.height - 1.dp.toPx()
-                    drawLine(palette.border.copy(alpha = 0.5f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
-                }
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Filled.ArrowBack,
-                contentDescription = "Voltar",
-                tint = palette.textPrimary,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable { currentTextAndClose() }
-                    .padding(10.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    fileName,
-                    color = palette.textPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(6.dp)
-                            .background(if (saved) palette.success else palette.accentBright, CircleShape)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        if (saved) "Salvo" else "Editando…",
-                        color = if (saved) palette.success else palette.accentBright,
-                        fontSize = 10.sp,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(language, color = palette.textSecondary, fontSize = 10.sp)
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.Filled.Save,
-                contentDescription = "Salvar agora",
-                tint = palette.accentPrimary,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable {
-                        webView?.evaluateJavascript("window.PhantomEditor.getValue()") { value ->
-                            runCatching { workspace.writeText(path, unquoteJs(value)) }
-                            saved = true
-                            scope.launch { snackbar.showSnackbar("Salvo") }
-                        }
-                    }
-                    .padding(10.dp),
-            )
-            Box {
-                Icon(
-                    Icons.Filled.MoreVert,
-                    contentDescription = "Ações do arquivo",
-                    tint = palette.textSecondary,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clickable { actionsOpen = true }
-                        .padding(10.dp),
-                )
-                DropdownMenu(
-                    expanded = actionsOpen,
-                    onDismissRequest = { actionsOpen = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Buscar e substituir") },
-                        onClick = {
-                            actionsOpen = false
-                            searchOpen = true
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Desfazer") },
-                        onClick = {
-                            actionsOpen = false
-                            webView?.evaluateJavascript("window.PhantomEditor.undo()", null)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Refazer") },
-                        onClick = {
-                            actionsOpen = false
-                            webView?.evaluateJavascript("window.PhantomEditor.redo()", null)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Selecionar tudo") },
-                        onClick = {
-                            actionsOpen = false
-                            webView?.evaluateJavascript("window.PhantomEditor.selectAll()", null)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Salvar como…") },
-                        onClick = {
-                            actionsOpen = false
-                            saveAsInitial = path
-                            saveAsOpen = true
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Duplicar arquivo") },
-                        onClick = {
-                            actionsOpen = false
-                            val extension = fileName.substringAfterLast('.', "").let { if (it.isBlank()) "" else ".$it" }
-                            val base = fileName.removeSuffix(extension)
-                            val parent = path.substringBeforeLast('/', "")
-                            saveAsInitial = if (parent.isBlank()) "$base-copy$extension" else "$parent/$base-copy$extension"
-                            saveAsOpen = true
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Renomear arquivo") },
-                        onClick = {
-                            actionsOpen = false
-                            renameOpen = true
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Fechar editor") },
-                        onClick = {
-                            actionsOpen = false
-                            currentTextAndClose()
-                        },
-                    )
-                }
-            }
-         }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(palette.surface)
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            openTabs.forEach { tab ->
-                val selected = tab == path
-                Row(
-                    modifier = Modifier
-                        .padding(end = 6.dp)
-                        .background(
-                            if (selected) palette.surfaceAlt else palette.surface,
-                            RoundedCornerShape(4.dp),
-                        )
-                        .clickable { onSelectTab(tab) }
-                        .padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        tab.substringAfterLast('/'),
-                        color = if (selected) palette.accentPrimary else palette.textSecondary,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                    )
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Fechar ${tab.substringAfterLast('/')}",
-                        tint = palette.textSecondary,
-                        modifier = Modifier
-                            .padding(start = 6.dp)
-                            .size(16.dp)
-                            .clickable { onCloseTab(tab) }
-                            .padding(3.dp),
-                    )
-                }
-            }
-        }
-
-        if (searchOpen) {
+            // ── Barra do editor: voltar · nome · salvo · linha/coluna · salvar ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.surfaceAlt)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .background(palette.surface)
+                    .drawBehind {
+                        val y = size.height - 1.dp.toPx()
+                        drawLine(palette.border.copy(alpha = 0.5f), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BasicTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
-                    cursorBrush = SolidColor(palette.accentSecondary),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        if (searchQuery.isEmpty()) Text("Buscar…", color = palette.textSecondary, fontSize = 12.sp)
-                        inner()
-                    },
-                )
-                Spacer(Modifier.width(8.dp))
-                BasicTextField(
-                    value = replacement,
-                    onValueChange = { replacement = it },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
-                    cursorBrush = SolidColor(palette.accentSecondary),
-                    singleLine = true,
-                    decorationBox = { inner ->
-                        if (replacement.isEmpty()) Text("Substituir por…", color = palette.textSecondary, fontSize = 12.sp)
-                        inner()
-                    },
-                )
-                Text(
-                    "Trocar tudo",
-                    color = if (searchQuery.isBlank()) palette.border else palette.accentPrimary,
-                    fontSize = 11.sp,
+                Icon(
+                    Icons.Filled.ArrowBack,
+                    contentDescription = "Voltar",
+                    tint = palette.textPrimary,
                     modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .clickable(enabled = searchQuery.isNotBlank()) { replaceAll() },
+                        .size(40.dp)
+                        .clickable { currentTextAndClose() }
+                        .padding(10.dp),
                 )
-                IconButton(onClick = { searchOpen = false }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = palette.textSecondary)
-                }
-            }
-        }
-
-         // WebView com o CodeMirror 6 (preenche só o espaço abaixo da barra)
-        AndroidView(
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    setBackgroundColor(android.graphics.Color.BLACK)
-                    addJavascriptInterface(bridge, "AndroidBridge")
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, url: String?) {
-                            scope.launch(Dispatchers.IO) {
-                                val payload = JSONObject()
-                                    .put("value", workspace.readText(path))
-                                    .put("name", fileName)
-                                val js = "PhantomEditor.init(" +
-                                    "document.getElementById('editor')," +
-                                    "${payload.getString("value")}," +
-                                    "${payload.getString("name")});"
-                                mainHandler.post { view.evaluateJavascript(js, null) }
-                            }
+                Spacer(Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        fileName,
+                        color = palette.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(6.dp)
+                                .background(if (saved) palette.success else palette.accentBright, CircleShape)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (saved) "Salvo" else "Editando…",
+                            color = if (saved) palette.success else palette.accentBright,
+                            fontSize = 10.sp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(language, color = palette.textSecondary, fontSize = 10.sp)
+                        if (cursorLabel.isNotBlank()) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(cursorLabel, color = palette.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                         }
                     }
-                    loadUrl("file:///android_asset/editor/index.html")
                 }
-            },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            update = { webView = it },
-        )
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.Filled.Save,
+                    contentDescription = "Salvar agora",
+                    tint = palette.accentPrimary,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable {
+                            webView?.evaluateJavascript("window.PhantomEditor.getValue()") { value ->
+                                runCatching { workspace.writeText(path, unquoteJs(value)) }
+                                saved = true
+                                lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
+                                scope.launch { snackbar.showSnackbar("Salvo") }
+                            }
+                        }
+                        .padding(10.dp),
+                )
+                Box {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = "Ações do arquivo",
+                        tint = palette.textSecondary,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable { actionsOpen = true }
+                            .padding(10.dp),
+                    )
+                    DropdownMenu(
+                        expanded = actionsOpen,
+                        onDismissRequest = { actionsOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Buscar e substituir") },
+                            onClick = {
+                                actionsOpen = false
+                                searchOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Ir para linha…") },
+                            onClick = {
+                                actionsOpen = false
+                                gotoOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Desfazer") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.undo()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Refazer") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.redo()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Duplicar linha") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.duplicateLine()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Comentar / descomentar") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.toggleComment()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Selecionar tudo") },
+                            onClick = {
+                                actionsOpen = false
+                                webView?.evaluateJavascript("window.PhantomEditor.selectAll()", null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Preview no navegador") },
+                            onClick = {
+                                actionsOpen = false
+                                val url = runCatching { workspace.resolve(path).toURI().toString() }.getOrNull()
+                                if (url != null) onPreviewUrl(url) else scope.launch { snackbar.showSnackbar("Não foi possível abrir o preview") }
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Salvar como…") },
+                            onClick = {
+                                actionsOpen = false
+                                saveAsInitial = path
+                                saveAsOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Duplicar arquivo") },
+                            onClick = {
+                                actionsOpen = false
+                                val extension = fileName.substringAfterLast('.', "").let { if (it.isBlank()) "" else ".$it" }
+                                val base = fileName.removeSuffix(extension)
+                                val parent = path.substringBeforeLast('/', "")
+                                saveAsInitial = if (parent.isBlank()) "$base-copy$extension" else "$parent/$base-copy$extension"
+                                saveAsOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Renomear arquivo") },
+                            onClick = {
+                                actionsOpen = false
+                                renameOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Fechar editor") },
+                            onClick = {
+                                actionsOpen = false
+                                currentTextAndClose()
+                            },
+                        )
+                    }
+                }
+            }
+
+            // ── Abas ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                openTabs.forEach { tab ->
+                    val selected = tab == path
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .background(
+                                if (selected) palette.surfaceAlt else palette.surface,
+                                RoundedCornerShape(4.dp),
+                            )
+                            .clickable { onSelectTab(tab) }
+                            .padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            tab.substringAfterLast('/'),
+                            color = if (selected) palette.accentPrimary else palette.textSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Fechar ${tab.substringAfterLast('/')}",
+                            tint = palette.textSecondary,
+                            modifier = Modifier
+                                .padding(start = 6.dp)
+                                .size(16.dp)
+                                .clickable { onCloseTab(tab) }
+                                .padding(3.dp),
+                        )
+                    }
+                }
+            }
+
+            // ── Git integrado (P1.1): status + commit/push/pull ──
+            val root = gitRoot
+            if (root != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(palette.surface)
+                        .border(width = 1.dp, color = palette.border.copy(alpha = 0.4f), shape = RoundedCornerShape(0.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val st = gitStatus
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .background(if (st?.clean == true) palette.success else palette.accentBright, CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${st?.branch ?: "git"} · ${if (st?.clean == true) "limpo" else "${st?.changes?.size ?: 0} mudança(s)"}",
+                        color = palette.textSecondary,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GitChip(text = "Commit", enabled = !gitBusy && st?.clean == false, onClick = { commitOpen = true })
+                    Spacer(Modifier.width(6.dp))
+                    GitChip(text = "Push", enabled = !gitBusy && st?.clean == true, onClick = {
+                        scope.launch {
+                            gitBusy = true
+                            val result = withContext(Dispatchers.IO) { git.push(root) }
+                            gitBusy = false
+                            snackbar.showSnackbar(result?.takeIf { it != "push ok" } ?: "Push OK — enviado")
+                        }
+                    })
+                    Spacer(Modifier.width(6.dp))
+                    GitChip(text = "Pull", enabled = !gitBusy, onClick = {
+                        scope.launch {
+                            gitBusy = true
+                            val result = withContext(Dispatchers.IO) { git.pull(root) }
+                            gitBusy = false
+                            snackbar.showSnackbar(result ?: "Pull OK")
+                        }
+                    })
+                }
+            }
+
+            // ── Buscar e substituir ──
+            if (searchOpen) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(palette.surfaceAlt)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (searchQuery.isEmpty()) Text("Buscar…", color = palette.textSecondary, fontSize = 12.sp)
+                            inner()
+                        },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    BasicTextField(
+                        value = replacement,
+                        onValueChange = { replacement = it },
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                        decorationBox = { inner ->
+                            if (replacement.isEmpty()) Text("Substituir por…", color = palette.textSecondary, fontSize = 12.sp)
+                            inner()
+                        },
+                    )
+                    Text(
+                        "Trocar tudo",
+                        color = if (searchQuery.isBlank()) palette.border else palette.accentPrimary,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .clickable(enabled = searchQuery.isNotBlank()) { replaceAll() },
+                    )
+                    IconButton(onClick = { searchOpen = false }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = palette.textSecondary)
+                    }
+                }
+            }
+
+            // WebView com o CodeMirror 6 (preenche só o espaço abaixo das barras)
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        addJavascriptInterface(bridge, "AndroidBridge")
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                scope.launch(Dispatchers.IO) {
+                                    val payload = JSONObject()
+                                        .put("value", workspace.readText(path))
+                                        .put("name", fileName)
+                                    val js = "PhantomEditor.init(" +
+                                        "document.getElementById('editor')," +
+                                        "${payload.getString("value")}," +
+                                        "${payload.getString("name")});"
+                                    mainHandler.post {
+                                        view.evaluateJavascript(js, null)
+                                        lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
+                                    }
+                                }
+                            }
+                        }
+                        loadUrl("file:///android_asset/editor/index.html")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                update = { webView = it },
+            )
         }
 
         SnackbarHost(
@@ -429,6 +629,58 @@ fun EditorScreen(
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
         )
+
+        if (gotoOpen) {
+            PhantomDialog(
+                title = "Ir para linha",
+                placeholder = "Número da linha",
+                initialValue = "",
+                confirmText = "Ir",
+                onConfirm = { line ->
+                    gotoOpen = false
+                    webView?.evaluateJavascript("window.PhantomEditor.gotoLine(${line.trim().toIntOrNull() ?: 1})", null)
+                },
+                onDismiss = { gotoOpen = false },
+            )
+        }
+
+        if (commitOpen) {
+            PhantomDialog(
+                title = "Commit Git",
+                placeholder = "Mensagem do commit…",
+                initialValue = "",
+                confirmText = "Commit",
+                onConfirm = { message ->
+                    commitOpen = false
+                    val root = gitRoot ?: return@PhantomDialog
+                    scope.launch {
+                        gitBusy = true
+                        val result = withContext(Dispatchers.IO) { git.commit(root, message) }
+                        gitBusy = false
+                        snackbar.showSnackbar(result ?: "Commit OK")
+                    }
+                },
+                onDismiss = { commitOpen = false },
+            )
+        }
+
+        if (diskChanged) {
+            PhantomConfirmDialog(
+                title = "Arquivo mudou no disco",
+                message = "O arquivo foi alterado fora do editor (ex.: Git Pull). Recarregar agora?",
+                confirmText = "Recarregar",
+                onConfirm = {
+                    diskChanged = false
+                    reloadFromDisk()
+                    scope.launch { snackbar.showSnackbar("Arquivo recarregado") }
+                },
+                onDismiss = {
+                    diskChanged = false
+                    // Mantém as edições locais; evita insistir no mesmo arquivo.
+                    lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
+                },
+            )
+        }
 
         if (saveAsOpen) {
             PhantomDialog(
@@ -479,6 +731,22 @@ fun EditorScreen(
             )
         }
     }
+}
+
+/** Botão compacto da barra Git do editor. */
+@Composable
+private fun GitChip(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val palette = LocalThemeController.current.currentPalette()
+    Text(
+        text = text,
+        color = if (enabled) palette.accentPrimary else palette.border,
+        fontSize = 10.sp,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+            .border(1.dp, if (enabled) palette.accentPrimary.copy(alpha = 0.7f) else palette.border.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 /** Converte o retorno de evaluateJavascript (string JSON) para texto puro. */

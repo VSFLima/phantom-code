@@ -54,6 +54,7 @@ import com.phantomcode.app.data.vm.DeviceCapabilities
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.QemuPrefs
 import com.phantomcode.app.data.vm.QemuPresets
+import com.phantomcode.app.data.vm.TerminalPrefs
 import com.phantomcode.app.ui.components.BorderStylePreview
 import com.phantomcode.app.ui.components.ButtonStylePreview
 import com.phantomcode.app.ui.components.CornerStylePreview
@@ -298,6 +299,38 @@ fun SettingsScreen() {
             }
             Spacer(Modifier.height(6.dp))
             Text("A cor do texto e o fundo acompanham o estilo escolhido.", color = palette.textSecondary, fontSize = 10.sp)
+
+            // ── Tamanho da fonte do terminal (quebra de linha) ──
+            Spacer(Modifier.height(14.dp))
+            val terminalPrefs = remember { TerminalPrefs(LocalContext.current) }
+            var terminalFontSize by remember { mutableStateOf(terminalPrefs.fontSizeSp) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Tamanho da fonte (${terminalFontSize} dp)", color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text(
+                    if (terminalFontSize <= 10) "mais colunas por linha" else "letras maiores",
+                    color = palette.textSecondary,
+                    fontSize = 10.sp,
+                )
+            }
+            Slider(
+                value = terminalFontSize.toFloat(),
+                onValueChange = { terminalFontSize = it.toInt().coerceIn(TerminalPrefs.MIN_FONT_SIZE_SP, TerminalPrefs.MAX_FONT_SIZE_SP) },
+                onValueChangeFinished = {
+                    terminalPrefs.fontSizeSp = terminalFontSize
+                },
+                valueRange = TerminalPrefs.MIN_FONT_SIZE_SP.toFloat()..TerminalPrefs.MAX_FONT_SIZE_SP.toFloat(),
+                steps = TerminalPrefs.MAX_FONT_SIZE_SP - TerminalPrefs.MIN_FONT_SIZE_SP - 1,
+                colors = SliderDefaults.colors(
+                    thumbColor = palette.accentPrimary,
+                    activeTrackColor = palette.accentPrimary,
+                    inactiveTrackColor = palette.surfaceAlt,
+                ),
+            )
+            Text(
+                "A fonte define quantas colunas cabem na tela — influencia onde a linha quebra.",
+                color = palette.textSecondary,
+                fontSize = 10.sp,
+            )
         }
 
         Spacer(Modifier.height(20.dp))
