@@ -23,6 +23,15 @@ if [ -r "$CONF" ]; then
   [ -n "$USER" ] && USER_NAME="$USER"
 fi
 
+# Evita nomes inválidos/injeção no shell e monta o workspace na home escolhida.
+case "$USER_NAME" in
+  ''|*[!a-zA-Z0-9_-]*) USER_NAME="user" ;;
+esac
+case "$HOSTNAME" in
+  ''|*[!a-zA-Z0-9_-]*) HOSTNAME="phantom" ;;
+esac
+WORKSPACE_MOUNT="/home/$USER_NAME/workspace"
+
 log() { echo "[phantom] $*"; }
 
 log "Inicializando Phantom-Code (guest)…"
@@ -64,8 +73,8 @@ fi
 if [ -x /bin/bash ]; then SHELL=/bin/bash; else SHELL=/bin/sh; fi
 
 export SHELL
-export HOME=/root
-cd /root
+export HOME="/home/$USER_NAME"
+cd "$WORKSPACE_MOUNT" 2>/dev/null || cd "$HOME"
 
 # Prompt com o projeto ativo (se workspace visível) — hostname real (phantom por padrão)
 PS1='\[\033[01;35m\]\u@'"$HOSTNAME"'\[\033[00m\]:\[\033[01;36m\]\w\[\033[00m\]\$ '
@@ -82,7 +91,13 @@ log "Pronto. Workspace: $WORKSPACE_MOUNT"
 
 if [ -n "$1" ]; then
   # comando único (ex.: usado pelo app p/ executar algo)
-  exec $SHELL -c "$*"
+  if [ "$(id -u)" = "0" ] && id "$USER_NAME" >/dev/null 2>&1 && command -v su >/dev/null 2>&1; then
+    exec su - "$USER_NAME" -s "$SHELL" -c "$*"
+  fi
+  exec "$SHELL" -c "$*"
 else
-  exec $SHELL -i
+  if [ "$(id -u)" = "0" ] && id "$USER_NAME" >/dev/null 2>&1 && command -v su >/dev/null 2>&1; then
+    exec su - "$USER_NAME" -s "$SHELL" -c "cd '$WORKSPACE_MOUNT' 2>/dev/null || true; exec $SHELL -i"
+  fi
+  exec "$SHELL" -i
 fi

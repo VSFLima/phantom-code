@@ -2,7 +2,7 @@
 
 > **Projeto:** Phantom-Code (codinome Dark-Code) — IDE Android + VM Linux
 > **Data do registro:** 07/08/2026 · **Repositório:** `VSFLima/phantom-code`
-> **Estado atual:** HEAD em `c8bc19c` (último commit do Luna) · 2 arquivos pendentes não commitados (`PhantomApp.kt` + `dark-code-init.sh`)
+> **Estado atual:** autoinício da distro e shell do usuário no workspace preparados; aguardando validação no APK final.
 >
 > Este documento registra **tudo que o usuário pediu** ao longo da conversa, com o
 > status real de cada pedido (✅ feito · 🔶 parcial · ❌ pendente). Serve de guia
@@ -74,7 +74,7 @@
 ## ⏳ PENDÊNCIAS GERAIS (resumo executivo)
 
 ### Código — a decidir
-- [ ] **2 arquivos não commitados do Luna** (`PhantomApp.kt` auto-abrir terminal + `dark-code-init.sh` sanitização/su) — avaliar com o usuário se commitar ou ajustar (o `autoStartSuppressed` foi removido da checagem no `PhantomApp.kt`, mas o comentário e o `QemuManager.stop()` ainda o usam)
+- [x] **Autoinício + shell do usuário** — Phantom ativa inicia ao abrir o app, Terminal abre uma vez por sessão e o guest inicia em `/home/<usuário>/workspace`; a notificação continua oferecendo `Parar sessão`
 - [ ] **Apagar release órfã** `apk-20260807-2209` (build do polish que foi revertido) — confirmar com o usuário
 - [ ] **Scanner de pacotes do guest** (IAs/Linguagens/Ferramentas/Sistema) — desmarcado no TAREFAS
 
