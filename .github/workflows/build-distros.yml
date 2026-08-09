@@ -43,7 +43,8 @@ jobs:
       - name: Build arm64 rootfs (docker + Debian bookworm)
         timeout-minutes: 45
         run: |
-          docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
+          # timeout global do container: travamento do qemu-user vira falha rápida
+          timeout 1200 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
             set -e
             apt-get update
             # O python3.11 segfaulta sob o qemu-user do runner (postinst py3compile).
@@ -56,9 +57,26 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \
-              php-cli php-curl \
               linux-image-arm64 initramfs-tools e2fsprogs \
               sysvinit-core sysv-rc iproute2 isc-dhcp-client
+
+            # PHP: o trigger "php8.2-cli" (interest /etc/php/8.2/cli/conf.d) PENDURA
+            # o build sob qemu-user (2 builds travados em 27min ate timeout). O php
+            # e necessario no guest (server PHP do Preview), entao instalamos via
+            # dpkg --unpack: extrai os binarios SEM rodar postinst/triggers. O
+            # conf.d (extensoes) e o php.ini sao montados manualmente — o php roda
+            # nativo (arm64 real) no aparelho.
+            apt-get install -y --no-install-recommends libargon2-1 libsodium23 libedit2 libmagic1 media-types
+            cd /tmp
+            apt-get download php8.2-cli php8.2-common php8.2-opcache php8.2-readline php8.2-curl php-cli php-curl
+            for d in *.deb; do dpkg --unpack "$d" >/dev/null 2>&1 || true; done
+            mkdir -p /etc/php/8.2/cli/conf.d
+            for so in /usr/lib/php/20220829/*.so; do
+              [ -e "$so" ] && ln -sf "$so" "/etc/php/8.2/cli/conf.d/$(basename "$so" .so).ini"
+            done
+            cp /usr/lib/php/8.2/php.ini-production.cli /etc/php/8.2/cli/php.ini
+            ln -sf /usr/bin/php8.2 /usr/bin/php
+
             rm -rf /var/lib/apt/lists/*
           '
           docker export phantom > /tmp/rootfs.tar

@@ -283,6 +283,46 @@ code {
 .stack__layer--os { background: rgba(0, 255, 159, 0.05); }
 .stack__label { width: 64px; text-align: right; color: var(--dim); font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; }
 
+/* ───────────────────────────── Passos (fluxo de trabalho) ───────────────────────── */
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 52px; }
+.step {
+  position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 28px 24px; overflow: hidden; transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+.step:hover { transform: translateY(-6px); border-color: var(--cyan); box-shadow: 0 12px 36px rgba(0,0,0,0.5), 0 0 24px rgba(0,255,255,0.1); }
+.step__num {
+  font-family: var(--mono); font-size: 0.75rem; letter-spacing: 2px; color: var(--purple);
+  text-shadow: 0 0 10px rgba(159,77,255,0.6);
+}
+.step h3 { margin-top: 12px; font-size: 1.1rem; }
+.step p { margin-top: 8px; color: var(--dim); font-size: 0.9rem; }
+
+/* ───────────────────────────── Telas do app ───────────────────────── */
+.screens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 52px; }
+.screen {
+  display: flex; gap: 16px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px; transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
+}
+.screen:hover { transform: translateY(-4px); border-color: rgba(0,255,255,0.5); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+.screen__icon { font-size: 1.7rem; filter: drop-shadow(0 0 10px rgba(159,77,255,0.5)); flex-shrink: 0; }
+.screen__body h3 { font-size: 1.05rem; }
+.screen__body p { margin-top: 6px; color: var(--dim); font-size: 0.88rem; }
+.screen__tag {
+  display: inline-block; margin-top: 12px; font-family: var(--mono); font-size: 0.66rem;
+  color: var(--cyan); border: 1px solid rgba(0,255,255,0.35); padding: 2px 9px; border-radius: 999px;
+}
+
+/* ───────────────────────────── Ficha técnica ───────────────────────── */
+.tech { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 50px; }
+.tech__item {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 18px; transition: border-color 0.2s, transform 0.2s;
+}
+.tech__item:hover { border-color: var(--purple); transform: translateX(4px); }
+.tech__item span { color: var(--dim); font-size: 0.9rem; font-weight: 500; }
+.tech__item code { font-size: 0.82rem; }
+
 /* ───────────────────────────── Compare ───────────────────────── */
 .compare { margin-top: 50px; overflow-x: auto; }
 .compare__table { width: 100%; border-collapse: collapse; font-size: 0.95rem; min-width: 600px; }
@@ -369,6 +409,9 @@ code {
 @media (max-width: 920px) {
   .hero__inner { grid-template-columns: 1fr; gap: 52px; }
   .features { grid-template-columns: repeat(2, 1fr); }
+  .steps { grid-template-columns: repeat(2, 1fr); }
+  .screens { grid-template-columns: repeat(2, 1fr); }
+  .tech { grid-template-columns: 1fr; }
   .palette { grid-template-columns: repeat(2, 1fr); }
   .phases { grid-template-columns: repeat(2, 1fr); }
   .specs { grid-template-columns: repeat(2, 1fr); }
@@ -383,7 +426,7 @@ code {
 }
 
 @media (max-width: 560px) {
-  .features, .palette, .phases, .specs { grid-template-columns: 1fr; }
+  .features, .palette, .phases, .specs, .steps, .screens { grid-template-columns: 1fr; }
   .hero { padding: 130px 0 70px; }
   .term__body { min-height: 260px; }
 }

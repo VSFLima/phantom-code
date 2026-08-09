@@ -31,9 +31,10 @@
       </a>
       <div class="nav__links" id="navLinks">
         <a href="#recursos">Recursos</a>
-        <a href="#arquitetura">Como funciona</a>
+        <a href="#fluxo">Fluxo de trabalho</a>
+        <a href="#telas">Telas</a>
         <a href="#qemu">Por que QEMU?</a>
-        <a href="#design">Design</a>
+        <a href="#specs">Ficha técnica</a>
         <a href="#roadmap">Roadmap</a>
       </div>
       <a class="btn btn--primary nav__cta" href="#download">Baixar APK</a>
@@ -135,9 +136,97 @@
     </div>
   </section>
 
+  <section class="section" id="fluxo">
+    <div class="container">
+      <h2 class="section__title">Um fluxo de trabalho real</h2>
+      <p class="section__subtitle">Escreva, rode, version e deixe a IA ajudar — sem trocar de app.</p>
+
+      <div class="steps">
+        <div class="step">
+          <span class="step__num">01</span>
+          <h3>✍️ Escreva</h3>
+          <p>Editor CodeMirror 6 com abas, syntax neon e <strong>autosave</strong>. O arquivo cai direto na camada de arquivos compartilhada.</p>
+        </div>
+        <div class="step">
+          <span class="step__num">02</span>
+          <h3>⚡ Rode</h3>
+          <p>No terminal dock, o <strong>Linux real</strong> (QEMU arm64) enxerga o arquivo na hora via virtio-9p. <code>python3 app.py</code> funciona sem copiar nada.</p>
+        </div>
+        <div class="step">
+          <span class="step__num">03</span>
+          <h3>🔀 Version</h3>
+          <p>Git/GitHub direto na UI: <strong>commit, push, branch e diff</strong> no mesmo workspace. O repositório nunca descola do código.</p>
+        </div>
+        <div class="step">
+          <span class="step__num">04</span>
+          <h3>🤖 Automatize</h3>
+          <p><strong>IA nativa</strong> dentro do guest — <code>ollama run llama3</code> — para refatorar, revisar e testar seu próprio projeto.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="telas">
+    <div class="container">
+      <h2 class="section__title">Conheça o app</h2>
+      <p class="section__subtitle">Navegação fixa com 5 itens, Activity Bar lateral e terminal dock no rodapé — tudo em um só ecrã.</p>
+
+      <div class="screens">
+        <article class="screen">
+          <div class="screen__icon">📁</div>
+          <div class="screen__body">
+            <h3>Explorer</h3>
+            <p>Explorer real do workspace compartilhado: crie, renomeie, mova e apague arquivos que o Linux já vê.</p>
+            <span class="screen__tag">virtio-9p</span>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen__icon">🔍</div>
+          <div class="screen__body">
+            <h3>Search</h3>
+            <p>Busca no projeto inteiro com contexto — arquivos, símbolos e conteúdo, dentro do editor.</p>
+            <span class="screen__tag">CodeMirror 6</span>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen__icon">🔀</div>
+          <div class="screen__body">
+            <h3>Git</h3>
+            <p>Clone, commit, push, branches e diff visual. JGit embutido, sem precisar do terminal.</p>
+            <span class="screen__tag">JGit</span>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen__icon">🧰</div>
+          <div class="screen__body">
+            <h3>Toolbox</h3>
+            <p>Scanner de pacotes do Linux + Integrações &amp; API Keys protegidas pelo Android Keystore.</p>
+            <span class="screen__tag">Keystore</span>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen__icon">🎨</div>
+          <div class="screen__body">
+            <h3>Settings</h3>
+            <p>Tema Cyber-Phantom 100% personalizável — 7 presets + cores customizadas (custom).</p>
+            <span class="screen__tag">Themes</span>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen__icon">🖥️</div>
+          <div class="screen__body">
+            <h3>Terminal dock</h3>
+            <p>Rodapé com abas múltiplas (Terminal 1/2/Run) ligadas ao Linux real. Rode e veja o resultado sem sair do código.</p>
+            <span class="screen__tag">QEMU</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <section class="section section--alt" id="arquitetura">
     <div class="container">
-      <h2 class="section__title">Como funciona</h2>
+      <h2 class="section__title">Como funciona por baixo</h2>
       <p class="section__subtitle">Uma única camada de arquivos, três motores, zero sincronização.</p>
 
       <div class="flow">
@@ -241,6 +330,28 @@
       <p class="section__hint">
         7 presets: <strong>Phantom</strong> · Deep Slate · Matrix · Dracula · Nord · Solarized Dark · Light Soft · <strong class="accent">Custom</strong>
       </p>
+    </div>
+  </section>
+
+  <section class="section" id="specs">
+    <div class="container">
+      <h2 class="section__title">Ficha técnica</h2>
+      <p class="section__subtitle">O que roda embaixo do capô.</p>
+
+      <div class="tech">
+        <div class="tech__item"><span>Linguagem</span><code>Kotlin + Jetpack Compose</code></div>
+        <div class="tech__item"><span>Editor</span><code>CodeMirror 6 (syntax neon)</code></div>
+        <div class="tech__item"><span>Máquina virtual</span><code>QEMU arm64 (aarch64-softmmu)</code></div>
+        <div class="tech__item"><span>Distro</span><code>Debian bookworm · sysvinit</code></div>
+        <div class="tech__item"><span>Kernel</span><code>linux-image-arm64 6.1</code></div>
+        <div class="tech__item"><span>Rede do guest</span><code>SLIRP / NAT · hostfwd :8384</code></div>
+        <div class="tech__item"><span>Integração</span><code>virtio-9p (mesma pasta)</code></div>
+        <div class="tech__item"><span>Git</span><code>JGit nativo</code></div>
+        <div class="tech__item"><span>IA</span><code>Ollama · llama.cpp (nativos)</code></div>
+        <div class="tech__item"><span>Segurança</span><code>API Keys no Android Keystore</code></div>
+        <div class="tech__item"><span>Build</span><code>GitHub Actions · APK assinado</code></div>
+        <div class="tech__item"><span>Temas</span><code>Cyber-Phantom · 7 presets + custom</code></div>
+      </div>
     </div>
   </section>
 
