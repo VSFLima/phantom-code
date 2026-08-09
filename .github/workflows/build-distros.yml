@@ -72,20 +72,20 @@ jobs:
             ar x "$d"
             for t in data.tar.*; do
               case "$t" in
-                *.xz)  tar -xf "$t" -C /tmp/rootfs ;;
-                *.zst) tar --zstd -xf "$t" -C /tmp/rootfs ;;
-                *.gz)  tar -zxf "$t" -C /tmp/rootfs ;;
+                *.xz)  sudo tar -xf "$t" -C /tmp/rootfs ;;
+                *.zst) sudo tar --zstd -xf "$t" -C /tmp/rootfs ;;
+                *.gz)  sudo tar -zxf "$t" -C /tmp/rootfs ;;
               esac
             done
           done
           echo "==> rootfs extraído (ar+tar host-side, sem scripts)"
 
           # CA bundle (o postinst do ca-certificates não roda no build).
-          curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/rootfs/etc/ssl/certs/ca-certificates.crt
+          curl -fsSL https://curl.se/ca/cacert.pem | sudo tee /tmp/rootfs/etc/ssl/certs/ca-certificates.crt >/dev/null
           ls -la /tmp/rootfs/etc/ssl/certs/ca-certificates.crt
 
           # Limpeza (stage1 não precisa de apt no guest).
-          rm -rf /tmp/rootfs/var/cache/apt/archives /tmp/rootfs/var/lib/apt/lists /tmp/rootfs/debootstrap
+          sudo rm -rf /tmp/rootfs/var/cache/apt/archives /tmp/rootfs/var/lib/apt/lists /tmp/rootfs/debootstrap
           rm -rf /tmp/ex
           echo "=== kernel:"; ls -la /tmp/rootfs/boot/vmlinuz-*
           echo "=== módulos:"; ls /tmp/rootfs/lib/modules/
@@ -145,20 +145,20 @@ jobs:
             ar x ../"$d"
             for t in data.tar.*; do
               case "$t" in
-                *.xz)  tar -xf "$t" -C /tmp/rootfs ;;
-                *.zst) tar --zstd -xf "$t" -C /tmp/rootfs ;;
+                *.xz)  sudo tar -xf "$t" -C /tmp/rootfs ;;
+                *.zst) sudo tar --zstd -xf "$t" -C /tmp/rootfs ;;
               esac
             done
             cd /tmp/php
           done
           # conf.d (o trigger do php8.2-cli cria isso — recriado manualmente)
-          mkdir -p /tmp/rootfs/etc/php/8.2/cli/conf.d
+          sudo mkdir -p /tmp/rootfs/etc/php/8.2/cli/conf.d
           for ini in /tmp/rootfs/etc/php/8.2/mods-available/*.ini; do
-            [ -e "$ini" ] && ln -sf "/etc/php/8.2/mods-available/$(basename "$ini")" \
+            [ -e "$ini" ] && sudo ln -sf "/etc/php/8.2/mods-available/$(basename "$ini")" \
               "/tmp/rootfs/etc/php/8.2/cli/conf.d/$(basename "$ini")"
           done
-          cp /tmp/rootfs/usr/lib/php/8.2/php.ini-production.cli /tmp/rootfs/etc/php/8.2/cli/php.ini
-          ln -sf /usr/bin/php8.2 /tmp/rootfs/usr/bin/php
+          sudo cp /tmp/rootfs/usr/lib/php/8.2/php.ini-production.cli /tmp/rootfs/etc/php/8.2/cli/php.ini
+          sudo ln -sf /usr/bin/php8.2 /tmp/rootfs/usr/bin/php
           echo "=== php no rootfs ==="
           ls -la /tmp/rootfs/usr/bin/php*
           ls /tmp/rootfs/usr/lib/php/20220829/*.so
@@ -187,14 +187,14 @@ jobs:
       - name: Configure guest boot (sysvinit + phantom bootstrap)
         run: |
           set -e
-          mkdir -p /tmp/rootfs/usr/local/lib/phantom
+          sudo mkdir -p /tmp/rootfs/usr/local/lib/phantom
           # Cópia de segurança do init do app dentro do próprio rootfs
-          cp android/app/src/main/assets/linux/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh
-          cp android/app/src/main/assets/linux/phantom-agent.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
-          chmod +x /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
+          sudo cp android/app/src/main/assets/linux/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh
+          sudo cp android/app/src/main/assets/linux/phantom-agent.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
+          sudo chmod +x /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
 
           # Bootstrap: monta o 9p da distro (onde o app deixa o init + config)
-          cat > /tmp/rootfs/etc/phantom-boot.sh <<'EOF'
+          cat > /tmp/phantom-boot.sh <<'EOF'
           #!/bin/sh
           # T-D4: bootstrap do guest. Monta a pasta da distro do app (9p) e
           # executa o dark-code-init.sh real; cai no fallback embutido sem 9p.
@@ -210,15 +210,19 @@ jobs:
           echo "phantom-boot: nenhum init disponível" >&2
           exec /bin/sh
           EOF
-          chmod +x /tmp/rootfs/etc/phantom-boot.sh
+          sudo cp /tmp/phantom-boot.sh /tmp/rootfs/etc/phantom-boot.sh
+          rm -f /tmp/phantom-boot.sh
+          sudo chmod +x /tmp/rootfs/etc/phantom-boot.sh
 
           # inittab do sysvinit: sysinit roda o bootstrap; getty em hvc0 com
           # auto-login (user) como rede de segurança depois que o shell sair.
-          cat > /tmp/rootfs/etc/inittab <<'EOF'
+          cat > /tmp/inittab <<'EOF'
           id:2:initdefault:
           ::sysinit:/etc/phantom-boot.sh
           ::respawn:/sbin/getty -a user -L hvc0 0 vt100
           EOF
+          sudo cp /tmp/inittab /tmp/rootfs/etc/inittab
+          rm -f /tmp/inittab
           echo "inittab + phantom-boot.sh configurados"
 
       # ─────────────────────────────────────────────────────────────────────
@@ -362,7 +366,7 @@ jobs:
       # ─────────────────────────────────────────────────────────────────────
       - name: Create rootfs.img (mkfs.ext2 -d — imagem ext2 populada direto do dir)
         run: |
-          # `du -s` subconta hardlinks (docker export) — usamos -l e ainda sobramos
+          # `du -s` subconta hardlinks — usamos -l e ainda sobramos
           # 140% + 200 MB. ext2 de verdade via e2fsprogs (muito mais robusto que
           # genext2fs, que estourava "couldn't allocate a block").
           SIZE_MB=$(( $(du -sk -l /tmp/rootfs | awk '{print $1}') * 140 / 100 / 1024 + 200 ))
