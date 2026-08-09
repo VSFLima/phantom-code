@@ -40,80 +40,74 @@ jobs:
         run: |
           docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
-      - name: Build arm64 rootfs (docker + Debian bookworm)
-        timeout-minutes: 55
+      - name: Install rootfs tools
         run: |
-          # timeout global do container: travamento do qemu-user vira falha rápida
-          # (docker ignora SIGTERM bloqueado — --kill-after força o SIGKILL).
-          # 1800s: apt (~10min) + initrd manual (~7min) + folga.
-          timeout --kill-after=60 1800 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
-            set -e
-            apt-get update
+          sudo apt-get update
+          sudo apt-get install -y debootstrap xz-utils zstd binutils gnupg ca-certificates curl
 
-            # ── TRIGGERS PENDURAM sob qemu-user ─────────────────────────────
-            # dpkg/apt NAO podem processar triggers no build: o "dpkg
-            # --triggers-only" final do apt e os handlers (update-ca-certificates,
-            # update-initramfs, ldconfig) travam sob o qemu-user do runner
-            # (5 builds travados de 16-35min cada). Estrategia deterministica:
-            # NUNCA rodar trigger phase — "apt-get install --download-only"
-            # (baixa os .debs SEM dpkg) + "dpkg --unpack --no-triggers"
-            # (extrai, sem postinst) + "dpkg --configure -a --no-triggers"
-            # (roda postinst, ADIA triggers) + descarte do estado de triggers.
-            # Handlers perigosos viram /bin/true durante o build (dpkg-divert
-            # sobre arquivo pre-criado, garantido) e sao restaurados ao final.
-            # O initrd e gerado manualmente com o update-initramfs REAL
-            # ("-k <ver>" e comprovadamente estavel sob qemu, ~6.5min).
-            mkdir -p /usr/sbin
-            touch /usr/sbin/update-ca-certificates /usr/sbin/update-initramfs
-            dpkg-divert --local --add --rename /sbin/ldconfig || true
-            ln -sf /bin/true /sbin/ldconfig
-            dpkg-divert --local --add --rename /usr/sbin/update-ca-certificates || true
-            ln -sf /bin/true /usr/sbin/update-ca-certificates
-            dpkg-divert --local --add --rename /usr/sbin/update-initramfs || true
-            ln -sf /bin/true /usr/sbin/update-initramfs
-            dpkg-divert --local --add --rename /usr/bin/py3compile || true
-            ln -sf /bin/true /usr/bin/py3compile
-            dpkg-divert --local --add --rename /usr/bin/pycompile || true
-            ln -sf /bin/true /usr/bin/pycompile
+      - name: Build arm64 rootfs (debootstrap --foreign + ar+tar host-side)
+        timeout-minutes: 20
+        run: |
+          set -e
+          # ── MÉTODO B: rootfs SEM dpkg/qemu nos scripts ───────────────────
+          # Os 8 builds anteriores travaram 16-35min: sob o qemu-user do runner,
+          # scripts de manutenção do dpkg (preinst/postinst/trigger de
+          # ca-certificates, initramfs-tools, libc-bin) PENDURAM.
+          # Aqui NENHUM script arm64 roda no build:
+          #   1. debootstrap --foreign baixa base + extras e EXTRAI os arquivos
+          #      (stage 1 — sem dpkg --configure, sem scripts de manutenção).
+          #   2. Todos os .debs ficam em /var/cache/apt/archives; cada um é
+          #      extraído HOST-side com ar+tar (nativo x86_64, arch-independent).
+          #   3. initrd + CA bundle: feitos manualmente nos próximos passos.
+          sudo debootstrap --arch=arm64 --foreign --variant=minbase \
+            --include=ca-certificates,curl,wget,git,python3,openssh-client,tzdata,nano,vim-tiny,htop,file,linux-image-arm64,initramfs-tools,e2fsprogs,sysvinit-core,sysv-rc,iproute2,isc-dhcp-client,libargon2-1,libsodium23,libedit2,libmagic1,media-types \
+            bookworm /tmp/rootfs http://deb.debian.org/debian
+          echo "==> debs baixados: $(ls /tmp/rootfs/var/cache/apt/archives/*.deb | wc -l)"
 
-            # SÓ BAIXA os .debs (inclui dependencias) — nenhum dpkg roda aqui.
-            DEBIAN_FRONTEND=noninteractive apt-get install --download-only -y --no-install-recommends \
-              bash ca-certificates curl wget git python3 openssh-client tzdata nano vim-tiny htop file \
-              linux-image-arm64 initramfs-tools e2fsprogs sysvinit-core sysv-rc iproute2 isc-dhcp-client \
-              libargon2-1 libsodium23 libedit2 libmagic1 media-types
+          # Extrai todos os .debs HOST-side (ar -> data.tar.* -> rootfs).
+          mkdir -p /tmp/ex
+          cd /tmp/ex
+          for d in /tmp/rootfs/var/cache/apt/archives/*.deb; do
+            rm -rf /tmp/ex/*
+            ar x "$d"
+            for t in data.tar.*; do
+              case "$t" in
+                *.xz)  tar -xf "$t" -C /tmp/rootfs ;;
+                *.zst) tar --zstd -xf "$t" -C /tmp/rootfs ;;
+                *.gz)  tar -zxf "$t" -C /tmp/rootfs ;;
+              esac
+            done
+          done
+          echo "==> rootfs extraído (ar+tar host-side, sem scripts)"
 
-            # Desempacota (preinst roda, postinst/trigger NAO).
-            dpkg --unpack --no-triggers /var/cache/apt/archives/*.deb >/dev/null 2>&1 || \
-              dpkg --unpack --no-triggers /var/cache/apt/archives/*.deb >/dev/null 2>&1 || true
+          # CA bundle (o postinst do ca-certificates não roda no build).
+          curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/rootfs/etc/ssl/certs/ca-certificates.crt
+          ls -la /tmp/rootfs/etc/ssl/certs/ca-certificates.crt
 
-            # Configura (postinst roda, triggers ADIADOS e depois descartados).
-            dpkg --configure -a --no-triggers >/dev/null 2>&1 || true
-            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
+          # Limpeza (stage1 não precisa de apt no guest).
+          rm -rf /tmp/rootfs/var/cache/apt/archives /tmp/rootfs/var/lib/apt/lists /tmp/rootfs/debootstrap
+          rm -rf /tmp/ex
+          echo "=== kernel:"; ls -la /tmp/rootfs/boot/vmlinuz-*
+          echo "=== módulos:"; ls /tmp/rootfs/lib/modules/
 
-            # Restaura o ldconfig real (guest roda nativo no aparelho).
-            rm -f /sbin/ldconfig
-            mv /sbin/ldconfig.distrib /sbin/ldconfig 2>/dev/null || true
-
-            # initrd: gera com o update-initramfs REAL (-k estavel sob qemu).
-            rm -f /usr/sbin/update-initramfs
-            mv /usr/sbin/update-initramfs.distrib /usr/sbin/update-initramfs 2>/dev/null || true
-            K=$(ls /lib/modules | head -1)
-            echo "==> initrd para kernel $K"
-            update-initramfs -k "$K"
-            ls -la /boot/initrd.img-*
-
-            # CA bundle (update-ca-certificates no-op no build): baixa o bundle
-            # Mozilla default do Debian.
-            curl -fsSL https://curl.se/ca/cacert.pem -o /etc/ssl/certs/ca-certificates.crt || \
-              echo "sem CA bundle (https no guest fica de fora)"
-            ls -la /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
-
-            # PHP entra no HOST (passo "Install PHP 8.2").
-            rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
-          '
-          docker export phantom > /tmp/rootfs.tar
-          mkdir -p /tmp/rootfs
-          tar -xf /tmp/rootfs.tar -C /tmp/rootfs
+      - name: Generate initrd (update-initramfs via qemu chroot)
+        timeout-minutes: 15
+        run: |
+          # ÚNICA execução arm64 do build. update-initramfs -k é estável sob
+          # qemu (comprovado em runs anteriores, ~6.5min). O passo "Register
+          # binfmt" registrou qemu-aarch64 no kernel do runner, então o chroot
+          # roda os binários arm64 do rootfs via binfmt.
+          K=$(ls /tmp/rootfs/lib/modules | head -1)
+          echo "==> initrd para kernel $K"
+          sudo mount -t proc proc /tmp/rootfs/proc 2>/dev/null || true
+          sudo mount -t sysfs sysfs /tmp/rootfs/sys 2>/dev/null || true
+          sudo mount -t devtmpfs devtmpfs /tmp/rootfs/dev 2>/dev/null || true
+          timeout --kill-after=60 600 sudo chroot /tmp/rootfs /usr/sbin/update-initramfs -k "$K" || \
+            echo "⚠️ update-initramfs retornou erro (initrd pode não existir)"
+          sudo umount /tmp/rootfs/dev 2>/dev/null || true
+          sudo umount /tmp/rootfs/proc 2>/dev/null || true
+          sudo umount /tmp/rootfs/sys 2>/dev/null || true
+          ls -la /tmp/rootfs/boot/initrd.img-* || echo "❌ sem initrd.img"
 
       # ─────────────────────────────────────────────────────────────────────
       # PHP 8.2 no rootfs — HOST-side (nativo, SEM qemu-user)
