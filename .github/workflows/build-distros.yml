@@ -44,7 +44,8 @@ jobs:
         timeout-minutes: 45
         run: |
           # timeout global do container: travamento do qemu-user vira falha rápida
-          timeout 1200 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
+          # (docker ignora SIGTERM bloqueado — --kill-after força o SIGKILL)
+          timeout --kill-after=60 1500 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
             set -e
             apt-get update
             # O python3.11 segfaulta sob o qemu-user do runner (postinst py3compile).
@@ -54,34 +55,35 @@ jobs:
             ln -sf /bin/true /usr/bin/py3compile
             dpkg-divert --local --add --rename /usr/bin/pycompile
             ln -sf /bin/true /usr/bin/pycompile
+            # DPkg::Options (case-sensitive!) --no-triggers: NENHUM trigger roda no
+            # build. Sob qemu-user os triggers penduram (libc-bin/ldconfig travou
+            # 35min, initramfs-tools 35min, php8.2-cli 27min) — sempre no final do
+            # apt. O postinst do linux-image gera o initrd.img (unico processo
+            # pesado que FUNCIONA, ~6.5min). Equivalente manual do ldconfig roda
+            # com timeout (cache so e aceleracao; o loader acha os dirs multiarch
+            # sem ele).
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              -o Dpkg::Options::="--no-triggers" \
+              -o DPkg::Options::=--no-triggers \
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \
               linux-image-arm64 initramfs-tools e2fsprogs \
               sysvinit-core sysv-rc iproute2 isc-dhcp-client
 
-            # Triggers adiados viram redundantes/perigosos sob qemu-user:
-            #   - initramfs-tools (interest-await update-initramfs) roda
-            #     "update-initramfs -u" DE NOVO e PENDURA (build travou 35min).
-            #     O postinst do linux-image ja gerou o initrd.img (6.5min).
-            #   - o trigger do php8.2-cli tambem pendurava (tratado abaixo).
-            # Descartamos os triggers pendentes e rodamos o equivalente manual
-            # (ldconfig + ca-certificates) — rapido e determinístico.
+            # Descarta triggers adiados (ficaram pendentes com --no-triggers)
             rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
-            ldconfig || true
-            update-ca-certificates --fresh >/dev/null 2>&1 || true
+            timeout 60 ldconfig || true
 
             # PHP: o trigger "php8.2-cli" (interest /etc/php/8.2/cli/conf.d) PENDURA
-            # o build sob qemu-user (2 builds travados em 27min ate timeout). O php
-            # e necessario no guest (server PHP do Preview), entao instalamos via
-            # dpkg --unpack: extrai os binarios SEM rodar postinst/triggers. O
-            # conf.d (extensoes) e o php.ini sao montados manualmente — o php roda
-            # nativo (arm64 real) no aparelho.
-            apt-get install -y --no-install-recommends libargon2-1 libsodium23 libedit2 libmagic1 media-types
+            # sob qemu-user. O php e necessario no guest (server PHP do Preview),
+            # entao instalamos via dpkg --unpack: extrai os binarios SEM rodar
+            # postinst/triggers. conf.d (extensoes) e php.ini montados manualmente —
+            # o php roda nativo (arm64 real) no aparelho.
+            apt-get install -y --no-install-recommends -o DPkg::Options::=--no-triggers \
+              libargon2-1 libsodium23 libedit2 libmagic1 media-types
+            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
             cd /tmp
             apt-get download php8.2-cli php8.2-common php8.2-opcache php8.2-readline php8.2-curl php-cli php-curl
-            for d in *.deb; do dpkg --unpack "$d" >/dev/null 2>&1 || true; done
+            for d in *.deb; do dpkg --unpack --no-triggers "$d" >/dev/null 2>&1 || true; done
             mkdir -p /etc/php/8.2/cli/conf.d
             for so in /usr/lib/php/20220829/*.so; do
               [ -e "$so" ] && ln -sf "$so" "/etc/php/8.2/cli/conf.d/$(basename "$so" .so).ini"
