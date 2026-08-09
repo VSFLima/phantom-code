@@ -426,6 +426,19 @@ jobs:
           fi
           echo "--- marcadores úteis:"; grep -E "Run /sbin/init|Freeing unused|getty|login:|phantom-boot|dark-code|Panic" /tmp/boot.log | head -20
 
+      - name: Sanity-check do binário QEMU embarcado (aarch64 user-mode)
+        run: |
+          set -e
+          # O tarball embarca um qemu-system-aarch64 CROSS-compilado (aarch64
+          # estático) que só roda no device do usuário — o runner x86_64 não
+          # executa ELF aarch64. Validamos o cross-compile via qemu-aarch64-static
+          # (user-mode): se o binário estiver quebrado, ele aborta aqui em vez de
+          # chegar ao usuário.
+          sudo apt-get install -y qemu-user >/dev/null
+          QEMU_UA=$(command -v qemu-aarch64-static || command -v qemu-aarch64)
+          "$QEMU_UA" /tmp/qemu-system-aarch64 --version
+          echo "✅ binário aarch64 embarcado executável (user-mode)"
+
       - name: Publish as Release (tag fixa para o app)
         env:
           GH_TOKEN: ${{ github.token }}
