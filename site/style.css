@@ -380,7 +380,7 @@ code {
 
 .progress { max-width: 520px; margin: 40px auto 0; text-align: center; }
 .progress__bar { height: 8px; background: var(--surface-2); border-radius: 99px; border: 1px solid var(--border); overflow: hidden; }
-.progress__fill { height: 100%; width: 50%; border-radius: 99px; background: linear-gradient(90deg, var(--purple), var(--cyan)); box-shadow: 0 0 14px var(--cyan); animation: progressPulse 2.4s ease-in-out infinite; }
+.progress__fill { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--purple), var(--cyan)); box-shadow: 0 0 14px var(--cyan); animation: progressPulse 2.4s ease-in-out infinite; }
 @keyframes progressPulse { 50% { opacity: 0.7; } }
 .progress__label { display: block; margin-top: 12px; color: var(--dim); font-size: 0.82rem; }
 
