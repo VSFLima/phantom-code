@@ -93,6 +93,21 @@ context_summary() { # task_id -> prompt resumido (R8)
     fi
 }
 
+# ---- Fase B: propostas de delegação + aprovação do dono --------------------
+save_proposal() { # id from to subtask scope_write scope_read reason due status
+    local id="$1" from="$2" to="$3" subtask="$4" sw="$5" sr="$6" reason="$7" due="$8" status="$9"
+    local dir="$SUITE/tasks/$id"
+    mkdir -p "$dir"
+    jq -n --arg id "$id" --arg from "$from" --arg to "$to" --arg subtask "$subtask" \
+        --argjson sw "$sw" --argjson sr "$sr" --arg reason "$reason" --arg due "$due" --arg status "$status" \
+        '{id:$id,from:$from,to:$to,subtask:$subtask,scope_write:$sw,scope_read:$sr,reason:$reason,due:$due,status:$status}' \
+        > "$dir/proposal.json"
+    jq -n --arg id "$id" --arg title "$subtask" --arg status "$status" --arg owner "$to" \
+        --argjson sw "$sw" --argjson sr "$sr" --argjson due "$due" \
+        '{id:$id,title:$title,status:$status,owner:$owner,scope_files:$sw,scope_read:$sr,created_at:'"$(now)"',due:$due}' \
+        > "$dir/context.json"
+}
+
 # ---- registrador de agentes ------------------------------------------------
 register_hello() { # id name invoke
     local id="$1" name="$2" invoke="$3"
@@ -208,6 +223,82 @@ process_line() { # linha ROUTER:json
         done)
             thread_msg "$task_id" "$from" "done" "$(echo "$payload" | jq -r '.payload.summary // .text')"
             release_locks "$from"
+            ;;
+        delegate)
+            # Fase B — proposta de delegação: cria a tarefa, avisa o APP
+            # (Human Approval Gate). O dono decide: approved/rejected/ajustar.
+            local to subtask sw sr reason due
+            to=$(echo "$payload" | jq -r '.payload.to // ""')
+            subtask=$(echo "$payload" | jq -r '.payload.subtask // ""')
+            sw=$(echo "$payload" | jq -c '.payload.scope.write // .payload.scope_write // []')
+            sr=$(echo "$payload" | jq -c '.payload.scope.read // .payload.scope_read // []')
+            reason=$(echo "$payload" | jq -r '.payload.reason // ""')
+            due=$(echo "$payload" | jq -r '.payload.due // ""')
+            [ -n "$to" ] || { log "delegate sem destino"; break; }
+            save_proposal "$task_id" "$from" "$to" "$subtask" "$sw" "$sr" "$reason" "$due" "pending_approval"
+            thread_msg "$task_id" "$from" "msg" "$subtask"
+            echo "{\"type\":\"approval_req\",\"task_id\":\"$task_id\",\"payload\":{\"proposal_id\":\"$task_id\",\"from\":\"$from\",\"to\":\"$to\",\"summary\":\"$subtask\"}}"
+            log "proposta $task_id aguardando o dono"
+            ;;
+        approved)
+            local to sw
+            to=$(echo "$payload" | jq -r '.payload.to // ""')
+            sw=$(echo "$payload" | jq -c '.payload.scope_write // []')
+            [ -f "$SUITE/tasks/$task_id/proposal.json" ] && \
+                jq --arg s "approved" '.status = $s' "$SUITE/tasks/$task_id/proposal.json" > "$SUITE/tasks/$task_id/proposal.json.tmp" && mv "$SUITE/tasks/$task_id/proposal.json.tmp" "$SUITE/tasks/$task_id/proposal.json"
+            [ -f "$SUITE/tasks/$task_id/context.json" ] && \
+                jq --arg s "approved" '.status = $s' "$SUITE/tasks/$task_id/context.json" > "$SUITE/tasks/$task_id/context.json.tmp" && mv "$SUITE/tasks/$task_id/context.json.tmp" "$SUITE/tasks/$task_id/context.json"
+            echo "$sw" | jq -e . >/dev/null 2>&1 && echo "$sw" | jq -r '.[]' | while IFS= read -r p; do
+                lock_req "$to" "$p" "W" "$task_id" >/dev/null
+            done
+            thread_msg "$task_id" "dono" "approval" "Delegação aprovada — $to pode executar"
+            log "proposta $task_id aprovada pelo dono"
+            ;;
+        rejected)
+            [ -f "$SUITE/tasks/$task_id/proposal.json" ] && \
+                jq --arg s "rejected" '.status = $s' "$SUITE/tasks/$task_id/proposal.json" > "$SUITE/tasks/$task_id/proposal.json.tmp" && mv "$SUITE/tasks/$task_id/proposal.json.tmp" "$SUITE/tasks/$task_id/proposal.json"
+            thread_msg "$task_id" "dono" "approval" "Delegação recusada"
+            log "proposta $task_id recusada pelo dono"
+            ;;
+        owner_msg)
+            # R5 — o dono intervém na thread (prioridade máxima)
+            thread_msg "$task_id" "dono" "msg" "$(echo "$payload" | jq -r '.payload.text // .text')"
+            ;;
+        create_task)
+            # Fase C — o dono cria uma tarefa para uma IA executar no guest
+            local to title scope sw sr
+            to=$(echo "$payload" | jq -r '.payload.to // .to // ""')
+            title=$(echo "$payload" | jq -r '.payload.title // .payload.subtask // ""')
+            sw=$(echo "$payload" | jq -c '.payload.scope_write // []')
+            sr=$(echo "$payload" | jq -c '.payload.scope_read // []')
+            [ -n "$title" ] || { log "create_task sem título"; break; }
+            mkdir -p "$SUITE/tasks/$task_id"
+            jq -n --arg id "$task_id" --arg title "$title" --arg status "approved" --arg owner "$to" \
+                --argjson sw "$sw" --argjson sr "$sr" \
+                '{id:$id,title:$title,status:$status,owner:$owner,scope_files:$sw,scope_read:$sr,created_at:'"$(now)"',due:""}' \
+                > "$SUITE/tasks/$task_id/context.json"
+            thread_msg "$task_id" "dono" "msg" "Tarefa criada para $to: $title"
+            echo "$sw" | jq -e . >/dev/null 2>&1 && echo "$sw" | jq -r '.[]' | while IFS= read -r p; do
+                lock_req "$to" "$p" "W" "$task_id" >/dev/null
+            done
+            log "tarefa $task_id criada para $to"
+            ;;
+        scan)
+            # Fase C — PHANTOM-IA-HELLO nas CLIs conhecidas; registra quem responder
+            for cli in ollama claude codex aider gpt4all llama-server; do
+                if command -v "$cli" >/dev/null 2>&1; then
+                    local res
+                    res=$(printf 'PHANTOM-IA-HELLO\n' | "$cli" 2>/dev/null | head -1)
+                    if echo "$res" | jq -e . >/dev/null 2>&1; then
+                        register_hello "$(echo "$res" | jq -r '.id // "'$cli'"')" \
+                            "$(echo "$res" | jq -r '.name // "'$cli'"')" \
+                            "$(echo "$res" | jq -r '.invoke // "'$cli'"')"
+                        log "auto-registrado: $cli"
+                    else
+                        log "CLI $cli presente, sem protocolo PHANTOM-IA"
+                    fi
+                fi
+            done
             ;;
         error)
             log "erro de $from: $(echo "$payload" | jq -r '.payload.message')"

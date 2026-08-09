@@ -60,6 +60,12 @@ class PackageScanner {
     private val opQueue = ArrayDeque<Op>()
     private var opBusy = false
 
+    // EXEC (Editor: Executar no guest): resposta emoldurada EXEC-BEGIN…EXEC-END.
+    private var inExec = false
+    private val execBuffer = StringBuilder()
+    private var execCallback: ((String) -> Unit)? = null
+    private var execTimeoutJob: Job? = null
+
     val packages = mutableStateListOf<GuestPackage>()
     var scanning by mutableStateOf(false)
     var connected by mutableStateOf(false)
@@ -94,6 +100,11 @@ class PackageScanner {
         inScan = false
         opBusy = false
         opQueue.clear()
+        inExec = false
+        execBuffer.setLength(0)
+        execTimeoutJob?.cancel()
+        execTimeoutJob = null
+        execCallback = null
     }
 
     fun disconnect() {
@@ -164,8 +175,35 @@ class PackageScanner {
         sendOp("SERVERSTATUS\n") { line -> onResult(line.trim() == "1") }
     }
 
+    /**
+     * Executa um comando no guest devolvendo a saída (Editor: Executar no guest).
+     * O agente responde emoldurado (EXEC-BEGIN…EXEC-END) e a saída é entregue
+     * no callback — chamado UMA vez, na main/coroutine do chamador.
+     */
+    fun exec(command: String, onOutput: (String) -> Unit) {
+        if (!connected || awaitingResponse || inExec || inScan || opQueue.isNotEmpty()) {
+            onOutput("[ERRO] Agente do guest indisponível ou ocupado")
+            return
+        }
+        awaitingResponse = true
+        inExec = true
+        execBuffer.setLength(0)
+        execCallback = onOutput
+        send("EXEC:$command\n")
+        execTimeoutJob = scope.launch {
+            delay(20_000)
+            if (inExec) {
+                inExec = false
+                awaitingResponse = false
+                val cb = execCallback
+                execCallback = null
+                cb?.invoke("[tempo esgotado — o processo pode ainda estar rodando no guest]")
+            }
+        }
+    }
+
     private fun sendOp(cmd: String, cb: (String) -> Unit) {
-        if (!connected) {
+        if (!connected || inExec) {
             cb("ERR")
             return
         }
@@ -187,6 +225,25 @@ class PackageScanner {
 
     private fun onLine(line: String) {
         val trimmed = line.trim()
+        if (trimmed == "EXEC-BEGIN") {
+            inExec = true
+            execBuffer.setLength(0)
+            return
+        }
+        if (inExec) {
+            if (trimmed == "EXEC-END") {
+                inExec = false
+                awaitingResponse = false
+                execTimeoutJob?.cancel()
+                execTimeoutJob = null
+                val cb = execCallback
+                execCallback = null
+                cb?.invoke(execBuffer.toString().trimEnd())
+            } else {
+                execBuffer.append(line).append('\n')
+            }
+            return
+        }
         // Resposta de um comando do canal de controle (OK / ERR:… / 0 / 1).
         if (opQueue.isNotEmpty() && (trimmed == "OK" || trimmed.startsWith("ERR") || trimmed == "0" || trimmed == "1")) {
             val op = opQueue.removeFirst()

@@ -17,6 +17,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,15 +28,19 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -44,6 +49,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -68,8 +74,12 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,10 +90,12 @@ import com.phantomcode.app.data.LocalServer
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.data.EditorPrefs
+import com.phantomcode.app.data.ai.AiSuiteManager
 import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.git.GitStatus
 import com.phantomcode.app.data.remote.FtpClient
+import com.phantomcode.app.data.remote.SftpClient
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.QemuManager
 import com.phantomcode.app.ui.theme.CodeTheme
@@ -91,6 +103,7 @@ import com.phantomcode.app.ui.theme.LocalThemeController
 import com.phantomcode.app.ui.theme.terminalColors
 import com.phantomcode.app.ui.components.PhantomConfirmDialog
 import com.phantomcode.app.ui.components.PhantomDialog
+import com.phantomcode.app.ui.components.PhantomOutlinedButton
 import com.phantomcode.app.ui.components.PreviewPane
 import com.phantomcode.app.ui.components.StylePickerDialog
 import com.phantomcode.app.ui.components.fileTypeIcon
@@ -134,6 +147,7 @@ fun EditorScreen(
     val editorPrefs = remember { EditorPrefs(context) }
     val backup = remember { BackupManager(context) }
     val git = remember { GitManager(context) }
+    val aiSuite = remember { AiSuiteManager(context) }
     val vm = LocalVm.current
     val fileName = path.substringAfterLast('/')
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -146,6 +160,8 @@ fun EditorScreen(
     var themePickerOpen by remember { mutableStateOf(false) }
     var fontSizePickerOpen by remember { mutableStateOf(false) }
     var fontFamilyPickerOpen by remember { mutableStateOf(false) }
+    var cursorPickerOpen by remember { mutableStateOf(false) }
+    var selectionColorPickerOpen by remember { mutableStateOf(false) }
     var saveAsOpen by remember { mutableStateOf(false) }
     var renameOpen by remember { mutableStateOf(false) }
     var saveAsInitial by remember { mutableStateOf(path) }
@@ -163,6 +179,13 @@ fun EditorScreen(
     var ftpBusy by remember { mutableStateOf(false) }
     var contextTarget by remember { mutableStateOf<FileEntry?>(null) }
     var contextDialog by remember { mutableStateOf<String?>(null) }
+    var newFileOpen by remember { mutableStateOf(false) }
+    var newFolderOpen by remember { mutableStateOf(false) }
+    var moveDestOpen by remember { mutableStateOf(false) }
+    var copyDestOpen by remember { mutableStateOf(false) }
+
+    // Fase C — aviso quando outra IA tem lock (W/R) no arquivo aberto.
+    var lockNotice by remember { mutableStateOf<String?>(null) }
 
     // Preview Hub (P3.1) + servidor local/VM (D24)
     var previewOpen by remember { mutableStateOf(false) }
@@ -170,6 +193,15 @@ fun EditorScreen(
     var serverRunning by remember { mutableStateOf(LocalServer.isRunning()) }
     var vmServerBusy by remember { mutableStateOf(false) }
     var vmServerUp by remember { mutableStateOf(false) }
+
+    // Split view (P1.5): segundo editor lado a lado.
+    var splitOpen by remember { mutableStateOf(false) }
+    var splitPath by remember { mutableStateOf<String?>(null) }
+
+    // Executar no guest (Editor): saída do comando exibida num diálogo.
+    var execOpen by remember { mutableStateOf(false) }
+    var execBusy by remember { mutableStateOf(false) }
+    var execOutput by remember { mutableStateOf("") }
 
     // Exportar o PROJETO inteiro como ZIP (P2.2 — SAF): mesmo fluxo do backup,
     // mas limitado ao projeto do arquivo aberto (leva .git junto p/ histórico).
@@ -240,15 +272,19 @@ fun EditorScreen(
         lastSeenModified = runCatching { workspace.resolve(path).lastModified() }.getOrDefault(0L)
     }
 
-    /** Aplica as preferências do editor (tema/fonte/wrap/family) ao CodeMirror. */
+    /** Aplica as preferências do editor (tema/fonte/wrap/family/cursor/selection) ao CodeMirror. */
     fun applyEditorPrefs(target: WebView? = webView) {
         val wv = target ?: return
         val theme = JSONObject.quote(editorPrefs.theme.id)
         val family = JSONObject.quote(editorPrefs.fontFamily)
+        val cursor = JSONObject.quote(editorPrefs.cursorStyle)
+        val selection = JSONObject.quote(editorPrefs.selectionColor)
         val js = "window.PhantomEditor.setTheme($theme);" +
             "window.PhantomEditor.setFontSize(${editorPrefs.fontSizePx});" +
             "window.PhantomEditor.setWordWrap(${editorPrefs.wordWrap});" +
-            "window.PhantomEditor.setFontFamily($family);"
+            "window.PhantomEditor.setFontFamily($family);" +
+            "window.PhantomEditor.setCursorStyle($cursor);" +
+            "window.PhantomEditor.setSelectionColor($selection);"
         wv.evaluateJavascript(js, null)
     }
 
@@ -337,6 +373,17 @@ fun EditorScreen(
         }
     }
 
+    // Fase C — aviso de lock (R1): outra IA reservou o arquivo aberto para escrita.
+    LaunchedEffect(path) {
+        val held = aiSuite.guard.snapshot().firstOrNull { it.path == path && it.owner != "dono" && !it.expired }
+        lockNotice = when {
+            held == null -> null
+            held.mode == 'W' -> "🔒 ${held.owner} está editando este arquivo (lock W)"
+            held.mode == 'R' -> "📖 ${held.owner} está lendo este arquivo (lock R)"
+            else -> null
+        }
+    }
+
     // Status do servidor da VM (D24): polling leve a cada 5s.
     LaunchedEffect(Unit) {
         while (true) {
@@ -404,6 +451,32 @@ fun EditorScreen(
             return
         }
         onPreviewUrl("${QemuManager.VM_SERVER_BASE_URL}/$path")
+    }
+
+    /** Executa o arquivo atual no guest e mostra a saída (EXEC do phantom-agent). */
+    fun runInVm() {
+        val qemu = vm.qemu
+        if (!qemu.running || !qemu.scanner.connected) {
+            scope.launch { snackbar.showSnackbar("A VM não está rodando — inicie no Toolbox primeiro") }
+            return
+        }
+        if (execBusy) return
+        val guestPath = "${QemuManager.GUEST_WORKSPACE}/$path"
+        val dir = guestPath.substringBeforeLast('/', "")
+        val cmd = when (path.substringAfterLast('.', "").lowercase()) {
+            "py" -> "cd \"$dir\" && python3 \"$guestPath\""
+            "sh", "bash" -> "cd \"$dir\" && sh \"$guestPath\""
+            "js", "mjs" -> "cd \"$dir\" && node \"$guestPath\""
+            "ts" -> "cd \"$dir\" && (command -v node >/dev/null && node \"$guestPath\" || echo \"Node não instalado — apt install nodejs\")"
+            else -> "cd \"$dir\" && cat \"$guestPath\""
+        }
+        execBusy = true
+        execOutput = ""
+        execOpen = true
+        qemu.scanner.exec(cmd) { out ->
+            execBusy = false
+            execOutput = out
+        }
     }
 
     // Indicador linha/coluna (P1.3) — polling leve a cada 1s.
@@ -504,6 +577,10 @@ fun EditorScreen(
                             Spacer(Modifier.width(8.dp))
                             Text(cursorLabel, color = palette.textSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                         }
+                        if (lockNotice != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(lockNotice!!, color = palette.accentBright, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -570,6 +647,20 @@ fun EditorScreen(
                             onClick = {
                                 actionsOpen = false
                                 fontFamilyPickerOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cursor…") },
+                            onClick = {
+                                actionsOpen = false
+                                cursorPickerOpen = true
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cor de seleção…") },
+                            onClick = {
+                                actionsOpen = false
+                                selectionColorPickerOpen = true
                             },
                         )
                         DropdownMenuItem(
@@ -662,6 +753,19 @@ fun EditorScreen(
                             },
                         )
                         DropdownMenuItem(
+                            text = { Text(if (splitOpen) "Fechar split" else "Split view (arquivo atual)") },
+                            onClick = {
+                                actionsOpen = false
+                                if (splitOpen) {
+                                    splitOpen = false
+                                    splitPath = null
+                                } else {
+                                    splitPath = path
+                                    splitOpen = true
+                                }
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text(if (vmServerBusy) "Iniciando…" else "Servidor local (VM)") },
                             enabled = !vmServerBusy,
                             onClick = {
@@ -675,6 +779,14 @@ fun EditorScreen(
                             onClick = {
                                 actionsOpen = false
                                 openInVmServer()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (execBusy) "Executando…" else "Executar no guest") },
+                            enabled = !execBusy,
+                            onClick = {
+                                actionsOpen = false
+                                runInVm()
                             },
                         )
                         DropdownMenuItem(
@@ -720,6 +832,21 @@ fun EditorScreen(
                                     val ftp = FtpClient(context)
                                     val abs = runCatching { workspace.resolve(path).absolutePath }.getOrDefault(path)
                                     val result = withContext(Dispatchers.IO) { ftp.upload(abs, path) }
+                                    ftpBusy = false
+                                    snackbar.showSnackbar(result.message)
+                                }
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (ftpBusy) "Enviando…" else "Upload SFTP") },
+                            enabled = !ftpBusy,
+                            onClick = {
+                                actionsOpen = false
+                                scope.launch {
+                                    ftpBusy = true
+                                    val sftp = SftpClient(context)
+                                    val abs = runCatching { workspace.resolve(path).absolutePath }.getOrDefault(path)
+                                    val result = withContext(Dispatchers.IO) { sftp.upload(abs, path) }
                                     ftpBusy = false
                                     snackbar.showSnackbar(result.message)
                                 }
@@ -790,6 +917,8 @@ fun EditorScreen(
                     onRefresh = { explorerTick++ },
                     onOpenFile = onOpenFile,
                     onContextMenu = { contextTarget = it },
+                    onNewFile = { newFileOpen = true },
+                    onNewFolder = { newFolderOpen = true },
                 )
             }
 
@@ -992,7 +1121,26 @@ fun EditorScreen(
                     loadUrl("file:///android_asset/editor/index.html")
                 }
             }
-            if (previewOpen) {
+            val splitRel = if (splitOpen) splitPath else null
+            if (splitRel != null) {
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    AndroidView(
+                        factory = editorFactory,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        update = { webView = it },
+                    )
+                    SplitEditorPane(
+                        relPath = splitRel,
+                        workspace = workspace,
+                        onClose = {
+                            splitOpen = false
+                            splitPath = null
+                        },
+                        onOpenFile = onOpenFile,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+            } else if (previewOpen) {
                 Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     AndroidView(
                         factory = editorFactory,
@@ -1140,6 +1288,14 @@ fun EditorScreen(
                                 onOpenFile(target.relPath)
                             },
                         )
+                        DropdownMenuItem(
+                            text = { Text("Abrir no split") },
+                            onClick = {
+                                contextTarget = null
+                                splitPath = target.relPath
+                                splitOpen = true
+                            },
+                        )
                     }
                     DropdownMenuItem(
                         text = { Text("Renomear") },
@@ -1175,6 +1331,22 @@ fun EditorScreen(
                             }.onFailure {
                                 scope.launch { snackbar.showSnackbar("Erro ao duplicar: ${it.message}") }
                             }
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Mover para…") },
+                        onClick = {
+                            contextTarget = target
+                            contextDialog = null
+                            moveDestOpen = true
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copiar para…") },
+                        onClick = {
+                            contextTarget = target
+                            contextDialog = null
+                            copyDestOpen = true
                         },
                     )
                     DropdownMenuItem(
@@ -1237,6 +1409,169 @@ fun EditorScreen(
                         contextTarget = null
                     },
                 )
+            }
+        }
+
+        // ── Novo arquivo / nova pasta no explorer ──
+        if (newFileOpen) {
+            PhantomDialog(
+                title = "Novo arquivo",
+                placeholder = "src/main.kt",
+                initialValue = if (path.contains('/')) "${path.substringBeforeLast('/')}/" else "",
+                confirmText = "Criar",
+                onConfirm = { rel ->
+                    newFileOpen = false
+                    val clean = rel.trim().trimStart('/')
+                    runCatching {
+                        check(clean.isNotBlank()) { "Nome vazio" }
+                        check(workspace.createFile(clean)) { "Arquivo já existe" }
+                        explorerExpanded.remove(clean.substringBeforeLast('/', ""))
+                        explorerTick++
+                        onOpenFile(clean)
+                    }.onFailure {
+                        scope.launch { snackbar.showSnackbar("Erro: ${it.message}") }
+                    }
+                },
+                onDismiss = { newFileOpen = false },
+            )
+        }
+
+        if (newFolderOpen) {
+            PhantomDialog(
+                title = "Nova pasta",
+                placeholder = "nome-da-pasta",
+                initialValue = "",
+                confirmText = "Criar",
+                onConfirm = { name ->
+                    newFolderOpen = false
+                    val clean = name.trim().trim('/')
+                    runCatching {
+                        check(clean.isNotBlank()) { "Nome vazio" }
+                        check(workspace.createDir(clean)) { "Pasta já existe" }
+                        explorerExpanded[clean] = true
+                        explorerTick++
+                    }.onFailure {
+                        scope.launch { snackbar.showSnackbar("Erro: ${it.message}") }
+                    }
+                },
+                onDismiss = { newFolderOpen = false },
+            )
+        }
+
+        // ── Mover / copiar para… (escolha de pasta de destino) ──
+        val moveTarget = contextTarget
+        if (moveDestOpen && moveTarget != null) {
+            val folders = remember(moveTarget.relPath) { workspaceDirs(workspace) - moveTarget.relPath }
+            FolderPickerDialog(
+                title = "Mover '${moveTarget.name}' para",
+                folders = folders,
+                onPick = { dest ->
+                    moveDestOpen = false
+                    contextTarget = null
+                    runCatching {
+                        check(workspace.moveTo(moveTarget.relPath, dest)) { "Destino inválido (mesma pasta ou dentro de si mesmo)" }
+                        explorerExpanded.remove(moveTarget.relPath)
+                        explorerTick++
+                    }.onFailure {
+                        scope.launch { snackbar.showSnackbar("Erro ao mover: ${it.message}") }
+                    }
+                },
+                onDismiss = {
+                    moveDestOpen = false
+                    contextTarget = null
+                },
+            )
+        }
+
+        if (copyDestOpen && moveTarget != null) {
+            val folders = remember(moveTarget.relPath) { workspaceDirs(workspace) - moveTarget.relPath }
+            FolderPickerDialog(
+                title = "Copiar '${moveTarget.name}' para",
+                folders = folders,
+                onPick = { dest ->
+                    copyDestOpen = false
+                    contextTarget = null
+                    runCatching {
+                        check(workspace.copyTo(moveTarget.relPath, dest)) { "Destino inválido" }
+                        explorerTick++
+                    }.onFailure {
+                        scope.launch { snackbar.showSnackbar("Erro ao copiar: ${it.message}") }
+                    }
+                },
+                onDismiss = {
+                    copyDestOpen = false
+                    contextTarget = null
+                },
+            )
+        }
+
+        // ── Saída de "Executar no guest" (VM) ──
+        if (execOpen) {
+            val clipboard = LocalClipboardManager.current
+            Dialog(onDismissRequest = { execOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .background(palette.surface, RoundedCornerShape(10.dp))
+                        .border(1.dp, palette.accentPrimary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(16.dp)
+                        .widthIn(max = 560.dp)
+                        .heightIn(max = 500.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Executar no guest", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        if (execBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = palette.accentPrimary,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Fechar",
+                            tint = palette.textSecondary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { execOpen = false }
+                                .padding(4.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 120.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(palette.background)
+                            .border(1.dp, palette.border.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp),
+                    ) {
+                        Text(
+                            if (execBusy) "Executando na VM… (a saída aparece ao terminar)"
+                            else if (execOutput.isBlank()) "(sem saída — comando executado)"
+                            else execOutput,
+                            color = palette.textPrimary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        PhantomOutlinedButton(
+                            text = "Copiar",
+                            enabled = execOutput.isNotBlank(),
+                            onClick = {
+                                clipboard.setText(AnnotatedString(execOutput))
+                                scope.launch { snackbar.showSnackbar("Saída copiada") }
+                            },
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        PhantomOutlinedButton(text = "Fechar", onClick = { execOpen = false })
+                    }
+                }
             }
         }
     }
@@ -1332,6 +1667,69 @@ fun EditorScreen(
             onDismiss = { fontFamilyPickerOpen = false },
         )
     }
+
+    // ── Seletor de estilo do cursor do editor (P3.2) ──
+    if (cursorPickerOpen) {
+        val cursors = EditorPrefs.CURSOR_STYLES.map { PrefOption(it.first, it.second) }
+        StylePickerDialog(
+            title = "Cursor",
+            options = cursors,
+            selected = cursors.firstOrNull { it.id == editorPrefs.cursorStyle } ?: cursors.first(),
+            render = { Text(it.label, fontSize = 14.sp, color = palette.accentPrimary, fontWeight = FontWeight.SemiBold) },
+            onPick = {
+                editorPrefs.cursorStyle = it.id
+                val js = "window.PhantomEditor.setCursorStyle(${JSONObject.quote(it.id)})"
+                webView?.evaluateJavascript(js, null)
+                cursorPickerOpen = false
+            },
+            onDismiss = { cursorPickerOpen = false },
+        )
+    }
+
+    // ── Seletor de cor de seleção do editor (P3.2) ──
+    if (selectionColorPickerOpen) {
+        val followTheme = PrefOption("__theme__", "Seguir o tema")
+        val options = listOf(
+            PrefOption("#9F4DFF", "Roxo Phantom"),
+            PrefOption("#3B82F6", "Azul"),
+            PrefOption("#22C55E", "Verde"),
+            PrefOption("#F59E0B", "Âmbar"),
+            PrefOption("#EF4444", "Vermelho"),
+            PrefOption("#EC4899", "Rosa"),
+            PrefOption("#06B6D4", "Ciano"),
+        ) + followTheme
+        val current = editorPrefs.selectionColor
+        StylePickerDialog(
+            title = "Cor de seleção",
+            options = options,
+            selected = options.firstOrNull { it.id == (current ?: followTheme.id) } ?: followTheme,
+            render = { opt ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (opt.id == followTheme.id) palette.border.copy(alpha = 0.4f) else Color(runCatching { android.graphics.Color.parseColor(opt.id) }.getOrDefault(0xFF9F4DFF.toInt())))
+                            .border(1.dp, palette.border, RoundedCornerShape(4.dp)),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(opt.label, fontSize = 14.sp, color = palette.accentPrimary, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            onPick = {
+                editorPrefs.selectionColor = if (it.id == followTheme.id) null else it.id
+                val js = "window.PhantomEditor.setSelectionColor(${JSONObject.quote(editorPrefs.selectionColor)})"
+                webView?.evaluateJavascript(js, null)
+                selectionColorPickerOpen = false
+            },
+            onDismiss = { selectionColorPickerOpen = false },
+        )
+    }
+}
+
+/** Opção com rótulo para o [StylePickerDialog] (id → rótulo amigável). */
+private data class PrefOption(val id: String, val label: String) {
+    override fun toString() = label
 }
 
 /** Botão compacto da barra Git do editor. */
@@ -1357,6 +1755,131 @@ private fun unquoteJs(jsonString: String?): String {
         .getOrDefault(jsonString.removeSurrounding("\""))
 }
 
+/** Segundo editor do split view (P1.5): WebView próprio + bridge de save. */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun SplitEditorPane(
+    relPath: String,
+    workspace: WorkspaceManager,
+    onClose: () -> Unit,
+    onOpenFile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val palette = LocalThemeController.current.currentPalette()
+    val editorPrefs = remember { EditorPrefs(context) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var saved by remember { mutableStateOf(true) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+
+    fun applyPrefs(wv: WebView) {
+        val theme = JSONObject.quote(editorPrefs.theme.id)
+        val family = JSONObject.quote(editorPrefs.fontFamily)
+        val cursor = JSONObject.quote(editorPrefs.cursorStyle)
+        val selection = JSONObject.quote(editorPrefs.selectionColor)
+        val js = "window.PhantomEditor.setTheme($theme);" +
+            "window.PhantomEditor.setFontSize(${editorPrefs.fontSizePx});" +
+            "window.PhantomEditor.setWordWrap(${editorPrefs.wordWrap});" +
+            "window.PhantomEditor.setFontFamily($family);" +
+            "window.PhantomEditor.setCursorStyle($cursor);" +
+            "window.PhantomEditor.setSelectionColor($selection);"
+        wv.evaluateJavascript(js, null)
+    }
+
+    val bridge = remember(relPath, workspace) {
+        object {
+            @JavascriptInterface
+            fun save(text: String) {
+                runCatching { workspace.writeText(relPath, text) }
+                mainHandler.post { saved = true }
+            }
+
+            @JavascriptInterface
+            fun dirty() {
+                mainHandler.post { saved = false }
+            }
+
+            @JavascriptInterface
+            fun saved() = Unit
+
+            @JavascriptInterface
+            fun openSearch() = Unit
+
+            @JavascriptInterface
+            fun openGoto() = Unit
+        }
+    }
+
+    fun saveAndClose() {
+        val wv = webView ?: run { onClose(); return }
+        wv.evaluateJavascript("window.PhantomEditor.getValue()") { value ->
+            runCatching { workspace.writeText(relPath, unquoteJs(value)) }
+            onClose()
+        }
+    }
+
+    BackHandler(onBack = { saveAndClose() })
+
+    Column(
+        modifier = modifier
+            .background(palette.surface)
+            .border(1.dp, palette.border.copy(alpha = 0.5f), RoundedCornerShape(0.dp)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                relPath.substringAfterLast('/'),
+                color = palette.textPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onOpenFile(relPath) }
+                    .padding(2.dp),
+            )
+            Text(if (saved) "" else "●", color = palette.warning, fontSize = 10.sp)
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Fechar split",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp).clickable { saveAndClose() }.padding(1.dp),
+            )
+        }
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    addJavascriptInterface(bridge, "AndroidBridge")
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            val content = runCatching { workspace.readText(relPath) }.getOrDefault("")
+                            val js = "PhantomEditor.init(" +
+                                "document.getElementById('editor')," +
+                                "${JSONObject.quote(content)}," +
+                                "${JSONObject.quote(relPath.substringAfterLast('/'))});"
+                            mainHandler.post {
+                                view.evaluateJavascript(js, null)
+                                applyPrefs(view)
+                                view.evaluateJavascript("window.PhantomEditor.focus()", null)
+                                runCatching { view.requestFocus() }
+                            }
+                        }
+                    }
+                    loadUrl("file:///android_asset/editor/index.html")
+                    webView = this
+                }
+            },
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
+    }
+}
+
 /** Nó da árvore do explorer lateral do editor. */
 private data class EditorTreeNode(val entry: FileEntry, val depth: Int)
 
@@ -1373,6 +1896,77 @@ private fun editorVisibleTree(ws: WorkspaceManager, expanded: Map<String, Boolea
     return out
 }
 
+/** Todas as pastas do workspace (relativas à raiz) — usado no seletor de destino. */
+private fun workspaceDirs(ws: WorkspaceManager): List<String> {
+    val out = mutableListOf<String>()
+    fun walk(rel: String) {
+        ws.list(rel).filter { it.isDir }.forEach {
+            out += it.relPath
+            walk(it.relPath)
+        }
+    }
+    walk("")
+    return out
+}
+
+/** Diálogo de escolha de pasta de destino (mover/copiar no explorer). */
+@Composable
+private fun FolderPickerDialog(
+    title: String,
+    folders: List<String>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalThemeController.current.currentPalette()
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .background(palette.surface, RoundedCornerShape(10.dp))
+                .border(1.dp, palette.accentPrimary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                .padding(16.dp)
+                .widthIn(max = 420.dp)
+                .heightIn(max = 460.dp),
+        ) {
+            Text(title, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onPick("") }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Folder, contentDescription = null, tint = palette.accentPrimary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("(raiz do workspace)", color = palette.textPrimary, fontSize = 13.sp)
+                    }
+                }
+                items(folders) { folder ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onPick(folder) }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Folder, contentDescription = null, tint = palette.accentSecondary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(folder, color = palette.textPrimary, fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                PhantomOutlinedButton(text = "Cancelar", onClick = onDismiss)
+            }
+        }
+    }
+}
+
 /** Explorer lateral (P2.1): árvore de arquivos ao lado do editor. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1384,6 +1978,8 @@ private fun EditorExplorer(
     onRefresh: () -> Unit,
     onOpenFile: (String) -> Unit,
     onContextMenu: (FileEntry) -> Unit = {},
+    onNewFile: () -> Unit = {},
+    onNewFolder: () -> Unit = {},
 ) {
     val palette = LocalThemeController.current.currentPalette()
     val tree = remember(tick, expanded) { editorVisibleTree(workspace, expanded) }
@@ -1400,6 +1996,20 @@ private fun EditorExplorer(
         ) {
             Text("Projeto", color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = "Novo arquivo",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp).clickable(onClick = onNewFile).padding(1.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                Icons.Filled.CreateNewFolder,
+                contentDescription = "Nova pasta",
+                tint = palette.textSecondary,
+                modifier = Modifier.size(18.dp).clickable(onClick = onNewFolder).padding(1.dp),
+            )
+            Spacer(Modifier.width(6.dp))
             Icon(
                 Icons.Filled.Refresh,
                 contentDescription = "Atualizar",

@@ -62,12 +62,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.data.ai.AiAgent
 import com.phantomcode.app.data.ai.AiLock
+import com.phantomcode.app.data.ai.AiProposal
 import com.phantomcode.app.data.ai.AiSuiteManager
+import com.phantomcode.app.data.ai.AiTask
+import com.phantomcode.app.data.ai.AiThreadMessage
 import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.backup.CloudBackupManager
 import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.secrets.SecretsManager
 import com.phantomcode.app.data.vm.DistroCatalog
+import com.phantomcode.app.data.vm.DistroConfig
 import com.phantomcode.app.data.vm.DistroInfo
 import com.phantomcode.app.data.vm.GuestPackage
 import com.phantomcode.app.data.vm.LocalVm
@@ -86,6 +90,9 @@ import com.phantomcode.app.ui.theme.PhantomPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ToolboxScreen(
@@ -111,6 +118,28 @@ fun ToolboxScreen(
     var installTarget by remember { mutableStateOf<DistroInfo?>(null) }
     var confirmUninstallDistro by remember { mutableStateOf<DistroInfo?>(null) }
     var configureOnly by remember { mutableStateOf(false) }
+
+    // ── Instalação por arquivos locais (T-S1/T-S2/T-S3 — SAF) ──
+    // A guarda do target/config entre a abertura do seletor e o resultado:
+    // o usuário escolhe o arquivo no Documents UI e o app instala a distro.
+    var localPickTarget by remember { mutableStateOf<DistroInfo?>(null) }
+    var localPickConfig by remember { mutableStateOf<DistroConfig?>(null) }
+    val pickLocalLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        val info = localPickTarget
+        val config = localPickConfig ?: DistroConfig()
+        localPickTarget = null
+        localPickConfig = null
+        if (info != null && !uris.isNullOrEmpty()) {
+            qemu.setDiskSizeMb(config.diskSizeMb)
+            val logTab = qemu.terminal.addLogTab("Instalando ${info.name} (local)")
+            onOpenTerminal()
+            logTab.append("[phantom] Instalando ${info.name} por arquivos locais…\n")
+            logTab.append("[phantom] Selecione o phantom.tar.gz OU os avulsos (rootfs.img, kernel, initrd.img, qemu-system-aarch64).\n\n")
+            vm.distros.installFromUris(info, uris, config, logTab)
+        }
+    }
 
     // ── Backup (T21 · D2) ──
     val backup = remember { BackupManager(context) }
@@ -205,6 +234,16 @@ fun ToolboxScreen(
                 aiSuite = aiSuite,
                 qemuRunning = qemu.running,
                 guestPackages = qemu.scanner.packages,
+                onRunGuest = { cmd ->
+                    if (!qemu.scanner.connected) {
+                        scope.launch { snackbar.showSnackbar("Guest offline — inicie o Linux primeiro") }
+                    } else {
+                        qemu.scanner.exec(cmd) { out ->
+                            val msg = out.trim().ifBlank { "(sem saída)" }
+                            scope.launch { snackbar.showSnackbar(msg.take(400)) }
+                        }
+                    }
+                },
                 onSnack = { msg -> scope.launch { snackbar.showSnackbar(msg) } },
             )
 
@@ -443,6 +482,12 @@ fun ToolboxScreen(
                 initialRamMb = qemu.preset.ramMb,
                 githubAuthenticated = !git.token.isNullOrBlank(),
                 onOpenGit = onOpenGit,
+                onInstallLocal = { config ->
+                    installTarget = null
+                    localPickConfig = config
+                    localPickTarget = info
+                    pickLocalLauncher.launch(arrayOf("*/*"))
+                },
                 onConfirm = { config ->
                     installTarget = null
                     qemu.setPreset(
@@ -477,11 +522,14 @@ fun ToolboxScreen(
                                     lastPct = p
                                     logTab.append("[phantom] QEMU: $p%…\n")
                                 }
+                                logTab.setProgress(pct, "Baixando QEMU… $p%")
                             }
                             if (!ok) {
                                 logTab.append("\n\u001b[31m✗ QEMU não disponível: ${qemu.lastError ?: "erro desconhecido"}\u001b[0m\n")
+                                logTab.setProgress(null, "Falha — QEMU indisponível")
                                 return@launch
                             }
+                            logTab.setProgress(null, "QEMU pronto — instalando a distro…")
                             logTab.append("[phantom] ✓ QEMU pronto — instalando a distro…\n\n")
                         }
                         vm.distros.install(info, config, logTab)
@@ -744,6 +792,7 @@ private fun AiSuiteSection(
     aiSuite: AiSuiteManager,
     qemuRunning: Boolean,
     guestPackages: List<GuestPackage>,
+    onRunGuest: (String) -> Unit,
     onSnack: (String) -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -753,8 +802,25 @@ private fun AiSuiteSection(
     var regInvoke by remember { mutableStateOf("") }
     var regType by remember { mutableStateOf("local") }
 
+    // Fase B — delegação com aprovação do dono
+    var openTask by remember { mutableStateOf<String?>(null) }
+    var ownerMsg by remember { mutableStateOf("") }
+    var delegateOpen by remember { mutableStateOf(false) }
+    var delFrom by remember { mutableStateOf("") }
+    var delTo by remember { mutableStateOf("") }
+    var delSubtask by remember { mutableStateOf("") }
+    var delScope by remember { mutableStateOf("") }
+    var delRead by remember { mutableStateOf("") }
+    var delReason by remember { mutableStateOf("") }
+    var delDue by remember { mutableStateOf("") }
+    var adjustTask by remember { mutableStateOf<String?>(null) }
+    var adjWrite by remember { mutableStateOf("") }
+    var adjRead by remember { mutableStateOf("") }
+
     val agents = remember(tick, guestPackages.size) { aiSuite.allAgents(guestPackages) }
     val locks = remember(tick) { aiSuite.guard.snapshot() }
+    val proposals = remember(tick) { aiSuite.pendingProposals() }
+    val tasks = remember(tick) { aiSuite.listTasks() }
 
     SectionLabel(text = "AI Suite — roteador entre IAs")
     Spacer(Modifier.height(4.dp))
@@ -802,7 +868,7 @@ private fun AiSuiteSection(
         }
     } else {
         agents.forEach { agent ->
-            AiAgentRow(agent, palette)
+            AiAgentRow(agent, palette) { onRunGuest(agent.invoke) }
             Spacer(Modifier.height(6.dp))
         }
     }
@@ -819,6 +885,175 @@ private fun AiSuiteSection(
             AiLockRow(lock, palette)
             Spacer(Modifier.height(6.dp))
         }
+    }
+
+    // ── Fase B — aprovações do dono (R4) ────────────────────────────────
+    Spacer(Modifier.height(14.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Aprovações do dono (R4)", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        if (proposals.isNotEmpty()) {
+            Text("${proposals.size} pendente(s)", color = palette.accentBright, fontSize = 10.sp)
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    if (proposals.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Nenhuma delegação aguardando sua aprovação.", color = palette.textSecondary, fontSize = 12.sp)
+        }
+    } else {
+        proposals.forEach { p ->
+            ProposalCard(p, palette) { action ->
+                when (action) {
+                    ProposalAction.APPROVE -> {
+                        aiSuite.approveProposal(p.id)
+                        tick++
+                        onSnack("Delegação aprovada")
+                    }
+                    ProposalAction.REJECT -> {
+                        aiSuite.rejectProposal(p.id)
+                        tick++
+                        onSnack("Delegação recusada")
+                    }
+                    ProposalAction.ADJUST -> {
+                        adjustTask = p.id
+                        adjWrite = p.scopeWrite.joinToString(", ")
+                        adjRead = p.scopeRead.joinToString(", ")
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+
+    // ── Fase B — tarefas e conversas (R5) ───────────────────────────────
+    Spacer(Modifier.height(14.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Tarefas e conversas", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        PhantomOutlinedButton(text = "Delegar para IA", icon = Icons.Filled.Add, onClick = {
+            delFrom = agents.firstOrNull { it.id != "dono" }?.id ?: ""
+            delTo = ""
+            delSubtask = ""
+            delScope = ""
+            delRead = ""
+            delReason = ""
+            delDue = ""
+            delegateOpen = true
+        })
+    }
+    Spacer(Modifier.height(4.dp))
+    if (tasks.isEmpty()) {
+        PhantomCard(modifier = Modifier.fillMaxWidth()) {
+            Text("Nenhuma tarefa ainda. Use Delegar para IA para propor uma delegação.", color = palette.textSecondary, fontSize = 12.sp)
+        }
+    } else {
+        tasks.forEach { task ->
+            val agentInvoke = agents.firstOrNull { it.id == task.owner || it.name == task.owner }?.invoke.orEmpty()
+            TaskCard(
+                task = task,
+                messages = remember(task.id, tick) { aiSuite.taskMessages(task.id) },
+                open = openTask == task.id,
+                onToggle = { openTask = if (openTask == task.id) null else task.id },
+                ownerMsg = ownerMsg,
+                onOwnerMsgChange = { ownerMsg = it },
+                onSendOwner = {
+                    aiSuite.sendOwnerMessage(task.id, ownerMsg.trim())
+                    ownerMsg = ""
+                    tick++
+                },
+                onRunGuest = {
+                    if (agentInvoke.isNotBlank()) {
+                        onRunGuest("echo \"Tarefa ${task.id}: ${task.title}\" | ${agentInvoke}")
+                    }
+                },
+                runnable = task.status == "approved" || task.status == "in_progress",
+                palette = palette,
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+
+    if (adjustTask != null) {
+        AlertDialog(
+            onDismissRequest = { adjustTask = null },
+            containerColor = palette.surface,
+            title = { Text("Ajustar escopo da delegação", color = palette.textPrimary, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    Text("Arquivos de ESCRITA (vírgula):", color = palette.textSecondary, fontSize = 11.sp)
+                    BasicTextField(
+                        value = adjWrite,
+                        onValueChange = { adjWrite = it },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(palette.surfaceAlt)
+                            .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(10.dp),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("Arquivos de LEITURA (vírgula):", color = palette.textSecondary, fontSize = 11.sp)
+                    BasicTextField(
+                        value = adjRead,
+                        onValueChange = { adjRead = it },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(palette.surfaceAlt)
+                            .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp)).padding(10.dp),
+                        textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+                        cursorBrush = SolidColor(palette.accentSecondary),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    aiSuite.adjustProposal(adjustTask!!, adjWrite.split(",").map { it.trim() }.filter { it.isNotEmpty() }, adjRead.split(",").map { it.trim() }.filter { it.isNotEmpty() })
+                    adjustTask = null
+                    tick++
+                    onSnack("Escopo ajustado — aguardando nova aprovação")
+                }) { Text("Aplicar", color = palette.accentPrimary) }
+            },
+            dismissButton = { TextButton(onClick = { adjustTask = null }) { Text("Cancelar", color = palette.textSecondary) } },
+        )
+    }
+
+    if (delegateOpen) {
+        AlertDialog(
+            onDismissRequest = { delegateOpen = false },
+            containerColor = palette.surface,
+            title = { Text("Delegar tarefa para uma IA", color = palette.textPrimary, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    AiField("De origem (IA ou dono)", delFrom) { delFrom = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Para qual IA", delTo) { delTo = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Subtarefa (o que fazer)", delSubtask) { delSubtask = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Escopo de escrita (vírgula)", delScope) { delScope = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Escopo de leitura (vírgula)", delRead) { delRead = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Motivo (opcional)", delReason) { delReason = it }
+                    Spacer(Modifier.height(6.dp))
+                    AiField("Prazo (opcional)", delDue) { delDue = it }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = delTo.isNotBlank() && delSubtask.isNotBlank(), onClick = {
+                    aiSuite.proposeDelegation(
+                        from = delFrom.ifBlank { "dono" },
+                        to = delTo.trim(),
+                        subtask = delSubtask.trim(),
+                        scopeWrite = delScope.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                        scopeRead = delRead.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                        reason = delReason.trim(),
+                        due = delDue.trim(),
+                    )
+                    delegateOpen = false
+                    tick++
+                    onSnack("Proposta criada — aprovação necessária")
+                }) { Text("Propor", color = palette.accentPrimary) }
+            },
+            dismissButton = { TextButton(onClick = { delegateOpen = false }) { Text("Cancelar", color = palette.textSecondary) } },
+        )
     }
 
     if (registerOpen) {
@@ -903,7 +1138,7 @@ private fun AiSuiteSection(
 }
 
 @Composable
-private fun AiAgentRow(agent: AiAgent, palette: PhantomPalette) {
+private fun AiAgentRow(agent: AiAgent, palette: PhantomPalette, onRunGuest: () -> Unit) {
     PhantomCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -925,6 +1160,10 @@ private fun AiAgentRow(agent: AiAgent, palette: PhantomPalette) {
             }
             if (agent.id.startsWith("scan-")) {
                 Text("auto", color = palette.accentSecondary, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+            }
+            if (agent.invoke.isNotBlank()) {
+                Spacer(Modifier.width(6.dp))
+                PhantomOutlinedButton(text = "Rodar", onClick = onRunGuest)
             }
         }
     }
@@ -955,3 +1194,146 @@ private fun AiLockRow(lock: AiLock, palette: PhantomPalette) {
         }
     }
 }
+
+// ── Fase B — delegação com aprovação humana ────────────────────────────────
+
+private enum class ProposalAction { APPROVE, REJECT, ADJUST }
+
+@Composable
+private fun ProposalCard(proposal: AiProposal, palette: PhantomPalette, onAction: (ProposalAction) -> Unit) {
+    PhantomCard(glow = true, modifier = Modifier.fillMaxWidth()) {
+        Text("${proposal.from} → ${proposal.to}", color = palette.accentPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(2.dp))
+        Text(proposal.subtask, color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        if (proposal.reason.isNotBlank()) {
+            Text("motivo: ${proposal.reason}", color = palette.textSecondary, fontSize = 10.sp)
+        }
+        if (proposal.due.isNotBlank()) {
+            Text("prazo: ${proposal.due}", color = palette.textSecondary, fontSize = 10.sp)
+        }
+        Text(
+            "escreve: ${proposal.scopeWrite.joinToString(", ").ifBlank { "—" }} · lê: ${proposal.scopeRead.joinToString(", ").ifBlank { "—" }}",
+            color = palette.textSecondary,
+            fontSize = 10.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row {
+            PhantomPrimaryButton(text = "Aprovar", onClick = { onAction(ProposalAction.APPROVE) })
+            Spacer(Modifier.width(8.dp))
+            PhantomOutlinedButton(text = "Ajustar", onClick = { onAction(ProposalAction.ADJUST) })
+            Spacer(Modifier.width(8.dp))
+            PhantomOutlinedButton(text = "Recusar", onClick = { onAction(ProposalAction.REJECT) })
+        }
+    }
+}
+
+@Composable
+private fun TaskCard(
+    task: AiTask,
+    messages: List<AiThreadMessage>,
+    open: Boolean,
+    onToggle: () -> Unit,
+    ownerMsg: String,
+    onOwnerMsgChange: (String) -> Unit,
+    onSendOwner: () -> Unit,
+    onRunGuest: () -> Unit,
+    runnable: Boolean,
+    palette: PhantomPalette,
+) {
+    PhantomCard(modifier = Modifier.fillMaxWidth().clickable { onToggle() }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .background(AiStatusColor(task.status, palette), CircleShape),
+            )
+            Spacer(Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("${task.id} · ${task.title}", color = palette.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${task.status} · dono: ${task.owner}", color = palette.textSecondary, fontSize = 10.sp)
+            }
+            if (runnable) {
+                PhantomOutlinedButton(text = "Rodar no guest", onClick = onRunGuest)
+            }
+        }
+        if (open) {
+            Spacer(Modifier.height(8.dp))
+            if (messages.isEmpty()) {
+                Text("Sem mensagens nesta thread.", color = palette.textSecondary, fontSize = 11.sp)
+            } else {
+                messages.takeLast(60).forEach { m ->
+                    ThreadRow(m, palette)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicTextField(
+                    value = ownerMsg,
+                    onValueChange = onOwnerMsgChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(palette.surfaceAlt)
+                        .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    textStyle = TextStyle(color = palette.textPrimary, fontSize = 12.sp),
+                    cursorBrush = SolidColor(palette.accentBright),
+                    singleLine = true,
+                    decorationBox = { inner ->
+                        if (ownerMsg.isEmpty()) Text("Mensagem do dono… (prioridade máxima)", color = palette.textSecondary, fontSize = 11.sp)
+                        inner()
+                    },
+                )
+                Spacer(Modifier.width(8.dp))
+                PhantomPrimaryButton(text = "Enviar", enabled = ownerMsg.isNotBlank(), onClick = onSendOwner)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThreadRow(m: AiThreadMessage, palette: PhantomPalette) {
+    val color = when (m.from) {
+        "dono" -> palette.accentBright
+        "router" -> palette.textSecondary
+        else -> palette.accentSecondary
+    }
+    Text(
+        "${fmtTime(m.ts)} [${m.from}] ${m.text}",
+        color = color,
+        fontSize = 10.sp,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+private fun AiStatusColor(status: String, palette: PhantomPalette) = when (status) {
+    "pending_approval" -> palette.accentBright
+    "approved", "in_progress" -> palette.accentPrimary
+    "done", "merged" -> palette.success
+    "rejected", "cancelled" -> palette.error
+    else -> palette.border
+}
+
+@Composable
+private fun AiField(label: String, value: String, onValueChange: (String) -> Unit) {
+    val palette = LocalThemeController.current.currentPalette()
+    Text(label, color = palette.textSecondary, fontSize = 11.sp)
+    Spacer(Modifier.height(2.dp))
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(palette.surfaceAlt)
+            .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .padding(10.dp),
+        textStyle = TextStyle(color = palette.textPrimary, fontSize = 13.sp),
+        cursorBrush = SolidColor(palette.accentSecondary),
+        singleLine = true,
+    )
+}
+
+private fun fmtTime(ts: Long): String =
+    if (ts <= 0) "" else SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(ts))

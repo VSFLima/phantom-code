@@ -86,5 +86,7 @@ dependencies {
     // T17: emulador VT100 (jackpal emulatorview via JitPack — API clássica TermSession)
     implementation(libs.jackpal.emulatorview)
     implementation(libs.commons.net)
+    // SFTP (Editor: upload SFTP) — fork mantido do JSch
+    implementation(libs.jsch)
     debugImplementation(libs.androidx.ui.tooling)
 }

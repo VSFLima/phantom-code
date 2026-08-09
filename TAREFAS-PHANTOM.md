@@ -72,7 +72,7 @@
   - `GitManager` (JGit 6.10): status (A/M/D/U/C), git init, clone com token, commit, push/pull, log · tela Git real com seleção de projeto + token GitHub
 - [x] **T20. Toolbox (visual em cards)** ✅ Integrações & API Keys: catálogo de 30+ serviços (IA/Git/Cloud/Servidor) com preenchimento automático + botão **"Criar token"** que abre o navegador interno na página oficial do serviço; secrets no Android Keystore (AES-256/GCM)
   - [x] **Integrações & API Keys (D8)** — `SecretsManager` (Android Keystore + AES/GCM), cards com valor mascarado `sk-…xxxx`, copiar `$VAR`, toggle "Expor ao Linux", revogar; token do Git migrado p/ Keystore
-  - [ ] Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)
+  - [x] **Scanner de pacotes do guest (IAs/Linguagens/Ferramentas/Sistema)** ✅ `PackageScanner` (protocolo `SCAN:` no `phantom-agent.sh`); auto-registro de IAs no AI Suite (`agentsFromScan`)
 - [x] **T21. Backup local ZIP (SAF) + restauração (D2)** ✅
   - `BackupManager`: workspace → ZIP (`java.util.zip`) via SAF com manifest JSON; restauração com **merge que nunca apaga silenciosamente** (entradas inválidas puladas)
   - **Fix permissões**: manifest com `READ/WRITE_EXTERNAL_STORAGE` (≤10) + `MANAGE_EXTERNAL_STORAGE` (11+); `StorageHelper` com pasta pública **`/storage/emulated/0/Phantom-Code/`** + fallback privado; pedido de permissão na Home e Settings; migração automática dos projetos antigos
@@ -90,15 +90,20 @@
   - `ON_RESUME` → se há distro ativa, VM não está rodando e não houve encerramento explícito, `start()` sobe sozinha
   - Encerramento explícito (app ou notificação) marca `autoStartSuppressed` → não volta a subir sozinha até o usuário iniciar
 - [x] **T24. Onboarding + Command Palette (D14)** ✅
-  - `OnboardingScreen` (D20): 3 passos — armazenamento · instalar Phantom · iniciar Linux; flag `onboardingDone` (só 1ª vez)
+  - `OnboardingScreen` (D20 + T30): **4 passos** — armazenamento · **instalar QEMU + distro Phantom (auto, com barra de progresso real)** · escolher distro · iniciar Linux; flag `onboardingDone` (só 1ª vez)
   - `CommandPalette` (D14): overlay estilo VS Code com busca, aberta pelo ícone de menu no topo; comandos: Home/Explorer/Terminal/Iniciar-Parar Linux/Git/Toolbox/Settings
-- [ ] **T25. Testes em device (Galaxy Note 10 Plus)**
-  - Performance TCG, permutações de tema, corrigir o que quebrar
+- [ ] ~~**T25. Testes em device (Galaxy Note 10 Plus)**~~ ❌ **removida por decisão do usuário (08/08/2026)** — validação em device fica a cargo do usuário quando houver aparelho
 - [x] **T27. Design System v2 — UI & Botões (estilo do usuário)** ✅ estilos base prontos (Neon/Hacker/Gradient/Glass/Ghost/Pill/Sólido) + dimensões editáveis (cantos · bordas · letras) persistidas; preview ao vivo; animações (press nos botões, transições de navegação, diálogos com scale+fade); terminal segue a paleta (setColorScheme)
 - [x] **T28. Navegador interno (W2)** ✅ WebView com a cara do app: barra de URL, voltar/avançar/recarregar/início, progresso, página inicial temática; acesso via Home e Command Palette
 - [x] **T29. Distros com download interno (W3)** ✅ infra + catálogo prontos: workflow `build-distros.yml` gera a Phantom (Debian arm64) → Release **`distro-phantom`** com `phantom.tar.gz` (311 MB: rootfs.img + kernel + initrd.img + **QEMU incluído**) e **`qemu-aarch64`** (binário estático 122 MB, SHA-256 ok); URLs reais no `PhantomMirror`; catálogo expansível (`DistroCard`) + `DistroConfigDialog` (hostname/usuário/preset/HD) + instalação acompanhada ao vivo no terminal (download % → SHA-256 → extração) — resta testar a instalação no device e publicar Ubuntu/Debian/Alpine/Kali (ainda `example.com`)
 - [x] **Fix crash terminal** ✅ `EmulatorView(ctx, null, metrics)` crashava com NPE (construtor jackpal chama attachSession(null)); agora `EmulatorView(ctx, null)` + `setDensity` manual — instalar distro e barra de terminais não fecham mais o app
 - [x] **Fix redundância QEMU** ✅ `start()` verifica a distro instalada PRIMEIRO (o QEMU vem dentro do pacote Phantom); sem download redundante do binário separado
+- [x] **T30. Instalação automática QEMU + distro (fim do falso positivo)** ✅
+  - **Causa raiz do falso positivo:** o antigo `isInstalled()` era frouxo — bastava `rootfs.img` **OU** `kernel` **OU** pasta `rootfs/`; uma instalação parcial/antiga (ex.: só `rootfs.img` de um download que morreu) aparecia como "Instalada" e o QEMU nunca subia (sem kernel/qemu) → tela morta.
+  - **Fix:** `isInstalled()` estrito por tipo de boot (`KERNEL_INITRD` → `kernel && (rootfs||initrd)`; `ROOTFS_ONLY` → `rootfs`) + exige `qemu-system-aarch64` (> 1 MB) quando `includesQemu`; limpeza de artefatos parciais antes do download e após falha (`rootfs.img/kernel/initrd.img/qemu…` + `rootfs/`); `refreshBinary()` pós-instalação.
+  - **Instalação real no terminal:** QEMU + distro vêm no **MESMO tarball** (`phantom.tar.gz`). Novo fluxo `installPhantom()` (PhantomApp) abre o terminal com aba de log + **barra de progresso real** (fase ao vivo no `LogTermSession`: Baixando % → Verificando SHA-256 → Extraindo) e baixa/instala tudo de verdade. Durante o onboarding o NavHost ainda não existe → a navegação é adiada (`pendingTerminal`) e o terminal abre sozinho ao entrar no app.
+  - **Auto-instalação no 1º uso:** Onboarding ganhou a etapa "Instale o QEMU + a distro" (T24 atualizado → **4 passos**) e **dispara a instalação automaticamente** ao entrar; a Home ganhou o card **"QEMU + distro Phantom"** com "Instalar" (com progresso) para quem já passou do onboarding.
+  - **Terminal 100% celular (sem teclado físico):** teclado virtual garantido (IME no toque + `setUseCookedIME` + `adjustResize`); **pinça** = zoom da fonte (6–32 dp) com quebra de linha reajustando sozinha (`updateSize`); **toque longo = seleção** de texto; barra de ações **Selecionar / Copiar / Colar / Ctrl** (estilo Termux).
 
 ---
 
@@ -123,6 +128,6 @@
 | Design System | `DesignSystem.kt` (botões/cantos/bordas/letras) + `UiStyleController` persistido — Settings → UI & Botões |
 | Navegador | `BrowserScreen.kt` — WebView interno (W2) |
 | Editor | CodeMirror 6 (WebView) |
-| AI Suite | **`docs/roteador-ias.md`** — roteador de comunicação entre IAs (spec pronta: registro de agentes, Shared Context Bus, Conflict Guard com locks W/R/S/D/G, delegação com aprovação humana obrigatória, threads de conversação, fases A/B/C de implementação) — **Fase A**: `AiSuiteManager.kt` + `ConflictGuard.kt` + `phantom-router.sh` |
+| AI Suite | **`docs/roteador-ias.md`** — roteador de comunicação entre IAs (spec pronta: registro de agentes, Shared Context Bus, Conflict Guard com locks W/R/S/D/G, delegação com aprovação humana obrigatória, threads de conversação, fases A/B/C de implementação) — **Fase A**: `AiSuiteManager.kt` + `ConflictGuard.kt` + `phantom-router.sh` · **Fase B (✅ 08/08)**: delegação com Aprovar/Ajustar/Recusar, tarefas `tasks/<id>/` (context.json/messages.jsonl/proposal.json), threads append-only com intervenção do dono · **Fase C (✅ 08/08, parte executável)**: "Rodar no guest" por agente/tarefa, `create_task`/`scan`/`delegate`/`approved`/`rejected` no router do guest, aviso de lock no Editor |
 | Backup cloud | `CloudBackupManager.kt` — WebDAV (via chaves do catálogo: `WEBDAV_URL`/user/pass), upload/restore do ZIP do workspace |
 | Sync GitHub | `GitManager.createGithubRepo()` + `syncToGithub()` — cria repositório automático para projeto local e faz push |

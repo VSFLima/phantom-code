@@ -1,6 +1,8 @@
 package com.phantomcode.app.data.vm
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -205,11 +207,32 @@ class DistroManager(context: Context) {
 
     fun dirFor(id: String): File = File(linuxDir, id)
 
+    /**
+     * Instalação VÁLIDA = todos os artefatos exigidos pelo TIPO de boot da
+     * distro existem E, quando ela traz o QEMU embutido (`includesQemu`), o
+     * binário também está lá.
+     *
+     * ANTES bastava `rootfs.img` OU `kernel` — uma instalação parcial/legada
+     * (ex.: só `rootfs.img` deixado por um APK antigo com extração corrompida)
+     * aparecia como "Instalada" e o QEMU nunca subia (falso positivo). Agora só
+     * conta como instalada se for possível BOOTAR, alinhado com [QemuManager.start].
+     */
     fun isInstalled(id: String): Boolean {
+        val info = DistroCatalog.ALL.firstOrNull { it.id == id } ?: return false
         val d = dirFor(id)
-        return d.isDirectory && (File(d, "rootfs.img").exists() ||
-            File(d, "kernel").exists() ||
-            File(d, "rootfs").isDirectory)
+        if (!d.isDirectory) return false
+        val rootfs = File(d, "rootfs.img").exists() && File(d, "rootfs.img").length() > 0L
+        val kernel = File(d, "kernel").exists() && File(d, "kernel").length() > 0L
+        val initrd = File(d, "initrd.img").exists() && File(d, "initrd.img").length() > 0L
+        val bootOk = when (info.boot) {
+            DistroBoot.KERNEL_INITRD -> kernel && (rootfs || initrd)
+            DistroBoot.ROOTFS_ONLY -> rootfs && kernel // o QEMU virt exige kernel pareado
+        }
+        val qemuOk = if (info.includesQemu) {
+            val q = File(d, "qemu-system-aarch64")
+            q.exists() && q.length() > 1_000_000L
+        } else true
+        return bootOk && qemuOk
     }
 
     private fun stateFor(id: String): DistroInstallState =
@@ -254,29 +277,68 @@ class DistroManager(context: Context) {
         installStates[info.id] = DistroInstallState(downloading = true)
         scope.launch {
             val result = runCatching { downloadAndInstall(info, config, logSession) }
-            val err = result.exceptionOrNull()
-            withContext(Dispatchers.Main) {
-                val current = installStates[info.id] ?: DistroInstallState()
-                if (err != null) {
-                    File(dirFor(info.id), "artifact.tmp").delete()
-                    installStates[info.id] = current.copy(
-                        downloading = false,
-                        error = err.message ?: "Falha no download",
-                    )
-                    logSession?.append("\n\u001b[31m✗ ${err.message ?: "Falha na instalação"}\u001b[0m\n")
-                } else {
-                    installStates[info.id] = current.copy(
-                        downloading = false,
-                        progress = 1f,
-                        installed = true,
-                        message = "Instalada",
-                    )
-                    activeId = info.id
-                    // A distro traz o qemu-system-aarch64 — informa o motor QEMU
-                    // que o binário embutido já está disponível (binaryReady=true).
-                    QemuManager.instance?.refreshBinary()
-                    logSession?.append("\n\u001b[32m✓ Distro instalada e configurada.\u001b[0m\n")
-                }
+            completeInstall(info, result, logSession)
+        }
+    }
+
+    /**
+     * Instala a distro a partir de arquivos LOCAIS selecionados pelo usuário
+     * (SAF — T-S1/T-S2). O seletor pode devolver:
+     *   · um tarball `phantom.tar.gz` (como o baixado do mirror), OU
+     *   · os arquivos avulsos: rootfs.img, kernel, initrd.img, qemu-system-aarch64.
+     * Cada arquivo é copiado para o diretório da distro e validado antes de
+     * configurar (mesmo fluxo da instalação por download — [finalizeInstall]).
+     */
+    fun installFromUris(
+        info: DistroInfo,
+        uris: List<Uri>,
+        config: DistroConfig,
+        logSession: LogTermSession?,
+    ) {
+        if (uris.isEmpty()) return
+        if (installStates[info.id]?.downloading == true) return
+        installStates[info.id] = DistroInstallState(downloading = true)
+        scope.launch {
+            val result = runCatching { installLocalAndFinalize(info, config, uris, logSession) }
+            completeInstall(info, result, logSession)
+        }
+    }
+
+    /** Estado final comum a qualquer instalação (download ou arquivos locais). */
+    private suspend fun completeInstall(
+        info: DistroInfo,
+        result: Result<Boolean>,
+        logSession: LogTermSession?,
+    ) {
+        val err = result.exceptionOrNull()
+        withContext(Dispatchers.Main) {
+            val current = installStates[info.id] ?: DistroInstallState()
+            if (err != null) {
+                File(dirFor(info.id), "artifact.tmp").delete()
+                // Após uma falha, remove os artefatos PARCIAIS que a extração
+                // pode ter deixado (ex.: só rootfs.img). Sem isso o diretório
+                // continuaria existindo e a distro apareceria como "Instalada"
+                // no próximo boot (falso positivo) sem dar pra bootar.
+                runCatching { cleanArtifacts(dirFor(info.id)) }
+                QemuManager.instance?.refreshBinary()
+                installStates[info.id] = current.copy(
+                    downloading = false,
+                    error = err.message ?: "Falha no download",
+                )
+                logSession?.append("\n\u001b[31m✗ ${err.message ?: "Falha na instalação"}\u001b[0m\n")
+                logSession?.setProgress(null, "Falha na instalação")
+            } else {
+                installStates[info.id] = current.copy(
+                    downloading = false,
+                    progress = 1f,
+                    installed = true,
+                    message = "Instalada",
+                )
+                activeId = info.id
+                // A distro traz o qemu-system-aarch64 — informa o motor QEMU
+                // que o binário embutido já está disponível (binaryReady=true).
+                QemuManager.instance?.refreshBinary()
+                logSession?.append("\n\u001b[32m✓ Distro instalada e configurada.\u001b[0m\n")
             }
         }
     }
@@ -310,12 +372,17 @@ class DistroManager(context: Context) {
     ): Boolean = withContext(Dispatchers.IO) {
         fun log(msg: String) = logSession?.append(msg)
         val targetDir = dirFor(info.id).apply { mkdirs() }
+        // Limpa artefatos de instalações parciais/falhas ANTIGAS (ex.: só
+        // rootfs.img de um download que morreu) — evita mistura com os novos
+        // arquivos e libera espaço antes do download.
+        runCatching { cleanArtifacts(targetDir) }
         // Formato detectado pelo nome real do artefato na URL
         val artifactName = info.url.substringAfterLast('/').lowercase()
         val tmp = File(targetDir, "artifact.tmp")
 
         log("Instalando ${info.name}…\n")
         log("[phantom] hostname: ${config.hostname} · user: ${config.user}\n")
+        logSession?.setProgress(0f, "Baixando ${info.name}…")
 
         // Download com progresso
         val conn = downloadConnection(info)
@@ -343,6 +410,7 @@ class DistroManager(context: Context) {
                             withContext(Dispatchers.Main) {
                                 installStates[info.id] = (installStates[info.id] ?: DistroInstallState()).copy(progress = p)
                             }
+                            logSession?.setProgress(p, "Baixando ${info.name}… $pct%")
                         }
                     }
                 }
@@ -354,9 +422,11 @@ class DistroManager(context: Context) {
             check(got.equals(info.sha256, ignoreCase = true)) { "SHA-256 inválido" }
             log("[phantom] SHA-256 ok ✓\n")
         }
+        logSession?.setProgress(null, "Verificando SHA-256…")
 
         // Instala: extrai tarball ou move imagem (pelo nome real do artefato)
         log("[phantom] extraindo arquivos…\n")
+        logSession?.setProgress(null, "Extraindo arquivos…")
         when {
             artifactName.endsWith(".tar.gz") || artifactName.endsWith(".tgz") -> extractTarGz(tmp, targetDir)
             artifactName.endsWith(".gz") -> extractGz(tmp, File(targetDir, "rootfs.img"))
@@ -368,6 +438,25 @@ class DistroManager(context: Context) {
             }
         }
         tmp.delete()
+        // ✅ Pós-extração compartilhado (download e arquivos locais):
+        // validação por tipo de boot + config + init do guest + disco.
+        finalizeInstall(targetDir, info, config, logSession)
+        log("[phantom] pronto.\n")
+        logSession?.setProgress(1f, "Instalação concluída ✓")
+        true
+    }
+
+    /**
+     * Pós-extração comum a download (nuvem) e arquivos locais (SAF):
+     * valida os artefatos exigidos pelo tipo de boot, configura a distro
+     * (hostname/user/disco) e prepara a pasta `share` com o init do guest.
+     */
+    private fun finalizeInstall(
+        targetDir: File,
+        info: DistroInfo,
+        config: DistroConfig,
+        logSession: LogTermSession?,
+    ) {
         // ✅ VALIDAÇÃO pós-extração POR TIPO DE BOOT (M1): cada tipo exige os seus
         // arquivos. Antes bastava rootfs OU kernel — uma distro rootfs-only instalava
         // e o QEMU subia sem kernel (tela morta em silêncio).
@@ -403,8 +492,139 @@ class DistroManager(context: Context) {
         // Defensivo: garante +x no QEMU embutido (o extrator preserva o bit do
         // cabeçalho tar, mas alguns arquivos/APKs antigos podem vir sem ele).
         runCatching { File(targetDir, "qemu-system-aarch64").takeIf { it.exists() }?.setExecutable(true) }
+    }
+
+    /** Remove artefatos de instalação anterior (parcial/falha) do diretório da distro. */
+    private fun cleanArtifacts(targetDir: File) {
+        listOf(
+            "rootfs.img", "kernel", "initrd.img", "qemu-system-aarch64",
+            "dark-code.conf", "dark-code-init.sh", "phantom-agent.sh",
+        ).forEach { n -> File(targetDir, n).delete() }
+        File(targetDir, "rootfs").deleteRecursively()
+        File(targetDir, "share").deleteRecursively()
+    }
+
+    /**
+     * Instala a partir de arquivos locais (SAF): categoriza cada URI pelo nome,
+     * copia para o diretório da distro e valida a integridade dos artefatos
+     * (T-S4) antes de configurar.
+     */
+    private suspend fun installLocalAndFinalize(
+        info: DistroInfo,
+        config: DistroConfig,
+        uris: List<Uri>,
+        logSession: LogTermSession?,
+    ): Boolean = withContext(Dispatchers.IO) {
+        fun log(msg: String) = logSession?.append(msg)
+        val targetDir = dirFor(info.id).apply { mkdirs() }
+        runCatching { cleanArtifacts(targetDir) }
+
+        // 1) Categoriza os arquivos selecionados pelo nome do documento
+        val picked = uris.mapNotNull { uri ->
+            val name = displayName(uri)?.lowercase()
+            val kind = when {
+                name == null -> null
+                name.endsWith(".tar.gz") || name.endsWith(".tgz") -> "tarball"
+                name == "initrd.img" || name.contains("initrd") -> "initrd"
+                name.endsWith(".img") || name.endsWith(".ext4") || name.endsWith(".qcow2") -> "rootfs"
+                name == "kernel" || name.contains("vmlinuz") || name.contains("image") -> "kernel"
+                name.contains("qemu") && name.contains("aarch64") -> "qemu"
+                else -> null
+            }
+            kind?.let { it to uri }
+        }
+        if (picked.isEmpty()) {
+            error("Nenhum arquivo reconhecido. Selecione o pacote phantom.tar.gz ou os arquivos avulsos (rootfs.img, kernel, initrd.img, qemu-system-aarch64).")
+        }
+        picked.forEach { (kind, uri) ->
+            log("[phantom] selecionado: ${displayName(uri) ?: uri} → $kind\n")
+        }
+
+        // 2) Copia (tarball extrai; avulsos vão direto para os nomes canônicos)
+        logSession?.setProgress(0f, "Copiando arquivos…")
+        picked.forEach { (kind, uri) ->
+            val dest = when (kind) {
+                "tarball" -> File(targetDir, "artifact.tmp")
+                "initrd" -> File(targetDir, "initrd.img")
+                "rootfs" -> File(targetDir, "rootfs.img")
+                "kernel" -> File(targetDir, "kernel")
+                "qemu" -> File(targetDir, "qemu-system-aarch64")
+                else -> return@forEach
+            }
+            copyUri(uri, dest)
+            if (kind == "qemu") runCatching { dest.setExecutable(true) }
+        }
+        val tarball = File(targetDir, "artifact.tmp")
+        if (tarball.exists() && tarball.length() > 0L) {
+            log("[phantom] extraindo tarball local…\n")
+            logSession?.setProgress(null, "Extraindo tarball…")
+            extractTarGz(tarball, targetDir)
+            tarball.delete()
+        }
+
+        // 3) Valida integridade dos artefatos locais (T-S4)
+        log("[phantom] validando arquivos…\n")
+        logSession?.setProgress(null, "Validando integridade…")
+        validateLocalArtifacts(targetDir)
+
+        // 4) Fluxo comum (config, init do guest, disco)
+        finalizeInstall(targetDir, info, config, logSession)
         log("[phantom] pronto.\n")
+        logSession?.setProgress(1f, "Instalação concluída ✓")
         true
+    }
+
+    /** Nome exibido de uma URI do SAF (OpenableColumns.DISPLAY_NAME). */
+    private fun displayName(uri: Uri): String? = runCatching {
+        appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(c.getColumnIndex(OpenableColumns.DISPLAY_NAME)) else null
+        }
+    }.getOrNull()
+
+    /** Copia o conteúdo de uma URI de conteúdo do SAF para um arquivo local. */
+    private fun copyUri(uri: Uri, dest: File) {
+        val input = appContext.contentResolver.openInputStream(uri)
+            ?: error("Não foi possível abrir ${displayName(uri) ?: uri}")
+        input.use { i -> dest.outputStream().use { o -> i.copyTo(o) } }
+    }
+
+    /**
+     * Validação de integridade de arquivos locais (T-S4): assinatura ext2 do
+     * rootfs, magic da Image arm64 (ou ELF/gzip) do kernel e tamanho mínimo do
+     * QEMU. Best-effort — o fluxo de boot em si é validado depois em
+     * [finalizeInstall] (arquivos exigidos pelo tipo da distro).
+     */
+    private fun validateLocalArtifacts(targetDir: File) {
+        val rootfs = File(targetDir, "rootfs.img")
+        if (rootfs.exists()) {
+            val magic = runCatching {
+                RandomAccessFile(rootfs, "r").use { raf ->
+                    raf.seek(0x438) // superblock ext (offset 1024) + s_magic (0x38)
+                    raf.readShort()
+                }
+            }.getOrDefault(0)
+            check(magic.toInt() and 0xFFFF == 0xEF53) {
+                "rootfs.img não é uma imagem ext2/3/4 (assinatura inválida) — arquivo corrompido ou incompleto"
+            }
+        }
+        val kernel = File(targetDir, "kernel")
+        if (kernel.exists()) {
+            val head = ByteArray(0x40)
+            val n = kernel.inputStream().use { it.read(head) }
+            val arm64 = n >= 0x40 &&
+                head[0x38] == 'A'.code.toByte() && head[0x39] == 'R'.code.toByte() &&
+                head[0x3A] == 'M'.code.toByte() && head[0x3B] == 'x'.code.toByte()
+            val gz = n >= 2 && head[0] == 0x1F.toByte() && head[1] == 0x8B.toByte()
+            val elf = n >= 4 && head[0] == 0x7F.toByte() && head[1] == 'E'.code.toByte() &&
+                head[2] == 'L'.code.toByte() && head[3] == 'F'.code.toByte()
+            check(arm64 || gz || elf) {
+                "kernel não parece ser uma Image arm64 (magic inválida) — arquivo corrompido ou de outra arquitetura"
+            }
+        }
+        val qemu = File(targetDir, "qemu-system-aarch64")
+        if (qemu.exists()) {
+            check(qemu.length() > 1_000_000L) { "qemu-system-aarch64 muito pequeno — arquivo corrompido" }
+        }
     }
 
     private fun downloadConnection(info: DistroInfo): HttpURLConnection {
@@ -425,19 +645,26 @@ class DistroManager(context: Context) {
         }
     }
 
-    /** Grava dark-code.conf (hostname/user) — lido pelo dark-code-init.sh no boot. */
+    /** Grava dark-code.conf (hostname/user) — lido pelo dark-code-init.sh no boot.
+     *  Escreve na raiz (compat) e na pasta `share` (T-D4 — a pasta exposta ao
+     *  guest via 9p, onde o dark-code-init.sh realmente lê o arquivo). */
     private fun writeConfig(targetDir: File, config: DistroConfig) {
-        runCatching {
-            File(targetDir, "dark-code.conf").writeText(
-                "HOSTNAME=${config.hostname}\nUSER=${config.user}\n",
-            )
-        }
+        val content = "HOSTNAME=${config.hostname}\nUSER=${config.user}\n"
+        runCatching { File(targetDir, "dark-code.conf").writeText(content) }
+        runCatching { File(shareDir(targetDir), "dark-code.conf").writeText(content) }
     }
 
-    /** Copia o dark-code-init.sh (T18) e o phantom-agent.sh (T20) para dentro da distro instalada. */
+    /** Pasta `share` — copiada para o guest no boot (9p darkcode-distro, T-D4).
+     *  Contém o dark-code-init.sh + phantom-agent.sh + dark-code.conf. Só essa
+     *  subpasta é exposta ao QEMU (o rootfs.img/ROMs ficam fora do alcance). */
+    private fun shareDir(targetDir: File): File = File(targetDir, "share").apply { mkdirs() }
+
+    /** Copia o dark-code-init.sh (T18) e o phantom-agent.sh (T20) para a pasta
+     *  `share` da distro — o guest os executa no boot (T-D4). */
     private fun copyInitScript(targetDir: File) {
-        copyAssetToRoot("linux/dark-code-init.sh", "dark-code-init.sh", targetDir)
-        copyAssetToRoot("linux/phantom-agent.sh", "phantom-agent.sh", targetDir)
+        val share = shareDir(targetDir)
+        copyAssetToRoot("linux/dark-code-init.sh", "dark-code-init.sh", share)
+        copyAssetToRoot("linux/phantom-agent.sh", "phantom-agent.sh", share)
     }
 
     private fun copyAssetToRoot(asset: String, name: String, targetDir: File) {

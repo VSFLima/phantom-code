@@ -1,7 +1,12 @@
 package com.phantomcode.app.ui.screens
 
+import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,10 +29,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.phantomcode.app.data.vm.LocalVm
+import com.phantomcode.app.data.vm.LogTermSession
 import com.phantomcode.app.data.vm.TerminalPrefs
 import com.phantomcode.app.data.vm.TerminalTabKind
 import com.phantomcode.app.ui.components.PhantomPrimaryButton
@@ -63,8 +76,6 @@ import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
 import jackpal.androidterm.emulatorview.TermSession
 import kotlinx.coroutines.launch
-import android.view.inputmethod.InputMethodManager
-import android.content.Context
 
 /**
  * Terminal (T17): emulador VT100 real (jackpal emulatorview) com abas.
@@ -88,6 +99,16 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     var termView by remember { mutableStateOf<EmulatorView?>(null) }
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
     var themePickerOpen by remember { mutableStateOf(false) }
+    var selecting by remember { mutableStateOf(false) }
+
+    /** Cola o texto da área de transferência no terminal ativo (Termux-like). */
+    fun pasteClipboard() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        val text = cm.primaryClip?.getItemAt(0)?.text?.toString() ?: return
+        val session = terminal.activeTab?.session ?: return
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        runCatching { session.write(bytes, 0, bytes.size) }
+    }
 
     // Abre o teclado do Android via InputMethodManager (o keyboard?.show() do
     // Compose falha com a EmulatorView nativa — o IME precisa ser acionado
@@ -235,6 +256,117 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
             }
         }
 
+        // ── Barra de progresso da instalação (T30): quando a aba ativa é um log
+        //    de instalação, mostra a fase ao vivo + barra real (Baixando % / SHA /
+        //    Extraindo). O usuário acompanha tudo dentro do próprio terminal. ──
+        val activeLog = (terminal.activeTab?.session as? LogTermSession)
+            ?.takeIf { it.progress != null || it.phase != null }
+        if (activeLog != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Download,
+                        contentDescription = null,
+                        tint = palette.accentPrimary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        activeLog.phase ?: "Instalando…",
+                        color = palette.textPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val prog = activeLog.progress
+                    if (prog != null) {
+                        Text(
+                            "${(prog * 100).toInt()}%",
+                            color = palette.textSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                val barProg = activeLog.progress
+                if (barProg != null) {
+                    LinearProgressIndicator(
+                        progress = { barProg },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        color = palette.accentPrimary,
+                        trackColor = palette.border,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        color = palette.accentPrimary,
+                        trackColor = palette.border,
+                    )
+                }
+            }
+        }
+
+        // ── Barra de ações (Termux-like): selecionar / copiar / colar / Ctrl ──
+        if (terminal.activeTab != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (selecting) {
+                    TermActionChip(
+                        text = "Copiar",
+                        icon = Icons.Filled.ContentCopy,
+                        onClick = {
+                            val txt = (termView as? PhantomTerminalView)?.getSelectedText()?.trim()
+                            if (!txt.isNullOrEmpty()) {
+                                runCatching {
+                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    cm.setPrimaryClip(ClipData.newPlainText("terminal", txt))
+                                }
+                                Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show()
+                            }
+                            (termView as? PhantomTerminalView)?.toggleSelectingText()
+                        },
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TermActionChip(
+                        text = "Sair",
+                        icon = Icons.Filled.Close,
+                        onClick = { (termView as? PhantomTerminalView)?.toggleSelectingText() },
+                    )
+                } else {
+                    TermActionChip(
+                        text = "Selecionar",
+                        icon = Icons.Filled.ContentCopy,
+                        onClick = { (termView as? PhantomTerminalView)?.toggleSelectingText() },
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                TermActionChip(
+                    text = "Colar",
+                    icon = Icons.Filled.ContentPaste,
+                    onClick = { pasteClipboard() },
+                )
+                Spacer(Modifier.width(6.dp))
+                TermActionChip(
+                    text = "Ctrl",
+                    icon = Icons.Filled.Keyboard,
+                    onClick = { termView?.sendControlKey() },
+                )
+            }
+        }
+
         // ── Terminal VT100 real (jackpal emulatorview) ──
         if (terminal.activeTab != null) {
             AndroidView<View>(
@@ -248,7 +380,12 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                     setDensity(ctx.resources.displayMetrics)
                     // Tamanho da fonte (dp) define as colunas por linha — fonte
                     // menor = mais texto por linha (quebra de linha organizada).
-                    runCatching { setTextSize(terminalPrefs.fontSizeSp) }
+                    // A pinça do usuário atualiza este valor e salva nas prefs.
+                    applyFontSize(terminalPrefs.fontSizeSp)
+                    // Pinça → salva o tamanho escolhido; seleção → mostra a barra
+                    // Copiar/Colar/Sair no Compose.
+                    setOnFontSizeChanged { size -> terminalPrefs.fontSizeSp = size }
+                    setOnSelectionChanged { selecting = it }
                     // Terminal segue o tema escolhido (Design System v2 + CodeTheme):
                     // fundo/texto/cursor nas cores do tema, com as 4 cores do ColorScheme.
                     runCatching {
@@ -270,7 +407,8 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                         // Sempre reaplica tema/fonte (mudança de preset recompõe e repinta).
                         runCatching {
                             view.setColorScheme(schemeOf(tc))
-                            view.setTextSize(terminalPrefs.fontSizeSp)
+                            (view as? PhantomTerminalView)?.applyFontSize(terminalPrefs.fontSizeSp)
+                                ?: view.setTextSize(terminalPrefs.fontSizeSp)
                         }
                         if (tab != null && attachedSession !== tab.session) {
                             runCatching {
@@ -302,7 +440,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 text = if (terminal.tabs.isEmpty()) {
                     "Toque em Iniciar para subir a VM."
                 } else {
-                    "Terminal VT100 · Ctrl/Alt no teclado físico · + para nova aba"
+                    "VT100 · pinça p/ zoom · segure p/ selecionar · + nova aba"
                 },
                 color = palette.textSecondary,
                 fontSize = 10.sp,
@@ -389,5 +527,23 @@ private fun TerminalTabChip(
             tint = palette.textSecondary,
             modifier = Modifier.size(20.dp).clickable(onClick = onClose).padding(3.dp),
         )
+    }
+}
+
+/** Botão compacto da barra de ações do terminal (Termux-like). */
+@Composable
+private fun TermActionChip(text: String, icon: ImageVector, onClick: () -> Unit) {
+    val palette = LocalThemeController.current.currentPalette()
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(palette.surfaceAlt)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = text, tint = palette.accentPrimary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(text, color = palette.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }

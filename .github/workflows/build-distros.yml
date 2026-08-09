@@ -11,13 +11,18 @@ name: Build Distro Artifacts
 # (`distro-phantom`) alimenta o app: rootfs + kernel + initrd + qemu.
 #
 # Artefato gerado:  phantom.tar.gz
-#   ├── rootfs.img   (ext2 de 1 GiB — Debian bookworm arm64 com ferramentas)
+#   ├── rootfs.img   (ext2 — Debian bookworm arm64 com ferramentas + sysvinit)
 #   ├── kernel       (vmlinuz do linux-image-arm64)
 #   ├── initrd.img   (initramfs do pacote)
-#   └── qemu-system-aarch64 (QEMU estático oficial do projeto, compilado aqui)
+#   ├── qemu-system-aarch64 (QEMU estático oficial do projeto, compilado aqui)
+#   └── *.rom *.bin *.efi   (ROMs do pc-bios — ex.: efi-virtio.rom; o QEMU 9.x
+#                            procura no CWD do processo, e o app roda com cwd =
+#                            pasta da distro → boot não morre mais no firmware)
 #
 # Boot no app:  -kernel kernel -initrd initrd.img -drive rootfs.img \
-#               -append "root=/dev/vda rw console=ttyAMA0"
+#               -append "root=/dev/vda rw console=ttyAMA0 console=hvc0"
+# O guest sobe com sysvinit → /etc/phantom-boot.sh monta a pasta da distro
+# (9p darkcode-distro) e executa o dark-code-init.sh real do app.
 on:
   workflow_dispatch:
 
@@ -50,7 +55,9 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \
-              linux-image-arm64 initramfs-tools e2fsprogs
+              php-cli php-curl \
+              linux-image-arm64 initramfs-tools e2fsprogs \
+              sysvinit-core sysv-rc iproute2 isc-dhcp-client
             rm -rf /var/lib/apt/lists/*
           '
           docker export phantom > /tmp/rootfs.tar
@@ -66,6 +73,53 @@ jobs:
           fi
           cp -L /tmp/rootfs/boot/initrd.img-* /tmp/initrd.img
           ls -la /tmp/kernel /tmp/initrd.img
+
+      # ─────────────────────────────────────────────────────────────────────
+      # T-D2/T-D4 — BOOT REAL do guest (sysvinit + bootstrap Phantom)
+      # ─────────────────────────────────────────────────────────────────────
+      # O kernel agora acha /sbin/init (sysvinit-core) em vez de cair no
+      # /bin/sh cru. O init roda /etc/phantom-boot.sh que:
+      #   1. monta a pasta da distro do app via virtio-9p (tag darkcode-distro)
+      #   2. executa o dark-code-init.sh REAL vindo do app (rede, usuário,
+      #      workspace 9p, phantom-agent.sh e shell de login)
+      # Fallback: uma cópia do init embutida no rootfs (/usr/local/lib/phantom)
+      # — usada quando o QEMU roda sem a pasta 9p do app (teste manual).
+      - name: Configure guest boot (sysvinit + phantom bootstrap)
+        run: |
+          set -e
+          mkdir -p /tmp/rootfs/usr/local/lib/phantom
+          # Cópia de segurança do init do app dentro do próprio rootfs
+          cp android/app/src/main/assets/linux/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh
+          cp android/app/src/main/assets/linux/phantom-agent.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
+          chmod +x /tmp/rootfs/usr/local/lib/phantom/dark-code-init.sh /tmp/rootfs/usr/local/lib/phantom/phantom-agent.sh
+
+          # Bootstrap: monta o 9p da distro (onde o app deixa o init + config)
+          cat > /tmp/rootfs/etc/phantom-boot.sh <<'EOF'
+          #!/bin/sh
+          # T-D4: bootstrap do guest. Monta a pasta da distro do app (9p) e
+          # executa o dark-code-init.sh real; cai no fallback embutido sem 9p.
+          mkdir -p /mnt/phantom
+          if mount -t 9p -o trans=virtio,version=9p2000.L,msize=1048576 darkcode-distro /mnt/phantom 2>/dev/null; then
+            if [ -x /mnt/phantom/dark-code-init.sh ]; then
+              exec /mnt/phantom/dark-code-init.sh
+            fi
+          fi
+          if [ -x /usr/local/lib/phantom/dark-code-init.sh ]; then
+            exec /usr/local/lib/phantom/dark-code-init.sh
+          fi
+          echo "phantom-boot: nenhum init disponível" >&2
+          exec /bin/sh
+          EOF
+          chmod +x /tmp/rootfs/etc/phantom-boot.sh
+
+          # inittab do sysvinit: sysinit roda o bootstrap; getty em hvc0 com
+          # auto-login (user) como rede de segurança depois que o shell sair.
+          cat > /tmp/rootfs/etc/inittab <<'EOF'
+          id:2:initdefault:
+          ::sysinit:/etc/phantom-boot.sh
+          ::respawn:/sbin/getty -a user -L hvc0 0 vt100
+          EOF
+          echo "inittab + phantom-boot.sh configurados"
 
       # ─────────────────────────────────────────────────────────────────────
       # QEMU ESTÁTICO (cross-compile nativo) — embutido no tarball da distro
@@ -155,6 +209,29 @@ jobs:
           ninja -C build && sudo ninja -C build install
           cd /tmp
 
+      # libslirp ESTÁTICO (aarch64): o `-netdev user` do app (rede SLIRP/NAT do
+      # guest) exige libslirp. O QEMU 9.x não traz o slirp como submodulo — a
+      # dependência é resolvida por pkg-config, e sem libslirp o build sai SEM
+      # rede (QEMU recusa `-netdev user` no boot — a VM nunca sobe).
+      - name: Build static libslirp for aarch64 (meson cross)
+        run: |
+          set -e
+          export PREFIX=/opt/arm
+          export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
+          cd /tmp
+          fetch() { local d="$1"; shift; for u in "$@"; do
+            if wget -q -O "$d" "$u" 2>/dev/null && [ -s "$d" ]; then echo "✓ $u"; return 0; fi
+            rm -f "$d"; done; echo "❌ falhou download"; exit 1; }
+          fetch libslirp.tar.gz \
+            "https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v4.8.0/libslirp-v4.8.0.tar.gz" \
+            "https://github.com/slirp/libslirp/archive/refs/tags/v4.8.0.tar.gz"
+          tar xzf libslirp.tar.gz && cd libslirp-*
+          meson setup build --cross-file /tmp/arm-cross.txt --prefix=$PREFIX \
+            --default-library=static
+          ninja -C build && sudo ninja -C build install
+          ls -la $PREFIX/lib/libslirp.a
+          cd /tmp
+
       - name: Build static QEMU (aarch64-softmmu, cross)
         run: |
           set -e
@@ -171,6 +248,7 @@ jobs:
           tar xf qemu.tar.xz && cd qemu-9.1.0
           ./configure --cross-prefix=aarch64-linux-gnu- \
             --target-list=aarch64-softmmu --static --disable-werror --prefix=/usr \
+            --enable-slirp \
             --disable-gnutls --disable-nettle --disable-gcrypt \
             --disable-gtk --disable-sdl --disable-vnc --disable-spice --disable-xen \
             --disable-libnfs --disable-smartcard --disable-usb-redir --disable-glusterfs \
@@ -195,7 +273,16 @@ jobs:
       - name: Package artifact
         run: |
           cd /tmp
-          tar czf phantom.tar.gz rootfs.img kernel initrd.img qemu-system-aarch64
+          # T-D1: o QEMU 9.x procura ROMs de firmware no CWD do processo — as
+          # ROMs do pc-bios (efi-virtio.rom etc.) vão FLAT no tarball, junto do
+          # rootfs/kernel. O app roda o QEMU com cwd = pasta da distro, então o
+          # boot não morre mais com "Could not open 'efi-virtio.rom'".
+          mkdir -p /tmp/roms
+          find /tmp/qemu-9.1.0/pc-bios -maxdepth 1 -type f -exec cp {} /tmp/roms/ \;
+          cp /tmp/roms/* ./
+          tar czf phantom.tar.gz rootfs.img kernel initrd.img qemu-system-aarch64 *.rom *.bin *.efi 2>/dev/null || true
+          # Garante que ao menos efi-virtio.rom entrou (a ROM exigida no boot virt)
+          tar tzf phantom.tar.gz | grep -q 'efi-virtio\.rom' || { echo "❌ efi-virtio.rom ausente no tarball"; exit 1; }
           echo "=== phantom.tar.gz ==="
           ls -la phantom.tar.gz
           sha256sum phantom.tar.gz

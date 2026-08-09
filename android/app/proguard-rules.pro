@@ -14,3 +14,7 @@
 # JGit (usa reflexão em transport/config)
 -keep class org.eclipse.jgit.** { *; }
 -dontwarn org.eclipse.jgit.**
+
+# JSch (SFTP/SSH — usa reflexão em ciphers/kex)
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**

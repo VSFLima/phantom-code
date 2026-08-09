@@ -267,6 +267,15 @@ class QemuManager(
             "-smp", preset.cpu.toString(),
             "-m", "${preset.ramMb}M",
         )
+        // Pasta da distro ativa: o QEMU 9.x procura as ROMs do pc-bios no CWD
+        // do processo (T-D1) — por isso o ProcessBuilder roda com directory() =
+        // pasta da distro, onde as ROMs (efi-virtio.rom etc.) são extraídas.
+        val distroDir = distros.activeId?.let { distros.dirFor(it) }
+        // Compartilhamento de arquivos do BOOT (T-D4): o guest monta essa pasta
+        // via 9p (tag darkcode-distro) e executa o dark-code-init.sh real do app.
+        // Só a subpasta `share` é exposta (contém o init + config) — o rootfs.img
+        // de 3 GB e as ROMs ficam fora do alcance de acidente no guest.
+        val distroShare = distroDir?.let { File(it, "share").takeIf { d -> d.isDirectory } }
         if (kernel != null) {
             cmd += listOf("-kernel", kernel.absolutePath)
             distros.activeInitrd()?.let { cmd += listOf("-initrd", it.absolutePath) }
@@ -275,8 +284,10 @@ class QemuManager(
             cmd += listOf("-append", "root=/dev/vda rw console=ttyAMA0 console=hvc0")
         }
         if (rootfs != null) {
+            // T-D5: format=raw explícito — o QEMU não sonda o formato da imagem
+            // (o ext2 era detectado por tentativa e erro; o formato cru é garantido).
             cmd += listOf(
-                "-drive", "if=none,file=${rootfs.absolutePath},id=hd0",
+                "-drive", "if=none,format=raw,file=${rootfs.absolutePath},id=hd0",
                 "-device", "virtio-blk-device,drive=hd0",
             )
         }
@@ -292,6 +303,15 @@ class QemuManager(
         cmd += listOf(
             // Ponte de arquivos: workspace do Android dentro do guest (D3)
             "-virtfs", "local,path=${workspace.root.absolutePath},mount_tag=darkcode-ws,security_model=none,id=ws0",
+        )
+        // Boot compartilhado (T-D4): pasta `share` da distro — o guest monta em
+        // /mnt/phantom e executa o dark-code-init.sh + dark-code.conf reais.
+        distroShare?.let {
+            cmd += listOf(
+                "-virtfs", "local,path=${it.absolutePath},mount_tag=darkcode-distro,security_model=none,id=distro0",
+            )
+        }
+        cmd += listOf(
             // Rede SLIRP (NAT) — internet no guest sem root.
             // hostfwd: porta 80 do guest (servidor PHP/Python/Node do Preview
             // Hub VM) fica acessível no app via http://127.0.0.1:8384 (D24).
@@ -311,7 +331,15 @@ class QemuManager(
         return@withContext runCatching {
             // Defensivo: garante +x antes de executar (evita Permission denied).
             runCatching { binary().setExecutable(true) }
-            val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+            // T-D1: cwd = pasta da distro (QEMU procura as ROMs do pc-bios aqui)
+            // + QEMU_FIRMWARE_PATH como reforço para o carregamento do firmware.
+            val pb = ProcessBuilder(cmd)
+                .directory(distroDir ?: qemuDir)
+                .redirectErrorStream(true)
+            if (distroDir != null) {
+                runCatching { pb.environment()["QEMU_FIRMWARE_PATH"] = distroDir.absolutePath }
+            }
+            val p = pb.start()
             process = p
             val serial = connectSerialSocket(sock)
             if (serial != null) {

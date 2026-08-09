@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -65,6 +67,7 @@ fun DistroConfigDialog(
     githubAuthenticated: Boolean = true,
     onOpenGit: () -> Unit = {},
     onConfirm: (DistroConfig) -> Unit,
+    onInstallLocal: (DistroConfig) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
@@ -232,6 +235,21 @@ fun DistroConfigDialog(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     PhantomOutlinedButton(text = "Cancelar", onClick = onDismiss)
                     Spacer(Modifier.width(10.dp))
+                    PhantomOutlinedButton(
+                        text = "Selecionar arquivos…",
+                        icon = Icons.Filled.FolderOpen,
+                        enabled = hostname.isNotBlank() && user.isNotBlank(),
+                        onClick = {
+                            onInstallLocal(
+                                DistroConfig(
+                                    hostname = hostname.trim(),
+                                    user = user.trim(),
+                                    diskSizeMb = diskMb,
+                                ),
+                            )
+                        },
+                    )
+                    Spacer(Modifier.width(10.dp))
                     PhantomPrimaryButton(
                         text = "Instalar automaticamente",
                         enabled = hostname.isNotBlank() && user.isNotBlank() && githubAuthenticated,
@@ -250,6 +268,12 @@ fun DistroConfigDialog(
                 Text(
                     "A instalação é acompanhada ao vivo no terminal (aba própria).",
                     color = palette.textSecondary,
+                    fontSize = 10.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "\"Selecionar arquivos\" usa arquivos locais (sem internet): o pacote phantom.tar.gz ou os arquivos avulsos (rootfs.img, kernel, initrd.img, qemu-system-aarch64).",
+                    color = palette.border,
                     fontSize = 10.sp,
                 )
             }

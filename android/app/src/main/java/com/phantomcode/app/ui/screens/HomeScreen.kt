@@ -27,10 +27,12 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -54,6 +56,7 @@ import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.WorkspaceManager
 import com.phantomcode.app.data.ProjectOrigin
+import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomDialog
@@ -74,6 +77,7 @@ import java.util.zip.ZipInputStream
 fun HomeScreen(
     onOpenProject: (String) -> Unit,
     onOpenFile: (String) -> Unit,
+    onInstallPhantom: () -> Unit,
 ) {
     val context = LocalContext.current
     val workspace = remember { WorkspaceManager(context) }
@@ -215,11 +219,67 @@ fun HomeScreen(
                             },
                         )
                     }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
+        // ── Motor QEMU + distro Phantom (T30): instalação real com progresso
+        //    no terminal. QEMU e distro vêm no MESMO tarball — o "Instalar"
+        //    abre o terminal com aba de log + barra de progresso ao vivo. ──
+        val vmQ = LocalVm.current
+        val phantomState = vmQ.distros.installStates[DistroCatalog.ALL.first().id]
+        val needSetup = !vmQ.qemu.binaryReady || phantomState?.installed != true
+        if (needSetup && !vmQ.qemu.running) {
+            PhantomCard(modifier = Modifier.fillMaxWidth(), glow = phantomState?.downloading == true) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Memory,
+                        contentDescription = null,
+                        tint = if (phantomState?.downloading == true) palette.accentPrimary else palette.warning,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("QEMU + distro Phantom", color = palette.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (phantomState?.downloading == true) {
+                                "Instalando… acompanhe o log e a barra de progresso ao vivo no terminal."
+                            } else {
+                                "O motor QEMU e a distro vêm no mesmo pacote. Instalação real, com progresso ao vivo no terminal."
+                            },
+                            color = palette.textSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 2,
+                        )
+                        val prog = phantomState?.progress
+                        if (phantomState?.downloading == true && prog != null) {
+                            Spacer(Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { prog },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = palette.accentPrimary,
+                                trackColor = palette.surfaceAlt,
+                            )
+                        }
+                        phantomState?.error?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text(it, color = palette.error, fontSize = 10.sp, maxLines = 2)
+                        }
+                    }
+                    if (phantomState?.downloading != true) {
+                        Spacer(Modifier.width(10.dp))
+                        PhantomPrimaryButton(
+                            text = "Instalar",
+                            icon = Icons.Filled.PlayArrow,
+                            onClick = onInstallPhantom,
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(10.dp))
+        }
+        Spacer(Modifier.height(10.dp))
 
-            // Hub inicial: informações e ações principais do ambiente
+        // Hub inicial: informações e ações principais do ambiente
             PhantomCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(

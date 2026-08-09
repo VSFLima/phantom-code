@@ -19,6 +19,40 @@ data class AiAgent(
     val keyRef: String?, // ex.: "$ANTHROPIC_API_KEY" — NUNCA o valor (SecretsManager é a fonte)
 )
 
+/** Tarefa do bus (Fase B) — ciclo de vida em `docs/roteador-ias.md` §8. */
+data class AiTask(
+    val id: String,
+    val title: String,
+    val status: String, // proposed | pending_approval | approved | in_progress | done | rejected | cancelled
+    val owner: String, // agente dono ou "dono" (o usuário)
+    val scopeFiles: List<String>, // arquivos que pode escrever (R3)
+    val scopeRead: List<String>, // arquivos de leitura
+    val createdAtEpoch: Long,
+    val due: String,
+)
+
+/** Mensagem de uma thread de tarefa — append-only (R5). */
+data class AiThreadMessage(
+    val ts: Long,
+    val from: String,
+    val type: String, // system | msg | done | delegation | approval
+    val text: String,
+    val refs: List<String> = emptyList(),
+)
+
+/** Proposta de delegação entre IAs — passa pelo Human Approval Gate (R4). */
+data class AiProposal(
+    val id: String, // = id da tarefa
+    val from: String,
+    val to: String,
+    val subtask: String,
+    val scopeWrite: List<String>,
+    val scopeRead: List<String>,
+    val reason: String,
+    val due: String,
+    val status: String, // pending_approval | approved | rejected
+)
+
 /**
  * AI Suite Manager — Fase A do Phantom AI Suite (`docs/roteador-ias.md`).
  *
@@ -121,6 +155,282 @@ class AiSuiteManager(context: Context) {
 
     fun resume() {
         paused = false
+    }
+
+    // ── Fase B — tarefas, threads e delegação com aprovação humana ────────
+
+    fun tasksDir(): File = File(stateDir, "tasks")
+
+    fun taskFile(taskId: String): File = File(tasksDir(), taskId)
+
+    private fun contextFile(taskId: String): File = File(taskFile(taskId), "context.json")
+
+    private fun messagesFile(taskId: String): File = File(taskFile(taskId), "messages.jsonl")
+
+    private fun proposalFile(taskId: String): File = File(taskFile(taskId), "proposal.json")
+
+    fun listTasks(): List<AiTask> {
+        val dir = tasksDir()
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.isDirectory }
+            ?.mapNotNull { taskFromJson(it.name, File(it, "context.json")) }
+            ?.sortedByDescending { it.createdAtEpoch }
+            ?: emptyList()
+    }
+
+    fun taskMessages(taskId: String): List<AiThreadMessage> {
+        val f = messagesFile(taskId)
+        if (!f.exists()) return emptyList()
+        return runCatching {
+            f.readLines().mapNotNull { line ->
+                runCatching {
+                    val o = JSONObject(line)
+                    AiThreadMessage(
+                        ts = o.optLong("ts"),
+                        from = o.optString("from", "?"),
+                        type = o.optString("type", "msg"),
+                        text = o.optString("text", ""),
+                        refs = buildList {
+                            o.optJSONArray("refs")?.let { arr ->
+                                for (i in 0 until arr.length()) add(arr.optString(i))
+                            }
+                        },
+                    )
+                }.getOrNull()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Propostas de delegação aguardando aprovação do dono (R4). */
+    fun pendingProposals(): List<AiProposal> = listProposals().filter { it.status == "pending_approval" }
+
+    fun listProposals(): List<AiProposal> {
+        val dir = tasksDir()
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.isDirectory && File(it, "proposal.json").exists() }
+            ?.mapNotNull { proposalFromJson(it.name, File(it, "proposal.json")) }
+            ?.sortedByDescending { it.id }
+            ?: emptyList()
+    }
+
+    /**
+     * Cria uma tarefa no bus. [owner] recebe locks de escrita do escopo (R1)
+     * se não houver conflito — sem isso ela só pode ler.
+     */
+    fun createTask(
+        title: String,
+        owner: String,
+        scopeFiles: List<String>,
+        scopeRead: List<String> = emptyList(),
+        due: String = "",
+        status: String = "in_progress",
+    ): AiTask {
+        val id = newTaskId()
+        val task = AiTask(
+            id = id,
+            title = title,
+            status = status,
+            owner = owner,
+            scopeFiles = scopeFiles,
+            scopeRead = scopeRead,
+            createdAtEpoch = System.currentTimeMillis(),
+            due = due,
+        )
+        saveTask(task)
+        scopeFiles.forEach { guard.request(it, 'W', owner, id) }
+        scopeRead.forEach { guard.request(it, 'R', owner, id) }
+        appendMessage(id, "router", "system", "Tarefa $id criada · escopo: ${scopeFiles.joinToString(", ") { it }.ifBlank { "—" }} · dono: $owner")
+        return task
+    }
+
+    /**
+     * Proposta de delegação (R4) — uma IA pede que outra execute uma subtarefa.
+     * Fica em `pending_approval` até o dono Aprovar/Ajustar/Recusar.
+     */
+    fun proposeDelegation(
+        from: String,
+        to: String,
+        subtask: String,
+        scopeWrite: List<String>,
+        scopeRead: List<String> = emptyList(),
+        reason: String = "",
+        due: String = "",
+    ): AiProposal {
+        val id = newTaskId()
+        val proposal = AiProposal(
+            id = id,
+            from = from,
+            to = to,
+            subtask = subtask,
+            scopeWrite = scopeWrite,
+            scopeRead = scopeRead,
+            reason = reason,
+            due = due,
+            status = "pending_approval",
+        )
+        saveProposal(proposal)
+        saveTask(
+            AiTask(
+                id = id,
+                title = subtask,
+                status = "pending_approval",
+                owner = to,
+                scopeFiles = scopeWrite,
+                scopeRead = scopeRead,
+                createdAtEpoch = System.currentTimeMillis(),
+                due = due,
+            ),
+        )
+        appendMessage(id, "router", "system", "Delegação de $from → $to aguarda o dono")
+        appendMessage(id, from, "msg", subtask)
+        return proposal
+    }
+
+    /** R4 — dono aprova: concede locks de escrita ao destino e inicia a tarefa. */
+    fun approveProposal(id: String): Boolean {
+        val p = listProposals().firstOrNull { it.id == id } ?: return false
+        saveProposal(p.copy(status = "approved"))
+        saveTask(
+            taskFromJson(id, contextFile(id))?.copy(status = "approved", owner = p.to) ?: return false,
+        )
+        p.scopeWrite.forEach { guard.request(it, 'W', p.to, id) }
+        p.scopeRead.forEach { guard.request(it, 'R', p.to, id) }
+        appendMessage(id, "dono", "approval", "✅ Delegação aprovada — $p.to pode executar")
+        return true
+    }
+
+    /** R4 — dono recusa (ou timeout expirou). */
+    fun rejectProposal(id: String): Boolean {
+        val p = listProposals().firstOrNull { it.id == id } ?: return false
+        saveProposal(p.copy(status = "rejected"))
+        saveTask(taskFromJson(id, contextFile(id))?.copy(status = "rejected") ?: return false)
+        appendMessage(id, "dono", "approval", "❌ Delegação recusada")
+        return true
+    }
+
+    /** R4 — dono ajusta o escopo; a proposta volta para `pending_approval` (timeout reinicia). */
+    fun adjustProposal(id: String, scopeWrite: List<String>, scopeRead: List<String>): Boolean {
+        val p = listProposals().firstOrNull { it.id == id } ?: return false
+        saveProposal(p.copy(scopeWrite = scopeWrite, scopeRead = scopeRead, status = "pending_approval"))
+        saveTask(taskFromJson(id, contextFile(id))?.copy(scopeFiles = scopeWrite, scopeRead = scopeRead, status = "pending_approval") ?: return false)
+        appendMessage(id, "dono", "approval", "✏️ Escopo ajustado pelo dono: escreve ${scopeWrite.joinToString(", ") { it }.ifBlank { "—" }} · lê ${scopeRead.joinToString(", ") { it }.ifBlank { "—" }}")
+        return true
+    }
+
+    /** R5 — o dono intervém na thread (prioridade máxima; pausa a tarefa). */
+    fun sendOwnerMessage(taskId: String, text: String) {
+        if (text.isBlank()) return
+        appendMessage(taskId, "dono", "msg", text.trim())
+    }
+
+    fun finishTask(taskId: String, summary: String = "") {
+        saveTask(taskFromJson(taskId, contextFile(taskId))?.copy(status = "done") ?: return)
+        appendMessage(taskId, "router", "done", summary.ifBlank { "Tarefa $taskId concluída" })
+        taskFromJson(taskId, contextFile(taskId))?.owner?.let { guard.release(it) }
+    }
+
+    // ── Fase B — persistência ──────────────────────────────────────────────
+
+    private var idCounter = 0L
+
+    private fun newTaskId(): String {
+        idCounter = (idCounter + 1) % 1000000
+        return "t-" + (System.nanoTime() % 1000000 + idCounter) % 1000000
+    }
+
+    private fun saveTask(task: AiTask) {
+        runCatching {
+            val f = contextFile(task.id)
+            f.parentFile?.mkdirs()
+            f.writeText(
+                JSONObject()
+                    .put("id", task.id)
+                    .put("title", task.title)
+                    .put("status", task.status)
+                    .put("owner", task.owner)
+                    .put("scope_files", JSONArray(task.scopeFiles))
+                    .put("scope_read", JSONArray(task.scopeRead))
+                    .put("created_at", task.createdAtEpoch)
+                    .put("due", task.due)
+                    .toString(2),
+            )
+        }
+    }
+
+    private fun taskFromJson(id: String, f: File): AiTask? {
+        if (!f.exists()) return null
+        return runCatching {
+            val o = JSONObject(f.readText())
+            AiTask(
+                id = id,
+                title = o.optString("title", id),
+                status = o.optString("status", "proposed"),
+                owner = o.optString("owner", "?"),
+                scopeFiles = jsonToStringList(o.optJSONArray("scope_files")),
+                scopeRead = jsonToStringList(o.optJSONArray("scope_read")),
+                createdAtEpoch = o.optLong("created_at", 0),
+                due = o.optString("due", ""),
+            )
+        }.getOrNull()
+    }
+
+    private fun saveProposal(p: AiProposal) {
+        runCatching {
+            val f = proposalFile(p.id)
+            f.parentFile?.mkdirs()
+            f.writeText(
+                JSONObject()
+                    .put("id", p.id)
+                    .put("from", p.from)
+                    .put("to", p.to)
+                    .put("subtask", p.subtask)
+                    .put("scope_write", JSONArray(p.scopeWrite))
+                    .put("scope_read", JSONArray(p.scopeRead))
+                    .put("reason", p.reason)
+                    .put("due", p.due)
+                    .put("status", p.status)
+                    .toString(2),
+            )
+        }
+    }
+
+    private fun proposalFromJson(id: String, f: File): AiProposal? {
+        if (!f.exists()) return null
+        return runCatching {
+            val o = JSONObject(f.readText())
+            AiProposal(
+                id = id,
+                from = o.optString("from", "?"),
+                to = o.optString("to", "?"),
+                subtask = o.optString("subtask", ""),
+                scopeWrite = jsonToStringList(o.optJSONArray("scope_write")),
+                scopeRead = jsonToStringList(o.optJSONArray("scope_read")),
+                reason = o.optString("reason", ""),
+                due = o.optString("due", ""),
+                status = o.optString("status", "pending_approval"),
+            )
+        }.getOrNull()
+    }
+
+    private fun jsonToStringList(arr: JSONArray?): List<String> =
+        buildList { arr?.let { for (i in 0 until it.length()) add(it.optString(i)) } }
+
+    /** R5 — append-only: a linha é adicionada ao final, nunca sobrescreve. */
+    private fun appendMessage(taskId: String, from: String, type: String, text: String, refs: List<String> = emptyList()) {
+        runCatching {
+            val f = messagesFile(taskId)
+            f.parentFile?.mkdirs()
+            val line = JSONObject()
+                .put("ts", System.currentTimeMillis())
+                .put("from", from)
+                .put("type", type)
+                .put("text", text)
+                .put("refs", JSONArray(refs))
+                .toString()
+            f.appendText(line + "\n")
+        }
     }
 
     // ── Persistência ──────────────────────────────────────────────────────

@@ -2,6 +2,9 @@ package com.phantomcode.app.data.vm
 
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import jackpal.androidterm.emulatorview.TermSession
 
 /**
@@ -13,6 +16,13 @@ class LogTermSession : TermSession() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var emulatorReady = false
+
+    /** Progresso da instalação (0..1) para a barra de progresso no terminal;
+     *  null = sem barra (ou barra indeterminada). */
+    var progress by mutableStateOf<Float?>(null)
+
+    /** Fase ao vivo da instalação ("Baixando…", "Verificando SHA-256…", "Extraindo…"). */
+    var phase by mutableStateOf<String?>(null)
 
     init {
         // ⚠️ FIX CRASH: o initializeEmulator() do jackpal inicia mReaderThread e
@@ -51,6 +61,14 @@ class LogTermSession : TermSession() {
         if (!emulatorReady) return
         val bytes = text.toByteArray(Charsets.UTF_8)
         mainHandler.post { runCatching { appendToEmulator(bytes, 0, bytes.size) } }
+    }
+
+    /** Atualiza a barra de progresso e a fase da instalação (postado na main thread). */
+    fun setProgress(p: Float?, phaseText: String?) {
+        mainHandler.post {
+            progress = p
+            phase = phaseText
+        }
     }
 
     override fun finish() {

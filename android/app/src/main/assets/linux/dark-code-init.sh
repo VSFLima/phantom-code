@@ -41,7 +41,8 @@ hostname "$HOSTNAME" 2>/dev/null || true
 if command -v resize2fs >/dev/null 2>&1 && ! [ -f /var/run/phantom-resized ]; then
   log "Redimensionando o sistema de arquivos (HD configurado)…"
   e2fsck -fp /dev/vda 2>/dev/null || true
-  resize2fs /dev/vda 2>/dev/null && touch /var/run/phantom-resized
+  resize2fs /dev/vda 2>/dev/null || true
+  touch /var/run/phantom-resized
 fi
 
 # ── 1. Rede (SLIRP) ─────────────────────────────────────────

@@ -55,6 +55,9 @@ import com.phantomcode.app.data.git.GitChange
 import com.phantomcode.app.data.git.GitCommitInfo
 import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.git.GitStatus
+import com.phantomcode.app.data.git.GithubIssue
+import com.phantomcode.app.data.git.GithubPr
+import com.phantomcode.app.data.git.GithubRelease
 import com.phantomcode.app.data.git.GithubRepo
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.ui.components.PhantomCard
@@ -91,8 +94,11 @@ fun GitScreen() {
     var publishName by remember { mutableStateOf("") }
     var remoteRepos by remember { mutableStateOf<List<GithubRepo>>(emptyList()) }
     var selectedRemote by remember { mutableStateOf<GithubRepo?>(null) }
-    var remoteReleases by remember { mutableStateOf<List<com.phantomcode.app.data.git.GithubRelease>>(emptyList()) }
+    var remoteReleases by remember { mutableStateOf<List<GithubRelease>>(emptyList()) }
+    var remoteIssues by remember { mutableStateOf<List<GithubIssue>>(emptyList()) }
+    var remotePrs by remember { mutableStateOf<List<GithubPr>>(emptyList()) }
     var remoteBusy by remember { mutableStateOf(false) }
+    var downloadingTag by remember { mutableStateOf<String?>(null) }
 
     val repoDir = selected?.let { File(vm.workspace.root, it) }
 
@@ -111,8 +117,23 @@ fun GitScreen() {
     fun selectRemote(repo: GithubRepo) {
         selectedRemote = repo
         remoteReleases = emptyList()
+        remoteIssues = emptyList()
+        remotePrs = emptyList()
         scope.launch {
             git.githubReleases(repo.fullName).onSuccess { remoteReleases = it }
+            git.githubIssues(repo.fullName).onSuccess { remoteIssues = it }
+            git.githubPrs(repo.fullName).onSuccess { remotePrs = it }
+        }
+    }
+
+    fun downloadRelease(release: GithubRelease) {
+        if (downloadingTag != null) return
+        downloadingTag = release.tag
+        scope.launch {
+            val result = git.downloadReleaseAsset(release, File(vm.workspace.root, "Downloads"))
+            downloadingTag = null
+            result.onSuccess { notify("Baixado em Downloads: $it") }
+                .onFailure { notify("Download: ${it.message}") }
         }
     }
 
@@ -255,7 +276,62 @@ fun GitScreen() {
                                 Spacer(Modifier.height(6.dp))
                                 Text("Releases", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                 remoteReleases.take(5).forEach { release ->
-                                    Text("${release.name} · ${release.tag} · ${release.publishedAt}", color = palette.textSecondary, fontSize = 10.sp)
+                                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("${release.name} · ${release.tag}", color = palette.textSecondary, fontSize = 10.sp)
+                                            Text(
+                                                if (release.assets.isEmpty()) "sem arquivos binários · ${release.publishedAt}"
+                                                else "${release.assets.first().name} · ${release.publishedAt}",
+                                                color = palette.textSecondary,
+                                                fontSize = 9.sp,
+                                            )
+                                        }
+                                        if (release.assets.isNotEmpty()) {
+                                            Spacer(Modifier.width(8.dp))
+                                            PhantomOutlinedButton(
+                                                text = if (downloadingTag == release.tag) "…" else "Baixar",
+                                                icon = Icons.Filled.CloudDownload,
+                                                enabled = downloadingTag == null,
+                                                onClick = { downloadRelease(release) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (remoteIssues.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text("Issues abertas (${remoteIssues.size})", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                remoteIssues.take(6).forEach { issue ->
+                                    Text(
+                                        "#${issue.number} ${issue.title}",
+                                        color = palette.textPrimary,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${issue.user} · ${issue.createdAt}" + issue.labels.joinToString("") { " · #$it" },
+                                        color = palette.textSecondary,
+                                        fontSize = 9.sp,
+                                    )
+                                }
+                            }
+                            if (remotePrs.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text("Pull requests (${remotePrs.size})", color = palette.accentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                remotePrs.take(6).forEach { pr ->
+                                    Text(
+                                        "#${pr.number} ${pr.title}",
+                                        color = palette.textPrimary,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${pr.user} · ${pr.createdAt} · ${if (pr.merged) "mergeado" else pr.state}",
+                                        color = palette.textSecondary,
+                                        fontSize = 9.sp,
+                                    )
                                 }
                             }
                         }

@@ -17,16 +17,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.DistroCatalog
+import com.phantomcode.app.data.vm.DistroInstallState
 import com.phantomcode.app.ui.components.PhantomCard
 import com.phantomcode.app.ui.components.PhantomLogo
 import com.phantomcode.app.ui.components.PhantomOutlinedButton
@@ -34,19 +38,33 @@ import com.phantomcode.app.ui.components.PhantomPrimaryButton
 import com.phantomcode.app.ui.theme.LocalThemeController
 
 /**
- * Onboarding de 1º uso (T24 · D20): apresenta o app e os primeiros passos —
- * conceder armazenamento, escolher a distro e iniciar o Linux.
+ * Onboarding de 1º uso (T24 · D20 + T30): apresenta o app e os primeiros passos —
+ * conceder armazenamento, instalar o motor QEMU + a distro Phantom (vêm no mesmo
+ * pacote, com progresso real no terminal), escolher a distro e iniciar o Linux.
  */
 @Composable
 fun OnboardingScreen(
     storageGranted: Boolean,
     distroInstalled: Boolean,
+    qemuReady: Boolean,
+    phantomState: DistroInstallState?,
     onRequestStorage: () -> Unit,
     onChooseDistro: () -> Unit,
     onStartLinux: () -> Unit,
+    onInstallPhantom: () -> Unit,
     onFinish: () -> Unit,
 ) {
     val palette = LocalThemeController.current.currentPalette()
+    val downloading = phantomState?.downloading == true
+    val phantomInstalled = phantomState?.installed == true
+
+    // T30: no 1º uso, instala AUTOMATICAMENTE o motor QEMU + a distro Phantom
+    // (mesmo tarball) e abre o terminal com log + barra de progresso reais.
+    LaunchedEffect(Unit) {
+        if (!qemuReady && !phantomInstalled && !downloading) {
+            onInstallPhantom()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -86,6 +104,30 @@ fun OnboardingScreen(
 
         OnboardingStep(
             number = 2,
+            title = "Instale o QEMU + a distro",
+            desc = if (downloading) {
+                "Baixando e instalando — o motor QEMU e a distro Phantom vêm no mesmo pacote. Acompanhe o progresso ao vivo no terminal."
+            } else {
+                "Um único pacote traz o motor QEMU e a distro Phantom. Instalação real, com log e barra de progresso ao vivo no terminal."
+            },
+            done = phantomInstalled,
+            actionLabel = "Instalar",
+            onAction = onInstallPhantom,
+            progress = if (downloading) phantomState?.progress else null,
+        )
+        phantomState?.error?.let { err ->
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "✗ $err — depois de autenticar, toque em Instalar para tentar de novo.",
+                color = palette.error,
+                fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.Start).padding(horizontal = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+
+        OnboardingStep(
+            number = 3,
             title = "Escolha sua distro",
             desc = "Toque para ver descrição, consumo e riscos de cada uma (modo terminal apenas). O app instala e configura tudo para você.",
             done = distroInstalled,
@@ -95,10 +137,10 @@ fun OnboardingScreen(
         Spacer(Modifier.height(12.dp))
 
         OnboardingStep(
-            number = 3,
+            number = 4,
             title = "Inicie o Linux",
             desc = "Sobe a VM QEMU headless e abre o terminal integrado.",
-            done = false,
+            done = distroInstalled,
             actionLabel = "Iniciar",
             onAction = onStartLinux,
         )
@@ -128,6 +170,7 @@ private fun OnboardingStep(
     done: Boolean,
     actionLabel: String,
     onAction: () -> Unit,
+    progress: Float? = null,
 ) {
     val palette = LocalThemeController.current.currentPalette()
     PhantomCard(modifier = Modifier.fillMaxWidth(), glow = done) {
@@ -148,9 +191,27 @@ private fun OnboardingStep(
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(desc, color = palette.textSecondary, fontSize = 11.sp, maxLines = 3)
+                if (progress != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.weight(1f),
+                            color = palette.accentPrimary,
+                            trackColor = palette.surfaceAlt,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${(progress * 100).toInt()}%",
+                            color = palette.textSecondary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
             }
             Spacer(Modifier.width(10.dp))
-            if (!done) {
+            if (!done && progress == null) {
                 PhantomOutlinedButton(text = actionLabel, onClick = onAction)
             }
         }

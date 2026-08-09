@@ -47,6 +47,7 @@ import androidx.navigation.navArgument
 import com.phantomcode.app.data.SessionManager
 import com.phantomcode.app.data.StorageHelper
 import com.phantomcode.app.data.vm.DistroCatalog
+import com.phantomcode.app.data.vm.DistroConfig
 import com.phantomcode.app.data.vm.LocalVm
 import com.phantomcode.app.data.vm.VmController
 import com.phantomcode.app.ui.components.PhantomScaffold
@@ -136,6 +137,17 @@ fun PhantomApp() {
     var editorTabs by remember { mutableStateOf<List<String>>(emptyList()) }
     var showOnboarding by remember { mutableStateOf(!session.onboardingDone) }
     var storageGranted by remember { mutableStateOf(StorageHelper.hasStorageAccess(context)) }
+    // Instalação iniciada DURANTE o onboarding (o NavHost ainda não está
+    // composto — navegar agora lançaria exceção). Abre o terminal assim que o
+    // onboarding terminar e o NavHost existir.
+    var pendingTerminal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showOnboarding) {
+        if (!showOnboarding && pendingTerminal) {
+            pendingTerminal = false
+            runCatching { navController.navigate(Routes.TERMINAL) { launchSingleTop = true } }
+        }
+    }
 
     val storageSettingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -156,12 +168,38 @@ fun PhantomApp() {
         navController.popBackStack()
     }
 
-    // ── Onboarding de 1º uso (T24 · D20) ────────────────────────
+    // ── Instala o motor QEMU + a distro Phantom de UMA VEZ (T30) ──────────
+    // Os dois vêm DENTRO do mesmo tarball (phantom.tar.gz): baixar e extrair
+    // o pacote instala o qemu-system-aarch64 e a distro juntos. Abre o
+    // terminal com uma aba de log + barra de progresso real e dispara o
+    // download — o usuário acompanha cada etapa ao vivo.
+    fun installPhantom() {
+        val phantom = DistroCatalog.ALL.firstOrNull { it.id == "phantom" } ?: return
+        val logTab = vm.qemu.terminal.addLogTab("Instalando ${phantom.name}")
+        // Durante o onboarding o NavHost ainda não está composto (sem graph) —
+        // a navegação falharia; nesse caso o terminal abre ao terminar o
+        // onboarding (pendingTerminal). Com o NavHost ativo, abre na hora.
+        val opened = runCatching {
+            navController.navigate(Routes.TERMINAL) { launchSingleTop = true }
+        }.isSuccess
+        if (!opened) pendingTerminal = true
+        scope.launch {
+            val state = vm.distros.installStates[phantom.id]
+            if (state?.downloading != true && state?.installed != true) {
+                vm.distros.install(phantom, DistroConfig(), logTab)
+            }
+        }
+    }
+
+    // ── Onboarding de 1º uso (T24 · D20 + T30) ───────────────────────
     if (showOnboarding) {
-        val distroInstalled = vm.distros.isInstalled(DistroCatalog.ALL.first().id)
+        val phantomId = DistroCatalog.ALL.first().id
+        val distroInstalled = vm.distros.isInstalled(phantomId)
         OnboardingScreen(
             storageGranted = storageGranted,
             distroInstalled = distroInstalled,
+            qemuReady = vm.qemu.binaryReady,
+            phantomState = vm.distros.installStates[phantomId],
             onRequestStorage = {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     storageSettingsLauncher.launch(StorageHelper.permissionIntent(context))
@@ -169,8 +207,9 @@ fun PhantomApp() {
                     storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             },
-            onChooseDistro = { navController.navigateToTab(Routes.TOOLBOX) },
+            onChooseDistro = { runCatching { navController.navigateToTab(Routes.TOOLBOX) } },
             onStartLinux = { scope.launch { vm.qemu.start() } },
+            onInstallPhantom = ::installPhantom,
             onFinish = {
                 session.onboardingDone = true
                 showOnboarding = false
@@ -224,6 +263,7 @@ fun PhantomApp() {
                     HomeScreen(
                         onOpenProject = { navController.navigateToTab(Routes.EXPLORER) },
                         onOpenFile = ::openEditor,
+                        onInstallPhantom = ::installPhantom,
                     )
                 }
                 composable(Routes.EXPLORER) {

@@ -11,6 +11,7 @@ jgit = "6.10.0.202406032230-r"
 slf4j = "1.7.36"
 jackpal = "v1.0.70"
 commonsNet = "3.11.1"
+jsch = "0.2.20"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +30,7 @@ org-eclipse-jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", vers
 slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 jackpal-emulatorview = { group = "com.github.jackpal.Android-Terminal-Emulator", name = "emulatorview", version.ref = "jackpal" }
 commons-net = { group = "commons-net", name = "commons-net", version.ref = "commonsNet" }
+jsch = { group = "com.github.mwiede", name = "jsch", version.ref = "jsch" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

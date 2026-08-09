@@ -20,8 +20,8 @@ class TerminalPrefs(context: Context) {
         set(value) = prefs.edit().putInt(KEY_FONT_SIZE, value.coerceIn(MIN_FONT_SIZE_SP, MAX_FONT_SIZE_SP)).apply()
 
     companion object {
-        const val MIN_FONT_SIZE_SP = 8
-        const val MAX_FONT_SIZE_SP = 18
+        const val MIN_FONT_SIZE_SP = 6
+        const val MAX_FONT_SIZE_SP = 32
         const val DEFAULT_FONT_SIZE_SP = 10
         private const val KEY_FONT_SIZE = "font_size_sp"
     }

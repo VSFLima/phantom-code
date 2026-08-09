@@ -6,6 +6,8 @@
 #   SCAN            → lista categorizada por linha:
 #                     S:<cat>|<nome>|<versão>|<rodando:0/1>|<tamanho KB>
 #   RUN:<cmd>       → executa <cmd> em background no guest
+#   EXEC:<cmd>      → executa <cmd> e devolve a saída (stdout+stderr, 8 KB max):
+#                     EXEC-BEGIN … EXEC-END (Editor: Executar no guest)
 #   SERVER:<dir>|<lang> → sobe servidor web na porta 80 (php/python/node)
 #                     servindo a pasta <dir> do workspace (Preview Hub VM)
 #   STOPSERVER      → derruba o servidor web
@@ -84,6 +86,11 @@ while :; do
         if ss -ltn 2>/dev/null | grep -q ':80 '; then echo "1" >&3
         elif netstat -ltn 2>/dev/null | grep -q ':80 '; then echo "1" >&3
         else echo "0" >&3; fi ;;
+      EXEC:*)
+        cmd="${line#EXEC:}"
+        echo "EXEC-BEGIN" >&3
+        { eval "$cmd" 2>&1; } | head -c 8000 >&3
+        echo "EXEC-END" >&3 ;;
       *) echo "ERR" >&3 ;;
     esac
   done

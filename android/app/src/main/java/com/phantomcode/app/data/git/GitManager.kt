@@ -47,6 +47,32 @@ data class GithubRelease(
     val name: String,
     val tag: String,
     val publishedAt: String,
+    val assets: List<GithubAsset> = emptyList(),
+    val sourceTarball: String = "",
+)
+
+data class GithubAsset(
+    val name: String,
+    val sizeBytes: Long,
+    val browserDownloadUrl: String,
+)
+
+data class GithubIssue(
+    val number: Int,
+    val title: String,
+    val state: String,
+    val user: String,
+    val createdAt: String,
+    val labels: List<String>,
+)
+
+data class GithubPr(
+    val number: Int,
+    val title: String,
+    val state: String,
+    val user: String,
+    val createdAt: String,
+    val merged: Boolean,
 )
 
 /** Git nativo via JGit (T19) — status, clone, commit, push/pull e log.
@@ -319,17 +345,125 @@ class GitManager(context: Context) {
             buildList {
                 for (i in 0 until json.length()) {
                     val item = json.getJSONObject(i)
+                    val assets = buildList {
+                        val arr = item.optJSONArray("assets")
+                        if (arr != null) {
+                            for (j in 0 until arr.length()) {
+                                val a = arr.getJSONObject(j)
+                                add(
+                                    GithubAsset(
+                                        name = a.optString("name"),
+                                        sizeBytes = a.optLong("size"),
+                                        browserDownloadUrl = a.optString("browser_download_url"),
+                                    ),
+                                )
+                            }
+                        }
+                    }
                     add(
                         GithubRelease(
                             name = item.optString("name").ifBlank { item.optString("tag_name") },
                             tag = item.optString("tag_name"),
                             publishedAt = item.optString("published_at").take(10),
+                            assets = assets,
+                            sourceTarball = item.optString("tarball_url"),
                         ),
                     )
                 }
             }
         }
     }
+
+    /** Issues abertas do repositório (exclui PRs, que a API do GitHub mistura aqui). */
+    suspend fun githubIssues(fullName: String): Result<List<GithubIssue>> = withContext(Dispatchers.IO) {
+        apiGet("https://api.github.com/repos/${fullName}/issues?state=open&per_page=30").map { body ->
+            val json = JSONArray(body)
+            buildList {
+                for (i in 0 until json.length()) {
+                    val item = json.getJSONObject(i)
+                    // Pull requests aparecem junto; filtrar pelo campo `pull_request`.
+                    if (item.has("pull_request")) continue
+                    val labels = buildList {
+                        val arr = item.optJSONArray("labels")
+                        if (arr != null) {
+                            for (j in 0 until arr.length()) {
+                                add(arr.getJSONObject(j).optString("name"))
+                            }
+                        }
+                    }
+                    add(
+                        GithubIssue(
+                            number = item.optInt("number"),
+                            title = item.optString("title"),
+                            state = item.optString("state"),
+                            user = item.optJSONObject("user")?.optString("login").orEmpty(),
+                            createdAt = item.optString("created_at").take(10),
+                            labels = labels,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Pull requests do repositório (status de equipe). */
+    suspend fun githubPrs(fullName: String): Result<List<GithubPr>> = withContext(Dispatchers.IO) {
+        apiGet("https://api.github.com/repos/${fullName}/pulls?state=open&per_page=30").map { body ->
+            val json = JSONArray(body)
+            buildList {
+                for (i in 0 until json.length()) {
+                    val item = json.getJSONObject(i)
+                    add(
+                        GithubPr(
+                            number = item.optInt("number"),
+                            title = item.optString("title"),
+                            state = item.optString("state"),
+                            user = item.optJSONObject("user")?.optString("login").orEmpty(),
+                            createdAt = item.optString("created_at").take(10),
+                            merged = item.optBoolean("merged"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Baixa o primeiro asset binário de uma release para [target] (pasta).
+     * Retorna o nome do arquivo salvo ou mensagem de erro.
+     */
+    suspend fun downloadReleaseAsset(release: GithubRelease, target: File): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val asset = release.assets.firstOrNull()
+                    ?: error("Release sem assets — use o botão Baixar projeto para obter o código")
+                val auth = token?.takeIf { it.isNotBlank() } ?: error("Autentique o GitHub primeiro")
+                val conn = (URL(asset.browserDownloadUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 60000
+                    setRequestProperty("Accept", "application/octet-stream")
+                    setRequestProperty("Authorization", "Bearer $auth")
+                }
+                if (conn.responseCode !in 200..299) {
+                    conn.disconnect()
+                    error("HTTP ${conn.responseCode} ao baixar ${asset.name}")
+                }
+                target.mkdirs()
+                val safe = asset.name.replace("/", "_").ifBlank { "release" }
+                val out = File(target, safe)
+                conn.inputStream.use { input ->
+                    out.outputStream().use { o ->
+                        val buffer = ByteArray(64 * 1024)
+                        var count: Int
+                        while (input.read(buffer).also { count = it } != -1) {
+                            o.write(buffer, 0, count)
+                        }
+                    }
+                }
+                conn.disconnect()
+                safe
+            }
+        }
 
     /** Cria um repositório no GitHub (POST /user/repos). Retorna o full_name ou erro. */
     suspend fun createGithubRepo(name: String, description: String = "", private: Boolean = false): Result<String> =
