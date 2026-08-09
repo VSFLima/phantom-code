@@ -41,24 +41,36 @@ jobs:
           docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Build arm64 rootfs (docker + Debian bookworm)
-        timeout-minutes: 45
+        timeout-minutes: 55
         run: |
           # timeout global do container: travamento do qemu-user vira falha rápida
-          # (docker ignora SIGTERM bloqueado — --kill-after força o SIGKILL)
-          timeout --kill-after=60 1500 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
+          # (docker ignora SIGTERM bloqueado — --kill-after força o SIGKILL).
+          # 1800s: apt (~10min) + initrd manual (~7min) + folga.
+          timeout --kill-after=60 1800 docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
             set -e
             apt-get update
-            # O python3.11 segfaulta sob o qemu-user do runner (postinst py3compile).
-            # Desviamos py3compile/pycompile para /bin/true: no guest o python roda
-            # de verdade no aparelho; o byte-compile no build só dispara o crash.
-            dpkg-divert --local --add --rename /usr/bin/py3compile
+
+            # ── TRIGGERS PENDURAM sob qemu-user ─────────────────────────────
+            # O apt roda "dpkg --triggers-only" no FINAL do install MESMO com
+            # -o DPkg::Options::=--no-triggers, e isso trava o build (3x: 35min
+            # cada — update-ca-certificates, update-initramfs, ldconfig).
+            # Neutralizamos os binarios ANTES do apt via dpkg-divert: quando o
+            # pacote instala o real, ele vai para <path>.distrib e nosso symlink
+            # /bin/true fica no lugar — o trigger vira no-op instantaneo.
+            # Depois do apt: restauramos ldconfig e geramos o initrd com o
+            # update-initramfs REAL (o "-k <ver>" funciona sob qemu, ~6.5min).
+            # py3compile tambem segfaulta sob qemu-user (postinst do python3).
+            dpkg-divert --local --add --rename /sbin/ldconfig || true
+            ln -sf /bin/true /sbin/ldconfig
+            dpkg-divert --local --add --rename /usr/sbin/update-ca-certificates || true
+            ln -sf /bin/true /usr/sbin/update-ca-certificates
+            dpkg-divert --local --add --rename /usr/sbin/update-initramfs || true
+            ln -sf /bin/true /usr/sbin/update-initramfs
+            dpkg-divert --local --add --rename /usr/bin/py3compile || true
             ln -sf /bin/true /usr/bin/py3compile
-            dpkg-divert --local --add --rename /usr/bin/pycompile
+            dpkg-divert --local --add --rename /usr/bin/pycompile || true
             ln -sf /bin/true /usr/bin/pycompile
-            # DPkg::Options (case-sensitive!) --no-triggers: NENHUM trigger roda no
-            # build (sob qemu-user eles penduram: libc-bin/ldconfig 35min,
-            # initramfs-tools 35min). O postinst do linux-image gera o initrd.img
-            # (unico processo pesado que funciona, ~6.5min).
+
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               -o DPkg::Options::=--no-triggers \
               bash ca-certificates curl wget git \
@@ -67,12 +79,29 @@ jobs:
               sysvinit-core sysv-rc iproute2 isc-dhcp-client \
               libargon2-1 libsodium23 libedit2 libmagic1 media-types
 
-            # Triggers pendentes descartados (liberam o estado do dpkg).
+            # dpkg: zera triggers pendentes e restaura o ldconfig real
+            # (o guest roda nativo no aparelho — cache de libs util).
             rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
+            rm -f /sbin/ldconfig
+            mv /sbin/ldconfig.distrib /sbin/ldconfig
 
-            # PHP NAO e instalado aqui: dpkg --unpack dos .debs do php PENDURA sob
-            # qemu-user (~150s cada deb). O php entra no rootfs no HOST (nativo,
-            # sem qemu) no passo "Install PHP 8.2 (host-side)".
+            # initrd: o kernel postinst rodou com update-initramfs no-op; gera
+            # agora com o binario REAL (so o "-k" especifico funciona sob qemu).
+            rm -f /usr/sbin/update-initramfs
+            mv /usr/sbin/update-initramfs.distrib /usr/sbin/update-initramfs
+            K=$(ls /lib/modules | head -1)
+            echo "==> initrd para kernel $K"
+            update-initramfs -k "$K"
+            ls -la /boot/initrd.img-*
+
+            # CA bundle: o update-ca-certificates (no-op no build) nao gerou o
+            # bundle; baixa o Mozilla que o Debian referencia como default.
+            curl -fsSL https://curl.se/ca/cacert.pem -o /etc/ssl/certs/ca-certificates.crt || \
+              echo "sem CA bundle (https no guest fica de fora)"
+            ls -la /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
+
+            # PHP entra no HOST (passo "Install PHP 8.2") — dpkg/apt do php
+            # penduram sob qemu-user.
             rm -rf /var/lib/apt/lists/*
           '
           docker export phantom > /tmp/rootfs.tar
