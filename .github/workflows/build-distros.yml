@@ -51,15 +51,20 @@ jobs:
             apt-get update
 
             # ── TRIGGERS PENDURAM sob qemu-user ─────────────────────────────
-            # O apt roda "dpkg --triggers-only" no FINAL do install MESMO com
-            # -o DPkg::Options::=--no-triggers, e isso trava o build (3x: 35min
-            # cada — update-ca-certificates, update-initramfs, ldconfig).
-            # Neutralizamos os binarios ANTES do apt via dpkg-divert: quando o
-            # pacote instala o real, ele vai para <path>.distrib e nosso symlink
-            # /bin/true fica no lugar — o trigger vira no-op instantaneo.
-            # Depois do apt: restauramos ldconfig e geramos o initrd com o
-            # update-initramfs REAL (o "-k <ver>" funciona sob qemu, ~6.5min).
-            # py3compile tambem segfaulta sob qemu-user (postinst do python3).
+            # dpkg/apt NAO podem processar triggers no build: o "dpkg
+            # --triggers-only" final do apt e os handlers (update-ca-certificates,
+            # update-initramfs, ldconfig) travam sob o qemu-user do runner
+            # (5 builds travados de 16-35min cada). Estrategia deterministica:
+            # NUNCA rodar trigger phase — "apt-get install --download-only"
+            # (baixa os .debs SEM dpkg) + "dpkg --unpack --no-triggers"
+            # (extrai, sem postinst) + "dpkg --configure -a --no-triggers"
+            # (roda postinst, ADIA triggers) + descarte do estado de triggers.
+            # Handlers perigosos viram /bin/true durante o build (dpkg-divert
+            # sobre arquivo pre-criado, garantido) e sao restaurados ao final.
+            # O initrd e gerado manualmente com o update-initramfs REAL
+            # ("-k <ver>" e comprovadamente estavel sob qemu, ~6.5min).
+            mkdir -p /usr/sbin
+            touch /usr/sbin/update-ca-certificates /usr/sbin/update-initramfs
             dpkg-divert --local --add --rename /sbin/ldconfig || true
             ln -sf /bin/true /sbin/ldconfig
             dpkg-divert --local --add --rename /usr/sbin/update-ca-certificates || true
@@ -71,38 +76,40 @@ jobs:
             dpkg-divert --local --add --rename /usr/bin/pycompile || true
             ln -sf /bin/true /usr/bin/pycompile
 
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              -o DPkg::Options::=--no-triggers \
-              bash ca-certificates curl wget git \
-              python3 openssh-client tzdata nano vim-tiny htop file \
-              linux-image-arm64 initramfs-tools e2fsprogs \
-              sysvinit-core sysv-rc iproute2 isc-dhcp-client \
+            # SÓ BAIXA os .debs (inclui dependencias) — nenhum dpkg roda aqui.
+            DEBIAN_FRONTEND=noninteractive apt-get install --download-only -y --no-install-recommends \
+              bash ca-certificates curl wget git python3 openssh-client tzdata nano vim-tiny htop file \
+              linux-image-arm64 initramfs-tools e2fsprogs sysvinit-core sysv-rc iproute2 isc-dhcp-client \
               libargon2-1 libsodium23 libedit2 libmagic1 media-types
 
-            # dpkg: zera triggers pendentes e restaura o ldconfig real
-            # (o guest roda nativo no aparelho — cache de libs util).
-            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
-            rm -f /sbin/ldconfig
-            mv /sbin/ldconfig.distrib /sbin/ldconfig
+            # Desempacota (preinst roda, postinst/trigger NAO).
+            dpkg --unpack --no-triggers /var/cache/apt/archives/*.deb >/dev/null 2>&1 || \
+              dpkg --unpack --no-triggers /var/cache/apt/archives/*.deb >/dev/null 2>&1 || true
 
-            # initrd: o kernel postinst rodou com update-initramfs no-op; gera
-            # agora com o binario REAL (so o "-k" especifico funciona sob qemu).
+            # Configura (postinst roda, triggers ADIADOS e depois descartados).
+            dpkg --configure -a --no-triggers >/dev/null 2>&1 || true
+            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
+
+            # Restaura o ldconfig real (guest roda nativo no aparelho).
+            rm -f /sbin/ldconfig
+            mv /sbin/ldconfig.distrib /sbin/ldconfig 2>/dev/null || true
+
+            # initrd: gera com o update-initramfs REAL (-k estavel sob qemu).
             rm -f /usr/sbin/update-initramfs
-            mv /usr/sbin/update-initramfs.distrib /usr/sbin/update-initramfs
+            mv /usr/sbin/update-initramfs.distrib /usr/sbin/update-initramfs 2>/dev/null || true
             K=$(ls /lib/modules | head -1)
             echo "==> initrd para kernel $K"
             update-initramfs -k "$K"
             ls -la /boot/initrd.img-*
 
-            # CA bundle: o update-ca-certificates (no-op no build) nao gerou o
-            # bundle; baixa o Mozilla que o Debian referencia como default.
+            # CA bundle (update-ca-certificates no-op no build): baixa o bundle
+            # Mozilla default do Debian.
             curl -fsSL https://curl.se/ca/cacert.pem -o /etc/ssl/certs/ca-certificates.crt || \
               echo "sem CA bundle (https no guest fica de fora)"
             ls -la /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true
 
-            # PHP entra no HOST (passo "Install PHP 8.2") — dpkg/apt do php
-            # penduram sob qemu-user.
-            rm -rf /var/lib/apt/lists/*
+            # PHP entra no HOST (passo "Install PHP 8.2").
+            rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
           '
           docker export phantom > /tmp/rootfs.tar
           mkdir -p /tmp/rootfs
