@@ -56,12 +56,9 @@ jobs:
             dpkg-divert --local --add --rename /usr/bin/pycompile
             ln -sf /bin/true /usr/bin/pycompile
             # DPkg::Options (case-sensitive!) --no-triggers: NENHUM trigger roda no
-            # build. Sob qemu-user os triggers penduram (libc-bin/ldconfig travou
-            # 35min, initramfs-tools 35min, php8.2-cli 27min) — sempre no final do
-            # apt. O postinst do linux-image gera o initrd.img (unico processo
-            # pesado que FUNCIONA, ~6.5min). Equivalente manual do ldconfig roda
-            # com timeout (cache so e aceleracao; o loader acha os dirs multiarch
-            # sem ele).
+            # build (sob qemu-user eles penduram: libc-bin/ldconfig 35min,
+            # initramfs-tools 35min). O postinst do linux-image gera o initrd.img
+            # (unico processo pesado que funciona, ~6.5min).
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               -o DPkg::Options::=--no-triggers \
               bash ca-certificates curl wget git \
@@ -70,39 +67,72 @@ jobs:
               sysvinit-core sysv-rc iproute2 isc-dhcp-client \
               libargon2-1 libsodium23 libedit2 libmagic1 media-types
 
-            # DPkg::Options (case-sensitive!) --no-triggers: NENHUM trigger roda no
-            # build. Sob qemu-user os triggers penduram SEMPRE no final do apt
-            # (libc-bin/ldconfig 35min, initramfs-tools 35min, php8.2-cli 27min).
-            # O postinst do linux-image gera o initrd.img (unico processo pesado
-            # que FUNCIONA, ~6.5min). Nao rodamos ldconfig manual: o SIGTERM nao
-            # mata o processo sob qemu-user (timeout ficava esperando para sempre)
-            # e o loader acha os dirs multiarch sem o cache. Triggers pendentes:
-            # descartados abaixo (liberam o estado do dpkg).
+            # Triggers pendentes descartados (liberam o estado do dpkg).
             rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
 
-            # PHP: o trigger "php8.2-cli" (interest /etc/php/8.2/cli/conf.d) PENDURA
-            # sob qemu-user. O php e necessario no guest (server PHP do Preview),
-            # entao instalamos via dpkg --unpack: extrai os binarios SEM rodar
-            # postinst/triggers. conf.d (extensoes) e php.ini montados manualmente —
-            # o php roda nativo (arm64 real) no aparelho.
-            cd /tmp
-            timeout --kill-after=30 240 apt-get download \
-              php8.2-cli php8.2-common php8.2-opcache php8.2-readline php8.2-curl php-cli php-curl
-            for d in *.deb; do
-              timeout --kill-after=30 120 dpkg --unpack --no-triggers "$d" >/dev/null 2>&1 || true
-            done
-            mkdir -p /etc/php/8.2/cli/conf.d
-            for so in /usr/lib/php/20220829/*.so; do
-              [ -e "$so" ] && ln -sf "$so" "/etc/php/8.2/cli/conf.d/$(basename "$so" .so).ini"
-            done
-            cp /usr/lib/php/8.2/php.ini-production.cli /etc/php/8.2/cli/php.ini
-            ln -sf /usr/bin/php8.2 /usr/bin/php
-
+            # PHP NAO e instalado aqui: dpkg --unpack dos .debs do php PENDURA sob
+            # qemu-user (~150s cada deb). O php entra no rootfs no HOST (nativo,
+            # sem qemu) no passo "Install PHP 8.2 (host-side)".
             rm -rf /var/lib/apt/lists/*
           '
           docker export phantom > /tmp/rootfs.tar
           mkdir -p /tmp/rootfs
           tar -xf /tmp/rootfs.tar -C /tmp/rootfs
+
+      # ─────────────────────────────────────────────────────────────────────
+      # PHP 8.2 no rootfs — HOST-side (nativo, SEM qemu-user)
+      # ─────────────────────────────────────────────────────────────────────
+      # No container, dpkg --unpack dos debs do php PENDURA sob qemu-user
+      # (~150s por deb — 7 debs ≈ 17min de hang). Aqui baixamos os .debs do
+      # php8.2 do bookworm arm64 com curl (host x86), extraímos com `ar`
+      # (binutils) e despejamos o data.tar direto no rootfs. conf.d/php.ini
+      # são montados manualmente (é o que o trigger do php8.2-cli fazia).
+      - name: Install PHP 8.2 (host-side, sem qemu-user)
+        run: |
+          set -e
+          cd /tmp
+          rm -rf php && mkdir -p php && cd php
+          curl -sL https://deb.debian.org/debian/dists/bookworm/main/binary-arm64/Packages.gz -o Packages.gz
+          declare -A FN
+          key=""
+          while read -r line; do
+            if [[ $line =~ ^Package:\ (php8.2-cli|php8.2-common|php8.2-opcache|php8.2-readline|php8.2-curl|php-cli|php-curl)$ ]]; then
+              key=${BASH_REMATCH[1]}
+            elif [[ $line =~ ^Filename:\ (.*)$ ]] && [[ -n "$key" ]]; then
+              FN[$key]=${BASH_REMATCH[1]}
+              key=""
+            fi
+          done < <(zcat Packages.gz)
+          for p in "${!FN[@]}"; do
+            echo "baixando $p -> ${FN[$p]}"
+            curl -sL "https://deb.debian.org/debian/${FN[$p]}" -o "$p.deb"
+          done
+          ls -la *.deb
+          # extrai cada .deb (ar -> data.tar.*) direto no rootfs — sem dpkg
+          mkdir -p ex
+          for d in *.deb; do
+            rm -rf ex/* && cd ex
+            ar x ../"$d"
+            for t in data.tar.*; do
+              case "$t" in
+                *.xz)  tar -xf "$t" -C /tmp/rootfs ;;
+                *.zst) tar --zstd -xf "$t" -C /tmp/rootfs ;;
+              esac
+            done
+            cd /tmp/php
+          done
+          # conf.d (o trigger do php8.2-cli cria isso — recriado manualmente)
+          mkdir -p /tmp/rootfs/etc/php/8.2/cli/conf.d
+          for ini in /tmp/rootfs/etc/php/8.2/mods-available/*.ini; do
+            [ -e "$ini" ] && ln -sf "/etc/php/8.2/mods-available/$(basename "$ini")" \
+              "/tmp/rootfs/etc/php/8.2/cli/conf.d/$(basename "$ini")"
+          done
+          cp /tmp/rootfs/usr/lib/php/8.2/php.ini-production.cli /tmp/rootfs/etc/php/8.2/cli/php.ini
+          ln -sf /usr/bin/php8.2 /tmp/rootfs/usr/bin/php
+          echo "=== php no rootfs ==="
+          ls -la /tmp/rootfs/usr/bin/php*
+          ls /tmp/rootfs/usr/lib/php/20220829/*.so
+          ls /tmp/rootfs/etc/php/8.2/cli/conf.d/
 
       - name: Grab kernel + initrd
         run: |
