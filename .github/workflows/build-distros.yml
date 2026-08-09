@@ -55,10 +55,22 @@ jobs:
             dpkg-divert --local --add --rename /usr/bin/pycompile
             ln -sf /bin/true /usr/bin/pycompile
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              -o Dpkg::Options::="--no-triggers" \
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \
               linux-image-arm64 initramfs-tools e2fsprogs \
               sysvinit-core sysv-rc iproute2 isc-dhcp-client
+
+            # Triggers adiados viram redundantes/perigosos sob qemu-user:
+            #   - initramfs-tools (interest-await update-initramfs) roda
+            #     "update-initramfs -u" DE NOVO e PENDURA (build travou 35min).
+            #     O postinst do linux-image ja gerou o initrd.img (6.5min).
+            #   - o trigger do php8.2-cli tambem pendurava (tratado abaixo).
+            # Descartamos os triggers pendentes e rodamos o equivalente manual
+            # (ldconfig + ca-certificates) — rapido e determinístico.
+            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
+            ldconfig || true
+            update-ca-certificates --fresh >/dev/null 2>&1 || true
 
             # PHP: o trigger "php8.2-cli" (interest /etc/php/8.2/cli/conf.d) PENDURA
             # o build sob qemu-user (2 builds travados em 27min ate timeout). O php
