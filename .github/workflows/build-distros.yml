@@ -102,7 +102,7 @@ jobs:
           sudo mount -t proc proc /tmp/rootfs/proc 2>/dev/null || true
           sudo mount -t sysfs sysfs /tmp/rootfs/sys 2>/dev/null || true
           sudo mount -t devtmpfs devtmpfs /tmp/rootfs/dev 2>/dev/null || true
-          timeout --kill-after=60 600 sudo chroot /tmp/rootfs /usr/sbin/update-initramfs -k "$K" || \
+          timeout --kill-after=60 600 sudo chroot /tmp/rootfs /usr/sbin/update-initramfs -c -k "$K" || \
             echo "⚠️ update-initramfs retornou erro (initrd pode não existir)"
           sudo umount /tmp/rootfs/dev 2>/dev/null || true
           sudo umount /tmp/rootfs/proc 2>/dev/null || true
