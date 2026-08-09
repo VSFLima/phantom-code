@@ -41,6 +41,7 @@ jobs:
           docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Build arm64 rootfs (docker + Debian bookworm)
+        timeout-minutes: 45
         run: |
           docker run --platform linux/arm64 --name phantom debian:bookworm-slim bash -c '
             set -e
@@ -233,6 +234,7 @@ jobs:
           cd /tmp
 
       - name: Build static QEMU (aarch64-softmmu, cross)
+        timeout-minutes: 45
         run: |
           set -e
           export PREFIX=/opt/arm
