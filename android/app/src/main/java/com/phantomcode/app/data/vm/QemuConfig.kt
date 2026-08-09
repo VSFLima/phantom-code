@@ -46,7 +46,7 @@ object PhantomMirror {
     // SHA-256 do tarball da Release `distro-phantom` (copiado do log do workflow:
     // "sha256sum phantom.tar.gz" no passo "Package artifact"). Atualize após cada
     // rebuild — qualquer rebuild gera um tarball novo com hash diferente.
-    const val PHANTOM_SHA256 = "2ac2d7937e6f4608f0e62fdb7b741fb9f132d1689951e743e7fc875800f889e0"
+    const val PHANTOM_SHA256 = "28e9230e644d30e378200bb5707e6eb71a7831a92595d7d4ff794c6ea69cc282"
 
     // Distros extras (T29): publicadas pelo workflow `Build Extra Distros`.
     // SHA-256 preenchido APÓS o build real (o app valida o download contra ele;
