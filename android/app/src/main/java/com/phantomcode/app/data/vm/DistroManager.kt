@@ -69,7 +69,7 @@ object DistroCatalog {
             recommendedFor = "Uso geral — o padrão do Phantom-Code",
             url = PhantomMirror.PHANTOM_URL,
             sha256 = PhantomMirror.PHANTOM_SHA256,
-            sizeMb = 500,
+            sizeMb = 356,
             installSizeMb = 2048,
             ramMb = 1024,
             risk = DistroRisk.LOW,

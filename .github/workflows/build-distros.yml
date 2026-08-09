@@ -392,6 +392,40 @@ jobs:
           ls -la phantom.tar.gz
           sha256sum phantom.tar.gz
 
+      - name: Smoke test boot (qemu-system-aarch64 nativo no runner)
+        timeout-minutes: 10
+        run: |
+          set -e
+          # Boot REAL do guest gerado, com o qemu-system-aarch64 nativo do runner
+          # (x86_64 + TCG — valida kernel + initrd + rootfs.img + init sysvinit
+          # end-to-end antes de publicar). Serial em ttyAMA0 + hvc0 (getty).
+          sudo apt-get install -y qemu-system-arm >/dev/null
+          cd /tmp
+          set +e
+          timeout --kill-after=10 120 qemu-system-aarch64 \
+            -M virt -cpu cortex-a72 -m 512 \
+            -kernel /tmp/kernel -initrd /tmp/initrd.img \
+            -drive file=/tmp/rootfs.img,format=raw,if=virtio \
+            -append "root=/dev/vda rw console=ttyAMA0 console=hvc0 panic=1" \
+            -nographic -no-reboot 2>&1 | tee /tmp/boot.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "==> qemu rc=$rc"
+          # Falha dura: kernel panic.
+          if grep -q "Kernel panic" /tmp/boot.log; then
+            echo "❌ KERNEL PANIC no boot:"; grep -A3 "Kernel panic" /tmp/boot.log; exit 1
+          fi
+          # Sucesso: kernel fez a transição para o init (prova rootfs montado +
+          # initramfs ok). getty em hvc0 também é sinal de boot completo.
+          if grep -q "Run /sbin/init as init process\|as init process\|Freeing unused kernel memory" /tmp/boot.log; then
+            echo "✅ guest bootou: kernel → initramfs → init sysvinit"
+          else
+            echo "❌ boot não alcançou o init (kernel/initrd/rootfs problemáticos):"
+            tail -20 /tmp/boot.log
+            exit 1
+          fi
+          echo "--- marcadores úteis:"; grep -E "Run /sbin/init|Freeing unused|getty|login:|phantom-boot|dark-code|Panic" /tmp/boot.log | head -20
+
       - name: Publish as Release (tag fixa para o app)
         env:
           GH_TOKEN: ${{ github.token }}

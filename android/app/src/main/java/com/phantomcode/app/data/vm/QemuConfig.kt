@@ -43,7 +43,10 @@ object PhantomMirror {
     // (.github/workflows/build-distros.yml) → Release `distro-phantom`.
     // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
     const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
-    const val PHANTOM_SHA256 = "32e6bc651fa687defa343f0e50bc2876578b91de1c6dd624e24f43efd8d40f39"
+    // SHA-256 do tarball da Release `distro-phantom` (copiado do log do workflow:
+    // "sha256sum phantom.tar.gz" no passo "Package artifact"). Atualize após cada
+    // rebuild — qualquer rebuild gera um tarball novo com hash diferente.
+    const val PHANTOM_SHA256 = "2ac2d7937e6f4608f0e62fdb7b741fb9f132d1689951e743e7fc875800f889e0"
 
     // Distros extras (T29): publicadas pelo workflow `Build Extra Distros`.
     // SHA-256 preenchido APÓS o build real (o app valida o download contra ele;
