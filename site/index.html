@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phantom-Code — IDE Android com Linux real (QEMU)</title>
+  <meta name="description" content="Phantom-Code: IDE Android com editor, terminal Linux real em QEMU, Git/GitHub e IA — tudo na mesma pasta de arquivos." />
+  <meta property="og:title" content="Phantom-Code — IDE Android com Linux real" />
+  <meta property="og:description" content="Editor + Terminal Linux real (QEMU) + Git/GitHub + IA. O que o editor cria, o Linux vê na hora." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- fundo animado -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg__grid"></div>
+    <div class="bg__orb bg__orb--purple"></div>
+    <div class="bg__orb bg__orb--cyan"></div>
+    <div class="bg__scanlines"></div>
+  </div>
+
+  <nav class="nav" id="nav">
+    <div class="container nav__inner">
+      <a class="nav__brand" href="#top">
+        <span class="nav__logo">👻</span>
+        <span>Phantom<span class="accent">_Code</span></span>
+        <span class="nav__ver">v0.1.0</span>
+      </a>
+      <div class="nav__links" id="navLinks">
+        <a href="#recursos">Recursos</a>
+        <a href="#arquitetura">Como funciona</a>
+        <a href="#qemu">Por que QEMU?</a>
+        <a href="#design">Design</a>
+        <a href="#roadmap">Roadmap</a>
+      </div>
+      <a class="btn btn--primary nav__cta" href="#download">Baixar APK</a>
+      <button class="nav__toggle" id="navToggle" aria-label="Menu">☰</button>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="container hero__inner">
+      <div class="hero__text">
+        <span class="hero__badge">⚡ IDE Android · Linux real embutido</span>
+        <h1 class="hero__title">
+          O que o editor cria,<br />
+          <span class="grad">o Linux real</span> vê na hora.
+        </h1>
+        <p class="hero__subtitle">
+          Phantom-Code une <strong>editor</strong>, <strong>terminal Linux real</strong> (VM QEMU arm64),
+          <strong>Git/GitHub</strong> e <strong>IA nativa</strong> em uma única camada de arquivos.
+          Sem sincronização. Sem cópia. Um Linux de verdade no seu bolso.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary btn--lg" href="#download">▶ Instalar</a>
+          <a class="btn btn--ghost btn--lg" href="#arquitetura">Explorar ↓</a>
+        </div>
+        <div class="hero__stats" id="stats">
+          <div class="stat"><span class="stat__num" data-count="5">0</span><span class="stat__label">Fases</span></div>
+          <div class="stat"><span class="stat__num" data-count="3">0</span><span class="stat__label">Motores</span></div>
+          <div class="stat"><span class="stat__num" data-count="100" data-suffix="%">0</span><span class="stat__label">glibc nativo</span></div>
+          <div class="stat"><span class="stat__num" data-count="7">0</span><span class="stat__label">Temas</span></div>
+        </div>
+      </div>
+
+      <div class="hero__term" aria-label="Terminal do Phantom-Code">
+        <div class="term">
+          <div class="term__bar">
+            <span class="term__dot term__dot--r"></span>
+            <span class="term__dot term__dot--y"></span>
+            <span class="term__dot term__dot--g"></span>
+            <span class="term__title">👻 QEMU LINUX — RUNNING</span>
+            <span class="term__live">● LIVE</span>
+          </div>
+          <div class="term__body" id="termBody">
+            <pre class="bootline"><span class="c-dim">[  OK  ]</span> Started Phantom guest (sysvinit)</pre>
+          </div>
+        </div>
+        <div class="term__glow" aria-hidden="true"></div>
+      </div>
+    </div>
+    <a class="hero__scroll" href="#recursos" aria-label="Rolar">▾</a>
+  </header>
+
+  <!-- marquee de tecnologias -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee__track">
+      <span>Kotlin</span><span>Jetpack Compose</span><span>QEMU</span><span>virtio-9p</span>
+      <span>CodeMirror 6</span><span>JGit</span><span>SLIRP</span><span>glibc</span><span>Debian</span>
+      <span>Kotlin</span><span>Jetpack Compose</span><span>QEMU</span><span>virtio-9p</span>
+      <span>CodeMirror 6</span><span>JGit</span><span>SLIRP</span><span>glibc</span><span>Debian</span>
+    </div>
+  </div>
+
+  <section class="section" id="recursos">
+    <div class="container">
+      <h2 class="section__title">Tudo em um só app</h2>
+      <p class="section__subtitle">Não é um "truque de terminal" — é uma IDE de verdade com um Linux completo embaixo.</p>
+
+      <div class="features">
+        <article class="feature">
+          <div class="feature__icon">🧩</div>
+          <h3>Editor CodeMirror 6</h3>
+          <p>Abas, syntax highlight neon, busca e autosave com restauração de sessão. Seu código, sempre salvo.</p>
+        </article>
+        <article class="feature">
+          <div class="feature__icon">🐧</div>
+          <h3>Terminal Linux real</h3>
+          <p>VM <strong>QEMU headless</strong> com glibc completo. Rode binários originais ARM64 — sem porte, sem emulação de libc.</p>
+        </article>
+        <article class="feature">
+          <div class="feature__icon">🔀</div>
+          <h3>Git / GitHub</h3>
+          <p>Clone, commit, push, branches e diff direto na UI via JGit. O projeto e o repositório nunca se desencontram.</p>
+        </article>
+        <article class="feature">
+          <div class="feature__icon">🗂️</div>
+          <h3>Workspace único</h3>
+          <p>Editor e terminal operam na <strong>mesma camada de arquivos</strong> via virtio-9p. Edite e rode sem copiar nada.</p>
+        </article>
+        <article class="feature">
+          <div class="feature__icon">🧰</div>
+          <h3>Toolbox</h3>
+          <p>Scanner de pacotes do Linux + Integrações &amp; API Keys protegidas pelo Android Keystore.</p>
+        </article>
+        <article class="feature">
+          <div class="feature__icon">🤖</div>
+          <h3>IA nativa</h3>
+          <p>Ollama, llama.cpp e amigos rodam <strong>nativos</strong> dentro do guest — como em qualquer Linux ARM64.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="arquitetura">
+    <div class="container">
+      <h2 class="section__title">Como funciona</h2>
+      <p class="section__subtitle">Uma única camada de arquivos, três motores, zero sincronização.</p>
+
+      <div class="flow">
+        <div class="flow__col">
+          <div class="flow__node">
+            <span class="flow__icon">📝</span>
+            <h4>Editor</h4>
+            <p>CodeMirror 6 · autosave</p>
+            <span class="flow__tag">virtio-9p</span>
+          </div>
+        </div>
+        <div class="flow__arrow">⇄</div>
+        <div class="flow__col">
+          <div class="flow__node flow__node--main">
+            <span class="flow__icon">💾</span>
+            <h4>Workspace único</h4>
+            <p>uma pasta · dois mundos</p>
+            <span class="flow__tag">mesma camada</span>
+          </div>
+        </div>
+        <div class="flow__arrow">⇄</div>
+        <div class="flow__col">
+          <div class="flow__node">
+            <span class="flow__icon">🐧</span>
+            <h4>VM Linux</h4>
+            <p>QEMU arm64 · Debian</p>
+            <span class="flow__tag">glibc real</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="stack__row">
+          <span class="stack__layer stack__layer--app">Android App · Kotlin / Compose</span>
+          <span class="stack__label">UI</span>
+        </div>
+        <div class="stack__row">
+          <span class="stack__layer stack__layer--mid">Editor · Terminal · Git · Toolbox</span>
+          <span class="stack__label">Motores</span>
+        </div>
+        <div class="stack__row">
+          <span class="stack__layer stack__layer--kernel">QEMU arm64 · virt · SLIRP · 9p</span>
+          <span class="stack__label">VM</span>
+        </div>
+        <div class="stack__row">
+          <span class="stack__layer stack__layer--os">Debian bookworm · sysvinit · glibc</span>
+          <span class="stack__label">Guest</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="qemu">
+    <div class="container">
+      <h2 class="section__title">Por que QEMU (e não "mais um Termux")?</h2>
+      <p class="section__subtitle">Termux usa a libc e o kernel do próprio Android. O Phantom-Code não.</p>
+
+      <div class="compare">
+        <table class="compare__table">
+          <thead>
+            <tr><th></th><th>Termux</th><th class="col--win">Phantom-Code</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>libc</td><td>Bionic <span class="dim">(quebra libs desktop)</span></td><td class="col--win">glibc completo <span class="dim">(binários originais)</span></td></tr>
+            <tr><td>Kernel</td><td>Mesmo do Android</td><td class="col--win">Guest isolado <span class="dim">(systemd funciona)</span></td></tr>
+            <tr><td>Ferramentas de IA</td><td>Precisam de porte</td><td class="col--win">Rodam nativas <span class="dim">(Ollama, llama.cpp…)</span></td></tr>
+            <tr><td>Integração IDE</td><td>Não existe</td><td class="col--win">Editor + Terminal + Git na mesma pasta</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="specs">
+        <div class="spec"><strong>Arch</strong><span>arm64 · virt / cortex-a72</span></div>
+        <div class="spec"><strong>Distro</strong><span>Debian bookworm (glibc)</span></div>
+        <div class="spec"><strong>Rede</strong><span>SLIRP / NAT + hostfwd</span></div>
+        <div class="spec"><strong>Boot</strong><span>sysvinit + bootstrap 9p</span></div>
+        <div class="spec"><strong>Disco</strong><span>ext2 · format=raw</span></div>
+        <div class="spec"><strong>Firmware</strong><span>pc-bios embutido</span></div>
+        <div class="spec"><strong>Editor</strong><span>CodeMirror 6</span></div>
+        <div class="spec"><strong>Git</strong><span>JGit nativo</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="design">
+    <div class="container">
+      <h2 class="section__title">Design Cyber-Phantom</h2>
+      <p class="section__subtitle">OLED preto + neon roxo/cyan, bordas angulares e glow. A identidade do app é a identidade do projeto.</p>
+
+      <div class="palette">
+        <div class="swatch swatch--bg"><span>bg-primary</span><code>#000000</code></div>
+        <div class="swatch swatch--surface"><span>bg-surface</span><code>#121212</code></div>
+        <div class="swatch swatch--purple"><span>accent</span><code>#9F4DFF</code></div>
+        <div class="swatch swatch--bright"><span>hover</span><code>#D34DFF</code></div>
+        <div class="swatch swatch--cyan"><span>cyan</span><code>#00FFFF</code></div>
+        <div class="swatch swatch--green"><span>success</span><code>#00FF9F</code></div>
+        <div class="swatch swatch--red"><span>error</span><code>#FF3366</code></div>
+        <div class="swatch swatch--text"><span>text</span><code>#E5E7EB</code></div>
+      </div>
+
+      <p class="section__hint">
+        7 presets: <strong>Phantom</strong> · Deep Slate · Matrix · Dracula · Nord · Solarized Dark · Light Soft · <strong class="accent">Custom</strong>
+      </p>
+    </div>
+  </section>
+
+  <section class="section" id="roadmap">
+    <div class="container">
+      <h2 class="section__title">Roadmap</h2>
+      <div class="phases">
+        <div class="phase phase--done"><span class="phase__tag">Fase 0</span><h3>Fundação</h3><p>Projeto Android, tema, CI.</p></div>
+        <div class="phase phase--done"><span class="phase__tag">Fase 1</span><h3>Shell da UI</h3><p>Navegação + temas.</p></div>
+        <div class="phase phase--done"><span class="phase__tag">Fase 2</span><h3>Editor + Explorer</h3><p>CodeMirror 6, autosave.</p></div>
+        <div class="phase phase--active"><span class="phase__tag">Fase 3</span><h3>VM + Terminal</h3><p>Motor QEMU + distro real funcional.</p></div>
+        <div class="phase"><span class="phase__tag">Fase 4</span><h3>Git + Toolbox</h3><p>JGit, API Keys, backup.</p></div>
+        <div class="phase"><span class="phase__tag">Fase 5</span><h3>Polish</h3><p>Onboarding, device tests, distribuição.</p></div>
+      </div>
+      <div class="progress">
+        <div class="progress__bar"><div class="progress__fill"></div></div>
+        <span class="progress__label">50% do caminho para a 1.0</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="container">
+      <div class="cta">
+        <span class="cta__ghost">👻</span>
+        <h2>Pronto para o Linux de verdade no seu bolso?</h2>
+        <p>O APK é gerado pelo CI no GitHub Actions. Acompanhe o repositório e baixe a build mais recente.</p>
+        <div class="cta__actions">
+          <a class="btn btn--primary btn--lg" href="https://github.com/VSFLima/phantom-code/actions" target="_blank" rel="noopener">⬇ Baixar APK (GitHub Actions)</a>
+          <a class="btn btn--ghost btn--lg" href="https://github.com/VSFLima/phantom-code" target="_blank" rel="noopener">⌨ Ver código no GitHub</a>
+        </div>
+        <p class="cta__note">Projeto proprietário · uso autorizado apenas · VSFLima / Asgard</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <span>👻 Phantom-Code · <span class="accent">Ideia → Código → APK</span></span>
+      <span class="footer__right">
+        <span>VSFLima / Asgard</span>
+        <span class="footer__sep">·</span>
+        <span>v0.1.0</span>
+      </span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
