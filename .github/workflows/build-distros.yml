@@ -67,23 +67,30 @@ jobs:
               bash ca-certificates curl wget git \
               python3 openssh-client tzdata nano vim-tiny htop file \
               linux-image-arm64 initramfs-tools e2fsprogs \
-              sysvinit-core sysv-rc iproute2 isc-dhcp-client
+              sysvinit-core sysv-rc iproute2 isc-dhcp-client \
+              libargon2-1 libsodium23 libedit2 libmagic1 media-types
 
-            # Descarta triggers adiados (ficaram pendentes com --no-triggers)
+            # DPkg::Options (case-sensitive!) --no-triggers: NENHUM trigger roda no
+            # build. Sob qemu-user os triggers penduram SEMPRE no final do apt
+            # (libc-bin/ldconfig 35min, initramfs-tools 35min, php8.2-cli 27min).
+            # O postinst do linux-image gera o initrd.img (unico processo pesado
+            # que FUNCIONA, ~6.5min). Nao rodamos ldconfig manual: o SIGTERM nao
+            # mata o processo sob qemu-user (timeout ficava esperando para sempre)
+            # e o loader acha os dirs multiarch sem o cache. Triggers pendentes:
+            # descartados abaixo (liberam o estado do dpkg).
             rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
-            timeout 60 ldconfig || true
 
             # PHP: o trigger "php8.2-cli" (interest /etc/php/8.2/cli/conf.d) PENDURA
             # sob qemu-user. O php e necessario no guest (server PHP do Preview),
             # entao instalamos via dpkg --unpack: extrai os binarios SEM rodar
             # postinst/triggers. conf.d (extensoes) e php.ini montados manualmente —
             # o php roda nativo (arm64 real) no aparelho.
-            apt-get install -y --no-install-recommends -o DPkg::Options::=--no-triggers \
-              libargon2-1 libsodium23 libedit2 libmagic1 media-types
-            rm -f /var/lib/dpkg/triggers/File /var/lib/dpkg/triggers/Unincorp
             cd /tmp
-            apt-get download php8.2-cli php8.2-common php8.2-opcache php8.2-readline php8.2-curl php-cli php-curl
-            for d in *.deb; do dpkg --unpack --no-triggers "$d" >/dev/null 2>&1 || true; done
+            timeout --kill-after=30 240 apt-get download \
+              php8.2-cli php8.2-common php8.2-opcache php8.2-readline php8.2-curl php-cli php-curl
+            for d in *.deb; do
+              timeout --kill-after=30 120 dpkg --unpack --no-triggers "$d" >/dev/null 2>&1 || true
+            done
             mkdir -p /etc/php/8.2/cli/conf.d
             for so in /usr/lib/php/20220829/*.so; do
               [ -e "$so" ] && ln -sf "$so" "/etc/php/8.2/cli/conf.d/$(basename "$so" .so).ini"
