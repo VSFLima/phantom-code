@@ -33,6 +33,16 @@ jobs:
           echo "$PHANTOM_KEYSTORE_BASE64" | base64 -d > android/release.keystore
           echo "keystore restaurado ($(wc -c < android/release.keystore) bytes)"
 
+      - name: Bundle QEMU nativo ARM64 no APK
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          curl --fail --location --retry 3 \
+            "https://github.com/VSFLima/phantom-releases/releases/download/distro-phantom/phantom.tar.gz" \
+            | tar -xzO qemu-system-aarch64 > android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
+          chmod 0755 android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
+          file android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
+
       - name: Build release APK
         env:
           PHANTOM_SIGNING: "true"
@@ -53,6 +63,6 @@ jobs:
           TAG="apk-$(date +%Y%m%d-%H%M)"
           gh release create "$TAG" \
             app/build/outputs/apk/release/app-release.apk \
-            --title "Phantom-Code APK $(date +%Y-%m-%d %H:%M)" \
+            --title "Phantom-Code APK $(date '+%Y-%m-%d %H:%M')" \
             --notes "APK assinado com a chave VSFLima/Asgard (build manual)." \
             --draft

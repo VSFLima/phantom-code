@@ -60,6 +60,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            // O QEMU é um executável ELF empacotado como lib nativa para que o
+            // Android o extraia em nativeLibraryDir com permissão de execução.
+            useLegacyPackaging = true
+        }
     }
 }
 

@@ -83,9 +83,16 @@ class QemuManager(
     /** Binário QEMU: a distro traz o seu (a Phantom vem com qemu no pacote); o
      *  fallback global (extraído/baixado) só entra quando não há distro instalada. */
     /** Arquivo efetivamente executado pelo ProcessBuilder. */
-    fun binary(): File = runtimeQemu
+    fun binary(): File = packagedQemu()?.takeIf { it.exists() } ?: runtimeQemu
 
-    private fun sourceBinary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
+    /** O APK extrai bibliotecas nativas em uma área permitida para execução. */
+    private fun packagedQemu(): File? =
+        File(appContext.applicationInfo.nativeLibraryDir, "libphantom_qemu.so")
+            .takeIf { it.exists() }
+
+    private fun sourceBinary(): File = packagedQemu()
+        ?: distros.activeQemu()
+        ?: File(qemuDir, "qemu-system-aarch64")
 
     init {
         refreshBinary()
@@ -105,6 +112,7 @@ class QemuManager(
 
     /** Copia o QEMU da área de dados para a área própria de código do Android. */
     private fun stageRuntimeBinary(source: File): Boolean {
+        if (packagedQemu()?.absolutePath == source.absolutePath) return makeExecutable(source)
         if (!source.exists() || source.length() < 1_000_000L) return false
         return runCatching {
             runtimeQemu.parentFile?.mkdirs()
@@ -154,6 +162,14 @@ class QemuManager(
      *  2º extraído de APK antigo (assets/qemu), 3º download (fallback). */
     suspend fun ensureBinary(onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         if (binaryReady) return@withContext true
+        packagedQemu()?.let { qemu ->
+            if (makeExecutable(qemu)) {
+                onMain { binaryInstalling = false; binaryReady = true }
+                return@withContext true
+            }
+            onMain { lastError = "QEMU nativo do APK não pode ser executado neste aparelho" }
+            return@withContext false
+        }
         // 1) QEMU que já vem dentro do pacote da distro instalada (ex.: Phantom).
         if (distros.activeQemu() != null) {
             // Defensivo: garante +x no binário vindo da distro (extrator preserva
