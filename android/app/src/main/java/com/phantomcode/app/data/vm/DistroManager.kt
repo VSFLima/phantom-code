@@ -2,6 +2,7 @@ package com.phantomcode.app.data.vm
 
 import android.content.Context
 import android.net.Uri
+import android.system.Os
 import android.provider.OpenableColumns
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
@@ -488,9 +489,13 @@ class DistroManager(context: Context) {
         applyDiskSize(targetDir, config)
         writeConfig(targetDir, config)
         copyInitScript(targetDir)
-        // Defensivo: garante +x no QEMU embutido (o extrator preserva o bit do
-        // cabeçalho tar, mas alguns arquivos/APKs antigos podem vir sem ele).
-        runCatching { File(targetDir, "qemu-system-aarch64").takeIf { it.exists() }?.setExecutable(true) }
+        // O modo executável do TAR pode ser perdido ao copiar pelo SAF ou ao
+        // extrair no Android. chmod explícito evita Permission denied no boot.
+        File(targetDir, "qemu-system-aarch64").takeIf { it.exists() }?.let { qemu ->
+            runCatching { Os.chmod(qemu.absolutePath, 0b111101101) }
+            runCatching { qemu.setExecutable(true, false) }
+            check(qemu.canExecute()) { "QEMU sem permissão de execução. Reinstale a distro." }
+        }
     }
 
     /** Remove artefatos de instalação anterior (parcial/falha) do diretório da distro. */

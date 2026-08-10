@@ -5,6 +5,7 @@ import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.os.Handler
 import android.os.Looper
+import android.system.Os
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -88,7 +89,16 @@ class QemuManager(
      *  falha com "Permission denied" e o QEMU nunca sobe. */
     fun refreshBinary() {
         val b = binary()
+        makeExecutable(b)
         binaryReady = b.exists() && b.canExecute()
+    }
+
+    /** Aplica o modo executável explicitamente, pois TAR/SAF podem removê-lo. */
+    private fun makeExecutable(file: File): Boolean {
+        if (!file.exists()) return false
+        runCatching { Os.chmod(file.absolutePath, 0b111101101) }
+        runCatching { file.setExecutable(true, false) }
+        return file.canExecute()
     }
 
     /** Persiste o preset escolhido e atualiza o estado (valores custom incluídos). */
@@ -122,7 +132,11 @@ class QemuManager(
         if (distros.activeQemu() != null) {
             // Defensivo: garante +x no binário vindo da distro (extrator preserva
             // o bit do tar, mas nunca custa confirmar antes de subir a VM).
-            runCatching { distros.activeQemu()?.setExecutable(true) }
+            val qemu = distros.activeQemu()
+            if (qemu == null || !makeExecutable(qemu)) {
+                onMain { lastError = "QEMU instalado sem permissão de execução. Reinstale a distro." }
+                return@withContext false
+            }
             onMain {
                 binaryInstalling = false
                 binaryReady = true
@@ -163,7 +177,7 @@ class QemuManager(
                 val got = d.digest().joinToString("") { "%02x".format(it) }
                 check(got.equals(PhantomMirror.QEMU_BINARY_SHA256, ignoreCase = true)) { "SHA-256 inválido" }
             }
-            tmp.setExecutable(true)
+            check(makeExecutable(tmp)) { "Não foi possível habilitar a execução do QEMU" }
             tmp.renameTo(target)
         }.onFailure {
             tmp.delete()
@@ -198,7 +212,7 @@ class QemuManager(
                         out.write(buf, 0, read)
                     }
                 }
-                tmp.setExecutable(true)
+                check(makeExecutable(tmp)) { "Não foi possível habilitar a execução do QEMU" }
                 tmp.renameTo(target)
             }
         }.isSuccess && target.exists()
@@ -331,6 +345,9 @@ class QemuManager(
         return@withContext runCatching {
             // Defensivo: garante +x antes de executar (evita Permission denied).
             runCatching { binary().setExecutable(true) }
+            if (!makeExecutable(binary())) {
+                throw IllegalStateException("QEMU sem permissão de execução: ${binary().absolutePath}")
+            }
             // T-D1: cwd = pasta da distro (QEMU procura as ROMs do pc-bios aqui)
             // + QEMU_FIRMWARE_PATH como reforço para o carregamento do firmware.
             val pb = ProcessBuilder(cmd)
