@@ -29,11 +29,17 @@ class SessionManager(context: Context) {
         }
 
     fun recentProjects(): List<String> =
-        prefs.getStringSet(KEY_RECENTS, emptySet())?.toList()?.sorted() ?: emptyList()
+        prefs.getString(KEY_RECENTS_ORDERED, null)
+            ?.split(RECENT_SEPARATOR)
+            ?.filter { it.isNotBlank() }
+            ?: prefs.getStringSet(KEY_RECENTS, emptySet())?.toList()?.sorted().orEmpty()
 
     fun addRecent(project: String) {
-        val recents = recentProjects().toMutableSet().apply { add(project) }
-        prefs.edit().putStringSet(KEY_RECENTS, recents.toList().takeLast(MAX_RECENTS).toSet()).apply()
+        val recents = (listOf(project) + recentProjects().filterNot { it == project }).take(MAX_RECENTS)
+        prefs.edit()
+            .putString(KEY_RECENTS_ORDERED, recents.joinToString(RECENT_SEPARATOR))
+            .putStringSet(KEY_RECENTS, recents.toSet())
+            .apply()
     }
 
     companion object {
@@ -42,6 +48,8 @@ class SessionManager(context: Context) {
         private const val KEY_LAST_OPEN = "last_open_path"
         private const val KEY_ACTIVE_PROJECT = "active_project"
         private const val KEY_RECENTS = "recent_projects"
+        private const val KEY_RECENTS_ORDERED = "recent_projects_ordered"
+        private const val RECENT_SEPARATOR = "\u001f"
         private const val MAX_RECENTS = 12
     }
 }

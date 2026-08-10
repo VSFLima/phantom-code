@@ -238,11 +238,16 @@ class AiSuiteManager(context: Context) {
             createdAtEpoch = System.currentTimeMillis(),
             due = due,
         )
-        saveTask(task)
-        scopeFiles.forEach { guard.request(it, 'W', owner, id) }
-        scopeRead.forEach { guard.request(it, 'R', owner, id) }
-        appendMessage(id, "router", "system", "Tarefa $id criada · escopo: ${scopeFiles.joinToString(", ") { it }.ifBlank { "—" }} · dono: $owner")
-        return task
+        val granted = buildList {
+            scopeFiles.forEach { add(guard.request(it, 'W', owner, id)) }
+            scopeRead.forEach { add(guard.request(it, 'R', owner, id)) }
+        }
+        val ready = granted.all { it.granted }
+        if (!ready) guard.releaseTask(owner, id)
+        val saved = task.copy(status = if (ready) status else "blocked")
+        saveTask(saved)
+        appendMessage(id, "router", "system", "Tarefa $id ${if (ready) "criada" else "bloqueada por conflito de escopo"} · dono: $owner")
+        return saved
     }
 
     /**
@@ -291,12 +296,17 @@ class AiSuiteManager(context: Context) {
     /** R4 — dono aprova: concede locks de escrita ao destino e inicia a tarefa. */
     fun approveProposal(id: String): Boolean {
         val p = listProposals().firstOrNull { it.id == id } ?: return false
+        val granted = buildList {
+            p.scopeWrite.forEach { add(guard.request(it, 'W', p.to, id)) }
+            p.scopeRead.forEach { add(guard.request(it, 'R', p.to, id)) }
+        }
+        if (granted.any { !it.granted }) {
+            guard.releaseTask(p.to, id)
+            appendMessage(id, "router", "approval", "Delegação não aprovada: conflito de escopo")
+            return false
+        }
         saveProposal(p.copy(status = "approved"))
-        saveTask(
-            taskFromJson(id, contextFile(id))?.copy(status = "approved", owner = p.to) ?: return false,
-        )
-        p.scopeWrite.forEach { guard.request(it, 'W', p.to, id) }
-        p.scopeRead.forEach { guard.request(it, 'R', p.to, id) }
+        saveTask(taskFromJson(id, contextFile(id))?.copy(status = "approved", owner = p.to) ?: return false)
         appendMessage(id, "dono", "approval", "✅ Delegação aprovada — $p.to pode executar")
         return true
     }
@@ -328,7 +338,7 @@ class AiSuiteManager(context: Context) {
     fun finishTask(taskId: String, summary: String = "") {
         saveTask(taskFromJson(taskId, contextFile(taskId))?.copy(status = "done") ?: return)
         appendMessage(taskId, "router", "done", summary.ifBlank { "Tarefa $taskId concluída" })
-        taskFromJson(taskId, contextFile(taskId))?.owner?.let { guard.release(it) }
+        taskFromJson(taskId, contextFile(taskId))?.owner?.let { guard.releaseTask(it, taskId) }
     }
 
     // ── Fase B — persistência ──────────────────────────────────────────────

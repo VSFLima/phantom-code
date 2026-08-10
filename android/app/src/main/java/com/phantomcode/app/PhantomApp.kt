@@ -141,11 +141,18 @@ fun PhantomApp() {
     // composto — navegar agora lançaria exceção). Abre o terminal assim que o
     // onboarding terminar e o NavHost existir.
     var pendingTerminal by remember { mutableStateOf(false) }
+    var pendingRoute by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(showOnboarding) {
-        if (!showOnboarding && pendingTerminal) {
-            pendingTerminal = false
-            runCatching { navController.navigate(Routes.TERMINAL) { launchSingleTop = true } }
+        if (!showOnboarding) {
+            pendingRoute?.let { route ->
+                pendingRoute = null
+                navController.navigateToTab(route)
+            }
+            if (pendingTerminal) {
+                pendingTerminal = false
+                navController.navigate(Routes.TERMINAL) { launchSingleTop = true }
+            }
         }
     }
 
@@ -207,7 +214,11 @@ fun PhantomApp() {
                     storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
             },
-            onChooseDistro = { runCatching { navController.navigateToTab(Routes.TOOLBOX) } },
+            onChooseDistro = {
+                pendingRoute = Routes.TOOLBOX
+                session.onboardingDone = true
+                showOnboarding = false
+            },
             onStartLinux = { scope.launch { vm.qemu.start() } },
             onInstallPhantom = ::installPhantom,
             onFinish = {

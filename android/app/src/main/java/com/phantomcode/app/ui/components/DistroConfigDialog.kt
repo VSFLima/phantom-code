@@ -224,12 +224,12 @@ fun DistroConfigDialog(
                 Spacer(Modifier.height(16.dp))
                 if (!githubAuthenticated) {
                     Text(
-                        "A Phantom é baixada de uma Release privada. Autentique o GitHub antes de instalar.",
+                        "O download automático requer uma conexão com a internet. Também é possível instalar por arquivos locais.",
                         color = palette.warning,
                         fontSize = 10.sp,
                     )
                     Spacer(Modifier.height(6.dp))
-                    PhantomOutlinedButton(text = "Autenticar GitHub", onClick = onOpenGit)
+                     PhantomOutlinedButton(text = "Abrir Git", onClick = onOpenGit)
                     Spacer(Modifier.height(10.dp))
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -245,6 +245,9 @@ fun DistroConfigDialog(
                                     hostname = hostname.trim(),
                                     user = user.trim(),
                                     diskSizeMb = diskMb,
+                                    presetId = presetId,
+                                    cores = cores,
+                                    ramMb = ramMb,
                                 ),
                             )
                         },
@@ -259,6 +262,9 @@ fun DistroConfigDialog(
                                     hostname = hostname.trim(),
                                     user = user.trim(),
                                     diskSizeMb = diskMb,
+                                    presetId = presetId,
+                                    cores = cores,
+                                    ramMb = ramMb,
                                 ),
                             )
                         },

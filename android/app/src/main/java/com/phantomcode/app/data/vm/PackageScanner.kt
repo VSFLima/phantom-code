@@ -52,6 +52,7 @@ class PackageScanner {
     private val scanBuffer = StringBuilder()
     private var awaitingResponse = false
     private var scanTimeoutJob: Job? = null
+    private var runTimeoutJob: Job? = null
 
     // Fila de comandos do canal de controle (SERVER/STOPSERVER/SERVERSTATUS).
     // O protocolo é serial: cada comando espera UMA linha de resposta
@@ -111,6 +112,8 @@ class PackageScanner {
         onMainDisconnected()
         scanTimeoutJob?.cancel()
         scanTimeoutJob = null
+        runTimeoutJob?.cancel()
+        runTimeoutJob = null
         readJob?.cancel()
         readJob = null
         runCatching { socket?.close() }
@@ -148,11 +151,13 @@ class PackageScanner {
         if (!connected || awaitingResponse) return
         awaitingResponse = true
         send("RUN:$cmd\n")
-        // Re-scan curto depois p/ refletir a mudança (ex.: desinstalar).
-        scope.launch {
-            delay(1500)
-            awaitingResponse = false
-            requestScan()
+        runTimeoutJob?.cancel()
+        runTimeoutJob = scope.launch {
+            delay(30_000)
+            if (awaitingResponse) {
+                awaitingResponse = false
+                lastError = "O guest não confirmou o comando"
+            }
         }
     }
 
@@ -250,6 +255,13 @@ class PackageScanner {
             opBusy = opQueue.isNotEmpty()
             if (opBusy) send(opQueue.first().cmd)
             op.cb(trimmed)
+            return
+        }
+        if (awaitingResponse && !inScan && (trimmed == "OK" || trimmed.startsWith("ERR"))) {
+            awaitingResponse = false
+            runTimeoutJob?.cancel()
+            runTimeoutJob = null
+            requestScan()
             return
         }
         when {

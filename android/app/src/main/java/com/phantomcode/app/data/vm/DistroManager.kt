@@ -11,8 +11,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.phantomcode.app.data.git.GitManager
-import com.phantomcode.app.data.git.GithubAssetClient
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
@@ -178,7 +176,6 @@ data class DistroConfig(
 class DistroManager(context: Context) {
 
     private val appContext: Context = context.applicationContext
-    private val git = GitManager(appContext)
     val linuxDir: File = File(context.filesDir, "linux").apply { mkdirs() }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -354,7 +351,9 @@ class DistroManager(context: Context) {
             withContext(Dispatchers.IO) {
                 runCatching { d.deleteRecursively() }
             }
-            if (activeId == id) activeId = null
+            if (activeId == id) {
+                activeId = DistroCatalog.ALL.firstOrNull { it.id != id && isInstalled(it.id) }?.id
+            }
             installStates[id] = DistroInstallState()
             QemuManager.instance?.refreshBinary()
         }
@@ -526,7 +525,8 @@ class DistroManager(context: Context) {
                 name == null -> null
                 name.endsWith(".tar.gz") || name.endsWith(".tgz") -> "tarball"
                 name == "initrd.img" || name.contains("initrd") -> "initrd"
-                name.endsWith(".img") || name.endsWith(".ext4") || name.endsWith(".qcow2") -> "rootfs"
+                name.endsWith(".qcow2") -> "qcow2"
+                name.endsWith(".img") || name.endsWith(".ext4") -> "rootfs"
                 name == "kernel" || name.contains("vmlinuz") || name.contains("image") -> "kernel"
                 name.contains("qemu") && name.contains("aarch64") -> "qemu"
                 else -> null
@@ -547,6 +547,7 @@ class DistroManager(context: Context) {
                 "tarball" -> File(targetDir, "artifact.tmp")
                 "initrd" -> File(targetDir, "initrd.img")
                 "rootfs" -> File(targetDir, "rootfs.img")
+                "qcow2" -> error("Imagens QCOW2 ainda não são suportadas pelo boot raw do QEMU; use rootfs.img/ext4")
                 "kernel" -> File(targetDir, "kernel")
                 "qemu" -> File(targetDir, "qemu-system-aarch64")
                 else -> return@forEach
@@ -628,12 +629,12 @@ class DistroManager(context: Context) {
     }
 
     private fun downloadConnection(info: DistroInfo): HttpURLConnection {
-        // Todas as distros baixam da Release privada via API com o token do GitHub
-        // (URL direta sem token retornaria 404 num repo privado). Formato das
-        // releases: tag `distro-<id>` com asset `<id>.tar.gz`.
-        val token = git.token
-        if (token.isNullOrBlank()) error("Autentique o GitHub na aba Git antes de instalar uma distro")
-        return GithubAssetClient.openReleaseAsset("distro-${info.id}", "${info.id}.tar.gz", token)
+        val connection = java.net.URL(info.url).openConnection() as HttpURLConnection
+        connection.instanceFollowRedirects = true
+        connection.connectTimeout = 20_000
+        connection.readTimeout = 120_000
+        connection.setRequestProperty("User-Agent", "Phantom-Code-Android")
+        return connection
     }
 
     /** Expande o rootfs.img para o tamanho escolhido (padrão 3 GB) via setLength. */

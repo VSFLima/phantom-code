@@ -204,12 +204,11 @@ fun TerminalDock(onOpen: () -> Unit) {
             imageVector = Icons.Filled.Add,
             contentDescription = "Novo terminal",
             tint = palette.textSecondary,
-            modifier = Modifier
-                .size(28.dp)
-                .clickable {
-                    terminal.addShellTab()
-                    onOpen()
-                }
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable {
+                     if (terminal.addShellTab()) onOpen()
+                 }
                 .padding(6.dp),
         )
         Spacer(Modifier.width(6.dp))

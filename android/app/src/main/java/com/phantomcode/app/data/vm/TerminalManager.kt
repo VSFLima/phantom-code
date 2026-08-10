@@ -112,6 +112,7 @@ class TerminalManager {
         val tab = tabs.getOrNull(index) ?: return
         tabs.removeAt(index)
         runCatching { tab.session.finish() }
+        if (index < activeIndex) activeIndex--
         if (activeIndex >= tabs.size) activeIndex = tabs.size - 1
         if (tabs.isEmpty()) activeIndex = -1
         active = tabs.isNotEmpty()

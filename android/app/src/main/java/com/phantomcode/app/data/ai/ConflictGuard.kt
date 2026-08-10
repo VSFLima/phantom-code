@@ -104,6 +104,18 @@ class ConflictGuard(private val stateDir: File) {
         return removed.size
     }
 
+    /** Libera somente as reservas pertencentes a uma tarefa, sem afetar tarefas irmãs. */
+    @Synchronized
+    fun releaseTask(owner: String, taskId: String): Int {
+        val removed = locks.keys.filter { key ->
+            val lock = locks[key]!!
+            lock.owner == owner && lock.taskId == taskId
+        }
+        removed.forEach { locks.remove(it) }
+        if (removed.isNotEmpty()) save()
+        return removed.size
+    }
+
     /** R7 — heartbeat renova os locks do dono (a IA não precisa lembrar de renovar). */
     @Synchronized
     fun heartbeat(owner: String): Int {

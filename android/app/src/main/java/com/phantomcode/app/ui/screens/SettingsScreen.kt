@@ -215,9 +215,9 @@ fun SettingsScreen() {
             Text("Prévia", color = palette.textSecondary, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PhantomPrimaryButton(text = "Ação principal", onClick = {})
+                 PhantomPrimaryButton(text = "Ação principal", onClick = { })
                 Spacer(Modifier.width(10.dp))
-                PhantomOutlinedButton(text = "Secundária", onClick = {})
+                 PhantomOutlinedButton(text = "Secundária", onClick = { })
             }
         }
 

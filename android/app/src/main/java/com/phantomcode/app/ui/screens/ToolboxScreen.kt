@@ -68,7 +68,6 @@ import com.phantomcode.app.data.ai.AiTask
 import com.phantomcode.app.data.ai.AiThreadMessage
 import com.phantomcode.app.data.backup.BackupManager
 import com.phantomcode.app.data.backup.CloudBackupManager
-import com.phantomcode.app.data.git.GitManager
 import com.phantomcode.app.data.secrets.SecretsManager
 import com.phantomcode.app.data.vm.DistroCatalog
 import com.phantomcode.app.data.vm.DistroConfig
@@ -108,7 +107,6 @@ fun ToolboxScreen(
 
     // ── Secrets (D8) ──
     val context = LocalContext.current
-    val git = remember { GitManager(context) }
     val clipboard = LocalClipboardManager.current
     val secrets = remember { SecretsManager(context) }
     var keysTick by remember { mutableIntStateOf(0) }
@@ -265,7 +263,7 @@ fun ToolboxScreen(
                     state = vm.distros.installStates[info.id] ?: com.phantomcode.app.data.vm.DistroInstallState(),
                     onClickInstall = { installTarget = info },
                     onClickUse = { vm.distros.setActive(info) },
-                    onClickConfigure = { configureOnly = true; installTarget = info },
+                     onClickConfigure = { configureOnly = true; installTarget = info },
                     onClickUninstall = { confirmUninstallDistro = info },
                 )
                 Spacer(Modifier.height(10.dp))
@@ -480,7 +478,7 @@ fun ToolboxScreen(
                 initialPresetId = qemu.preset.id,
                 initialCores = qemu.preset.cpu,
                 initialRamMb = qemu.preset.ramMb,
-                githubAuthenticated = !git.token.isNullOrBlank(),
+                githubAuthenticated = info.url.isNotBlank(),
                 onOpenGit = onOpenGit,
                 onInstallLocal = { config ->
                     installTarget = null
@@ -535,7 +533,7 @@ fun ToolboxScreen(
                         vm.distros.install(info, config, logTab)
                     }
                 },
-                onDismiss = { installTarget = null },
+                onDismiss = { installTarget = null; configureOnly = false },
             )
         }
 
@@ -639,6 +637,7 @@ private fun GuestPackagesSection(
 ) {
     val palette = LocalThemeController.current.currentPalette()
     val scanner = qemu.scanner
+    val packageManager = LocalVm.current.distros.activeInfo()?.packageManager ?: "apt"
     var query by remember { mutableStateOf("") }
     var details by remember { mutableStateOf<GuestPackage?>(null) }
     var confirmRemove by remember { mutableStateOf<GuestPackage?>(null) }
@@ -770,11 +769,18 @@ private fun GuestPackagesSection(
             onDismissRequest = { confirmRemove = null },
             containerColor = palette.surface,
             title = { Text("Desinstalar ${pkg.name}?", color = palette.textPrimary) },
-            text = { Text("Roda apt-get remove -y ${pkg.name} no guest.", color = palette.textSecondary, fontSize = 13.sp) },
+             text = {
+                 Text(
+                     "Roda ${if (packageManager == "apk") "apk del" else "apt-get remove -y"} ${pkg.name} no guest.",
+                     color = palette.textSecondary,
+                     fontSize = 13.sp,
+                 )
+             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRemove = null
-                    scanner.run("apt-get remove -y ${pkg.name}")
+                     val command = if (packageManager == "apk") "apk del ${pkg.name}" else "apt-get remove -y ${pkg.name}"
+                     scanner.run(command)
                 }) { Text("Desinstalar", color = palette.error) }
             },
             dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancelar", color = palette.textSecondary) } },
