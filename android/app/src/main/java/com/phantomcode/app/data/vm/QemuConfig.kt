@@ -27,7 +27,8 @@ object QemuPresets {
 /**
  * Espelhos oficiais do projeto (D16 — Phantom) e binário QEMU.
  *
- * Artefatos publicados nas Releases oficiais com validação SHA-256.
+ * Artefatos publicados nas Releases com validação SHA-256. O repo de código é
+ * privado; os downloads públicos apontam para o MIRROR `VSFLima/phantom-releases`.
  * Estrutura esperada do artefato de distro (tarball):
  *   linux/<id>/{ rootfs.img | kernel | initrd.img | rootfs/ } — ver DistroManager.
  */
@@ -40,13 +41,15 @@ object PhantomMirror {
     const val QEMU_BINARY_SHA256 = "2a3f85d622d250c24a9028484ad65fb700faecf8e253c3ab63947f59a7859c49"
 
     // Artefato real: construído pelo workflow `Build Distro Artifacts`
-    // (.github/workflows/build-distros.yml) → Release `distro-phantom`.
-    // O app baixa internamente (Toolbox → Distros) com progresso + SHA-256.
-    const val PHANTOM_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-phantom/phantom.tar.gz"
+    // (.github/workflows/build-distros.yml) e publicado no MIRROR público
+    // `VSFLima/phantom-releases` (o repo de código VSFLima/phantom-code é
+    // privado — download público só funciona no mirror). O app baixa
+    // internamente (Toolbox → Distros) com progresso + SHA-256.
+    const val PHANTOM_URL = "https://github.com/VSFLima/phantom-releases/releases/download/distro-phantom/phantom.tar.gz"
     // SHA-256 do tarball da Release `distro-phantom` (copiado do log do workflow:
     // "sha256sum phantom.tar.gz" no passo "Package artifact"). Atualize após cada
     // rebuild — qualquer rebuild gera um tarball novo com hash diferente.
-    const val PHANTOM_SHA256 = "28e9230e644d30e378200bb5707e6eb71a7831a92595d7d4ff794c6ea69cc282"
+    const val PHANTOM_SHA256 = "79d591f67913a33edd22abfa0ac0ff9bf37c053b427d425f155767fb60304d74"
 
     // Distros extras (T29): publicadas pelo workflow `Build Extra Distros`.
     // SHA-256 preenchido APÓS o build real (o app valida o download contra ele;
