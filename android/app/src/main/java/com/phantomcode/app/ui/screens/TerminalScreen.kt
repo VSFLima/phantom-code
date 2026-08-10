@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,11 +56,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -106,6 +109,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     var themePickerOpen by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var commandInput by remember { mutableStateOf("") }
 
     /** Copia o texto selecionado no terminal para a área de transferência. */
     fun copySelection() {
@@ -146,6 +150,15 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
         val session = terminal.activeTab?.session ?: return
         val bytes = text.toByteArray(Charsets.UTF_8)
         runCatching { session.write(bytes, 0, bytes.size) }
+    }
+
+    fun sendCommand() {
+        val command = commandInput
+        val session = terminal.activeTab?.session ?: return
+        if (command.isBlank()) return
+        val bytes = (command + "\n").toByteArray(Charsets.UTF_8)
+        runCatching { session.write(bytes, 0, bytes.size) }
+        commandInput = ""
     }
 
     // Abre o teclado do Android via InputMethodManager (o keyboard?.show() do
@@ -555,7 +568,37 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 },
              onRelease = { (it as? EmulatorView)?.onPause() },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+             )
+            }
+        }
+
+        // Entrada explícita: funciona mesmo quando o teclado IME do emulatorview
+        // não entrega commitText em determinados teclados Android.
+        if (terminal.activeTab?.kind != TerminalTabKind.LOG && terminal.activeTab != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BasicTextField(
+                    value = commandInput,
+                    onValueChange = { commandInput = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(palette.surfaceAlt, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                    textStyle = TextStyle(color = palette.textPrimary, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                    cursorBrush = SolidColor(palette.accentSecondary),
+                    singleLine = true,
+                    decorationBox = { inner ->
+                        if (commandInput.isEmpty()) Text("Digite um comando e toque em Enviar", color = palette.textSecondary, fontSize = 12.sp)
+                        inner()
+                    },
+                )
+                Spacer(Modifier.width(8.dp))
+                PhantomPrimaryButton(text = "Enviar", onClick = ::sendCommand, enabled = commandInput.isNotBlank())
             }
         }
 
@@ -660,4 +703,3 @@ private fun TermActionChip(text: String, icon: ImageVector, onClick: () -> Unit)
         Text(text, color = palette.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
-

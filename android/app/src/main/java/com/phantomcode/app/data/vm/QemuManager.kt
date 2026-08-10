@@ -19,6 +19,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -39,6 +41,9 @@ class QemuManager(
     private val appContext: Context = context.applicationContext
     private val git = GitManager(appContext)
     private val qemuDir: File = File(appContext.filesDir, "qemu").apply { mkdirs() }
+    // Alguns Android montam filesDir sem permissão para execve. O code cache é
+    // o diretório reservado pelo sistema para código gerado/executável.
+    private val runtimeQemu: File = File(appContext.codeCacheDir, "phantom/qemu-system-aarch64")
     private val scope = CoroutineScope(Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -77,7 +82,10 @@ class QemuManager(
 
     /** Binário QEMU: a distro traz o seu (a Phantom vem com qemu no pacote); o
      *  fallback global (extraído/baixado) só entra quando não há distro instalada. */
-    fun binary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
+    /** Arquivo efetivamente executado pelo ProcessBuilder. */
+    fun binary(): File = runtimeQemu
+
+    private fun sourceBinary(): File = distros.activeQemu() ?: File(qemuDir, "qemu-system-aarch64")
 
     init {
         refreshBinary()
@@ -88,9 +96,27 @@ class QemuManager(
      *  Requer EXISTÊNCIA + PERMISSÃO DE EXECUÇÃO — sem +x o ProcessBuilder
      *  falha com "Permission denied" e o QEMU nunca sobe. */
     fun refreshBinary() {
+        val source = sourceBinary()
+        stageRuntimeBinary(source)
         val b = binary()
         makeExecutable(b)
         binaryReady = b.exists() && b.canExecute()
+    }
+
+    /** Copia o QEMU da área de dados para a área própria de código do Android. */
+    private fun stageRuntimeBinary(source: File): Boolean {
+        if (!source.exists() || source.length() < 1_000_000L) return false
+        return runCatching {
+            runtimeQemu.parentFile?.mkdirs()
+            if (!runtimeQemu.exists() || runtimeQemu.length() != source.length() ||
+                runtimeQemu.lastModified() < source.lastModified()
+            ) {
+                FileInputStream(source).use { input ->
+                    FileOutputStream(runtimeQemu).use { output -> input.copyTo(output, 64 * 1024) }
+                }
+            }
+            makeExecutable(runtimeQemu)
+        }.getOrDefault(false)
     }
 
     /** Aplica o modo executável explicitamente, pois TAR/SAF podem removê-lo. */
@@ -133,7 +159,7 @@ class QemuManager(
             // Defensivo: garante +x no binário vindo da distro (extrator preserva
             // o bit do tar, mas nunca custa confirmar antes de subir a VM).
             val qemu = distros.activeQemu()
-            if (qemu == null || !makeExecutable(qemu)) {
+            if (qemu == null || !stageRuntimeBinary(qemu)) {
                 onMain { lastError = "QEMU instalado sem permissão de execução. Reinstale a distro." }
                 return@withContext false
             }
@@ -152,7 +178,7 @@ class QemuManager(
             return@withContext true
         }
         binaryInstalling = true
-        val target = binary()
+            val target = File(qemuDir, "qemu-system-aarch64")
         val tmp = File(qemuDir, "qemu.tmp")
         runCatching {
             val token = git.token ?: error("Autentique o GitHub antes de baixar o QEMU")
@@ -189,8 +215,9 @@ class QemuManager(
             onMain { binaryInstalling = false }
             return@withContext false
         }
+        stageRuntimeBinary(target)
         onMain { binaryInstalling = false }
-        onMain { binaryReady = target.exists() }
+        onMain { binaryReady = binary().exists() && binary().canExecute() }
         true
     }
 
@@ -201,7 +228,7 @@ class QemuManager(
      */
     private fun extractNativeQemu(): Boolean {
         val target = File(qemuDir, "qemu-system-aarch64")
-        if (target.exists() && target.length() > 1_000_000L) return true
+        if (target.exists() && target.length() > 1_000_000L) return stageRuntimeBinary(target)
         return runCatching {
             appContext.assets.open("qemu/qemu-system-aarch64").use { input ->
                 val tmp = File(qemuDir, "qemu.native.tmp")
@@ -215,7 +242,7 @@ class QemuManager(
                 check(makeExecutable(tmp)) { "Não foi possível habilitar a execução do QEMU" }
                 tmp.renameTo(target)
             }
-        }.isSuccess && target.exists()
+        }.isSuccess && target.exists() && stageRuntimeBinary(target)
     }
 
     /** Sobe a VM com a distro ativa. Retorna erro legível quando não dá. */
