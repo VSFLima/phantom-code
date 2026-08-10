@@ -342,10 +342,14 @@ class QemuManager(
             val p = pb.start()
             process = p
             val serial = connectSerialSocket(sock)
-            if (serial != null) {
-                terminal.attach(serial)
-            } else {
-                terminal.attach(p)
+            // ⚠️ O TermSession do jackpal exige um Looper no construtor e as
+            // mutações das abas são estado do Compose — criar/anexar SÓ na main.
+            withContext(Dispatchers.Main) {
+                if (serial != null) {
+                    terminal.attach(serial)
+                } else {
+                    terminal.attach(p)
+                }
             }
             connectControlSocket()
             onMain {
@@ -385,10 +389,17 @@ class QemuManager(
                     }
                     VmForegroundService.stop(appContext)
                 }
-                terminal.stop()
+                terminal.closeQemuTab()
             }
             true
         }.getOrElse {
+            // Falha após o processo subir (ex.: anexar o console) — derruba o
+            // QEMU órfão, limpa o socket e expõe o erro real na UI.
+            runCatching { process?.destroy() }
+            process = null
+            watcher?.cancel()
+            runCatching { sock.delete() }
+            runCatching { serialSocket = null }
             onMain { lastError = it.message ?: "Falha ao iniciar o QEMU" }
             false
         }
@@ -405,7 +416,10 @@ class QemuManager(
                 val ok = runCatching {
                     s.connect(LocalSocketAddress(sock.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
                 }.isSuccess
-                if (ok) return runCatching { SocketTermSession(s) }.getOrNull()
+                if (ok) {
+                    // Cria a sessão na MAIN thread (TermSession exige Looper).
+                    return runCatching { TerminalFactory.onMain { SocketTermSession(s) } }.getOrNull()
+                }
                 runCatching { s.close() }
             }
             Thread.sleep(100)
@@ -440,7 +454,7 @@ class QemuManager(
     fun stop() {
         runCatching { process?.destroy() }
         watcher?.cancel()
-        terminal.stop()
+        terminal.closeQemuTab()
         scanner.disconnect()
         runCatching { serialSocket?.delete() }
         serialSocket = null

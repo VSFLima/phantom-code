@@ -33,15 +33,20 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -100,11 +105,44 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     var attachedSession by remember { mutableStateOf<TermSession?>(null) }
     var themePickerOpen by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+
+    /** Copia o texto selecionado no terminal para a área de transferência. */
+    fun copySelection() {
+        val txt = (termView as? PhantomTerminalView)?.getSelectedText()?.trim()
+        if (!txt.isNullOrEmpty()) {
+            runCatching {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("terminal", txt))
+            }
+            Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show()
+        }
+        (termView as? PhantomTerminalView)?.toggleSelectingText()
+    }
 
     /** Cola o texto da área de transferência no terminal ativo (Termux-like). */
     fun pasteClipboard() {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         val text = cm.primaryClip?.getItemAt(0)?.text?.toString() ?: return
+        val session = terminal.activeTab?.session ?: return
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        runCatching { session.write(bytes, 0, bytes.size) }
+    }
+
+    /** Abre um shell local; falha silenciosa vira aviso visível (antes o toque em
+     *  "+" não fazia nada quando o shell não podia ser iniciado). */
+    fun newShell(cwd: String? = null) {
+        if (!terminal.addShellTab(cwd)) {
+            Toast.makeText(
+                context,
+                "Não foi possível abrir um shell local neste dispositivo",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    /** Escreve bytes crus na sessão ativa (ESC/Tab/setas do teclado virtual). */
+    fun sendKeys(text: String) {
         val session = terminal.activeTab?.session ?: return
         val bytes = text.toByteArray(Charsets.UTF_8)
         runCatching { session.write(bytes, 0, bytes.size) }
@@ -198,19 +236,124 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                         Icons.Filled.Add,
                         contentDescription = "Nova aba (shell local)",
                         tint = palette.textSecondary,
-                        modifier = Modifier.size(32.dp).clickable { terminal.addShellTab() }.padding(7.dp),
+                        modifier = Modifier.size(32.dp).clickable { newShell() }.padding(7.dp),
                     )
                 }
             }
-            Icon(
-                Icons.Filled.Palette,
-                contentDescription = "Tema do terminal",
-                tint = if (themePickerOpen) palette.accentPrimary else palette.textSecondary,
+            // Divisor entre o grupo "abas" e o grupo "ações" (organização da barra).
+            Spacer(Modifier.width(4.dp))
+            Box(Modifier.width(1.dp).height(22.dp).background(palette.border))
+            Spacer(Modifier.width(4.dp))
+            if (selecting) {
+                TermActionChip(
+                    text = "Copiar",
+                    icon = Icons.Filled.ContentCopy,
+                    onClick = { copySelection() },
+                )
+                Spacer(Modifier.width(6.dp))
+                TermActionChip(
+                    text = "Sair",
+                    icon = Icons.Filled.Close,
+                    onClick = { (termView as? PhantomTerminalView)?.toggleSelectingText() },
+                )
+                Spacer(Modifier.width(4.dp))
+            } else {
+                TermActionChip(
+                    text = "Ctrl",
+                    icon = Icons.Filled.Keyboard,
+                    onClick = { termView?.sendControlKey() },
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            // Menu de ações do terminal: tudo que é menos frequente fica aqui.
+            Box {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = "Ações do terminal",
+                    tint = palette.textSecondary,
+                    modifier = Modifier.size(34.dp).clickable { menuOpen = true }.padding(7.dp),
+                )
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Nova aba (shell local)") },
+                        leadingIcon = { Icon(Icons.Filled.Add, null) },
+                        onClick = {
+                            menuOpen = false
+                            newShell()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (selecting) "Sair da seleção" else "Selecionar texto") },
+                        leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                        onClick = {
+                            menuOpen = false
+                            (termView as? PhantomTerminalView)?.toggleSelectingText()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Colar") },
+                        leadingIcon = { Icon(Icons.Filled.ContentPaste, null) },
+                        onClick = {
+                            menuOpen = false
+                            pasteClipboard()
+                        },
+                    )
+                    HorizontalDivider()
+                    val quickKeys = listOf(
+                        "ESC" to "\u001b",
+                        "Tab" to "\t",
+                        "↑" to "\u001b[A",
+                        "↓" to "\u001b[B",
+                        "←" to "\u001b[D",
+                        "→" to "\u001b[C",
+                        "⌫ Backspace" to "\u007f",
+                    )
+                    quickKeys.forEach { (label, seq) ->
+                        DropdownMenuItem(
+                            text = { Text("Tecla $label") },
+                            onClick = {
+                                menuOpen = false
+                                sendKeys(seq)
+                            },
+                        )
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Tema do terminal") },
+                        leadingIcon = { Icon(Icons.Filled.Palette, null) },
+                        onClick = {
+                            menuOpen = false
+                            themePickerOpen = true
+                        },
+                    )
+                }
+            }
+        }
+
+        // ── Erro da VM (start() falhou): exposto em banner até o próximo start ──
+        val vmError = vm.qemu.lastError
+        if (vmError != null && !vm.qemu.running) {
+            Row(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clickable { themePickerOpen = true }
-                    .padding(7.dp),
-            )
+                    .fillMaxWidth()
+                    .background(palette.error.copy(alpha = 0.14f))
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "✕ ",
+                    color = palette.error,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Text(
+                    vmError,
+                    color = palette.error,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         // ── Aviso sem abas (VM parada) ──
@@ -243,9 +386,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                 PhantomOutlinedButton(
                     text = "Nova shell Android",
                     icon = Icons.Filled.Add,
-                    onClick = {
-                        terminal.addShellTab()
-                    },
+                    onClick = { newShell() },
                 )
                 Spacer(Modifier.size(8.dp))
                 PhantomOutlinedButton(
@@ -314,61 +455,50 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
             }
         }
 
-        // ── Barra de ações (Termux-like): selecionar / copiar / colar / Ctrl ──
-        if (terminal.activeTab != null) {
+        // ── Banner de boot da VM: informa o usuário na aba do console enquanto
+        //    o kernel sobe (primeiro boot costuma demorar) ──
+        var bootBannerDismissed by remember { mutableStateOf(false) }
+        LaunchedEffect(vm.qemu.running) { if (vm.qemu.running) bootBannerDismissed = false }
+        if (terminal.activeTab?.kind == TerminalTabKind.QEMU && vm.qemu.running && !bootBannerDismissed) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.surface)
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                    .background(palette.accentPrimary.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (selecting) {
-                    TermActionChip(
-                        text = "Copiar",
-                        icon = Icons.Filled.ContentCopy,
-                        onClick = {
-                            val txt = (termView as? PhantomTerminalView)?.getSelectedText()?.trim()
-                            if (!txt.isNullOrEmpty()) {
-                                runCatching {
-                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    cm.setPrimaryClip(ClipData.newPlainText("terminal", txt))
-                                }
-                                Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show()
-                            }
-                            (termView as? PhantomTerminalView)?.toggleSelectingText()
-                        },
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    TermActionChip(
-                        text = "Sair",
-                        icon = Icons.Filled.Close,
-                        onClick = { (termView as? PhantomTerminalView)?.toggleSelectingText() },
-                    )
-                } else {
-                    TermActionChip(
-                        text = "Selecionar",
-                        icon = Icons.Filled.ContentCopy,
-                        onClick = { (termView as? PhantomTerminalView)?.toggleSelectingText() },
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                TermActionChip(
-                    text = "Colar",
-                    icon = Icons.Filled.ContentPaste,
-                    onClick = { pasteClipboard() },
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = palette.accentPrimary,
+                    modifier = Modifier.size(14.dp),
                 )
-                Spacer(Modifier.width(6.dp))
-                TermActionChip(
-                    text = "Ctrl",
-                    icon = Icons.Filled.Keyboard,
-                    onClick = { termView?.sendControlKey() },
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Iniciando Linux… o primeiro boot pode levar alguns minutos",
+                    color = palette.textPrimary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Fechar aviso",
+                    tint = palette.textSecondary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { bootBannerDismissed = true }
+                        .padding(3.dp),
                 )
             }
         }
 
         // ── Terminal VT100 real (jackpal emulatorview) ──
         if (terminal.activeTab != null) {
+            // key = sessão: cada aba tem SUA própria EmulatorView. Sem isso, o
+            // `update` reanexa sessões na MESMA view e o jackpal não re-inicializa
+            // (`initialize()` só roda no primeiro attachSession) — a tela fica com
+            // o emulador da aba anterior e parece "congelada" ao trocar de aba.
+            key(terminal.activeTab?.session) {
             AndroidView<View>(
                 factory = { ctx ->
                 // Construção em 2 passos: o construtor (ctx, session, metrics) chama
@@ -426,27 +556,10 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
              onRelease = { (it as? EmulatorView)?.onPause() },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
+            }
         }
 
-        // ── Rodapé: dica de uso ──
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(palette.surface)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = if (terminal.tabs.isEmpty()) {
-                    "Toque em Iniciar para subir a VM."
-                } else {
-                    "VT100 · pinça p/ zoom · segure p/ selecionar · + nova aba"
-                },
-                color = palette.textSecondary,
-                fontSize = 10.sp,
-            )
-        }
-    }
+    } // fim do Column da tela
 
     // ── Seletor de tema do terminal (mesmo conjunto do editor) ──
     if (themePickerOpen) {
@@ -547,3 +660,4 @@ private fun TermActionChip(text: String, icon: ImageVector, onClick: () -> Unit)
         Text(text, color = palette.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
+
