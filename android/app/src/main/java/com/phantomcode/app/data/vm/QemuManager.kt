@@ -103,11 +103,19 @@ class QemuManager(
      *  Requer EXISTÊNCIA + PERMISSÃO DE EXECUÇÃO — sem +x o ProcessBuilder
      *  falha com "Permission denied" e o QEMU nunca sobe. */
     fun refreshBinary() {
+        // Nunca copie o QEMU nesta chamada: ela também é feita pela main thread
+        // ao criar o VmController e após uma instalação. O binário nativo do APK
+        // já está pronto; cópias de uma distro ocorrem somente em IO.
+        packagedQemu()?.let { packaged ->
+            binaryReady = makeExecutable(packaged)
+            return
+        }
+        binaryReady = false
         val source = sourceBinary()
-        stageRuntimeBinary(source)
-        val b = binary()
-        makeExecutable(b)
-        binaryReady = b.exists() && b.canExecute()
+        scope.launch {
+            val ready = stageRuntimeBinary(source)
+            onMain { binaryReady = ready && binary().exists() && binary().canExecute() }
+        }
     }
 
     /** Copia o QEMU da área de dados para a área própria de código do Android. */

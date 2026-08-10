@@ -82,7 +82,6 @@ import com.phantomcode.app.ui.theme.TerminalThemeColors
 import com.phantomcode.app.ui.theme.terminalColorsFor
 import jackpal.androidterm.emulatorview.ColorScheme
 import jackpal.androidterm.emulatorview.EmulatorView
-import jackpal.androidterm.emulatorview.TermSession
 import kotlinx.coroutines.launch
 
 /**
@@ -105,7 +104,6 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     val terminalPrefs = remember { TerminalPrefs(context) }
 
     var termView by remember { mutableStateOf<EmulatorView?>(null) }
-    var attachedSession by remember { mutableStateOf<TermSession?>(null) }
     var themePickerOpen by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -185,7 +183,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
     // Ciclo de vida da EmulatorView (IME + blink + redesenho). O requestFocus
     // é assíncrono — postamos para garantir que o foco seja aplicado depois do
     // layout e o teclado virtual (IME) abra de fato ao entrar no terminal.
-    LaunchedEffect(termView, attachedSession) {
+    LaunchedEffect(termView) {
         termView?.let { view ->
             runCatching {
                 view.onResume()
@@ -534,7 +532,7 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                     runCatching {
                         setColorScheme(schemeOf(tc))
                     }
-                    termView = this
+                     post { termView = this }
                 } }.getOrElse {
                     TextView(ctx).apply {
                         text = "Terminal indisponível: ${it.message ?: "falha ao iniciar o emulador"}"
@@ -553,11 +551,10 @@ fun TerminalScreen(onBack: () -> Unit, onOpenToolbox: () -> Unit = {}) {
                             (view as? PhantomTerminalView)?.applyFontSize(terminalPrefs.fontSizeSp)
                                 ?: view.setTextSize(terminalPrefs.fontSizeSp)
                         }
-                        if (tab != null && attachedSession !== tab.session) {
-                            runCatching {
-                                view.attachSession(tab.session)
-                                attachedSession = tab.session
-                                // Foco + teclado também após anexar a sessão (novas abas):
+                         if (tab != null && view.getTermSession() !== tab.session) {
+                             runCatching {
+                                 view.attachSession(tab.session)
+                                 // Foco + teclado também após anexar a sessão (novas abas):
                                 forceKeyboard(view)
                                 // Recalcula colunas/linhas após o attach — garante que a
                                 // quebra de linha acompanhe a largura real da view.
