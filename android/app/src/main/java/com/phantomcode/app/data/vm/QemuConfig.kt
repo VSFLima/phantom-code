@@ -33,10 +33,10 @@ object QemuPresets {
  *   linux/<id>/{ rootfs.img | kernel | initrd.img | rootfs/ } — ver DistroManager.
  */
 object PhantomMirror {
-    // Binário QEMU arm64 (estático/musl) publicado na Release `qemu-aarch64`
-    // pelo workflow `Build QEMU Binary`. É o FALLBACK para distros de terceiros:
-    // a distro oficial Phantom já traz o qemu-system-aarch64 DENTRO do pacote
-    // (QemuManager.binary() prioriza o da distro) — nada vem embutido no APK.
+    // Fallback legado: a Release `qemu-aarch64` do repo privado foi apagada e o
+    // workflow atual é AUTÔNOMO (compila o QEMU e embute no tarball Phantom).
+    // Este URL só seria usado por distros de terceiros sem QEMU embutido — sem
+    // uso ativo hoje; mantido só para não quebrar o fallback existente.
     const val QEMU_BINARY_URL = "https://github.com/VSFLima/phantom-code/releases/download/qemu-aarch64/qemu-system-aarch64"
     const val QEMU_BINARY_SHA256 = "2a3f85d622d250c24a9028484ad65fb700faecf8e253c3ab63947f59a7859c49"
 
@@ -51,16 +51,17 @@ object PhantomMirror {
     // rebuild — qualquer rebuild gera um tarball novo com hash diferente.
     const val PHANTOM_SHA256 = "79d591f67913a33edd22abfa0ac0ff9bf37c053b427d425f155767fb60304d74"
 
-    // Distros extras (T29): publicadas pelo workflow `Build Extra Distros`.
-    // SHA-256 preenchido APÓS o build real (o app valida o download contra ele;
-    // vazio = sem checagem até o valor real ser copiado do log do workflow).
-    const val UBUNTU_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-ubuntu/ubuntu.tar.gz"
+    // Distros extras (T29): publicadas pelo workflow `Build Extra Distros` e
+    // espelhadas no MIRROR público. SHA-256 preenchido APÓS o build real (o app
+    // valida o download contra ele; vazio = sem checagem até o valor real ser
+    // copiado do log do workflow).
+    const val UBUNTU_URL = "https://github.com/VSFLima/phantom-releases/releases/download/distro-ubuntu/ubuntu.tar.gz"
     const val UBUNTU_SHA256 = ""
-    const val DEBIAN_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-debian/debian.tar.gz"
+    const val DEBIAN_URL = "https://github.com/VSFLima/phantom-releases/releases/download/distro-debian/debian.tar.gz"
     const val DEBIAN_SHA256 = ""
-    const val KALI_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-kali/kali.tar.gz"
+    const val KALI_URL = "https://github.com/VSFLima/phantom-releases/releases/download/distro-kali/kali.tar.gz"
     const val KALI_SHA256 = ""
-    const val ALPINE_URL = "https://github.com/VSFLima/phantom-code/releases/download/distro-alpine/alpine.tar.gz"
+    const val ALPINE_URL = "https://github.com/VSFLima/phantom-releases/releases/download/distro-alpine/alpine.tar.gz"
     const val ALPINE_SHA256 = ""
 
 }
