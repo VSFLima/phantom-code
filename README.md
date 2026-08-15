@@ -10,7 +10,7 @@
 ┌─────────────────────────────────────────────┐
 │  👻 PHANTOM-CODE          ● QEMU LINUX: RUNNING │
 │  ┌────┬────────────────────────────────────┐ │
-│  │ 📁 │  Editor (CodeMirror 6)             │ │
+│  │ 📁 │  Editor (Ace)                      │ │
 │  │ 🔍 │                                    │ │
 │  │ 💎 │  ── Terminal dock ──               │ │
 │  │ 🧰 │  root@phantom:~/workspace$         │ │
@@ -31,7 +31,7 @@ Um **IDE Android completo** que une, em um único app:
 
 | 🔧 | O que faz |
 |---|---|
-| **Editor** | CodeMirror 6 com abas, syntax neon e autosave |
+| **Editor** | Ace (ex-CodeMirror 6) com abas, syntax neon e autosave |
 | **Terminal Linux real** | VM **QEMU headless** (glibc completo) — `apt`, `pip`, `npm`, `ollama` funcionam como em qualquer Linux ARM64 |
 | **Git/GitHub** | Clone, commit, push, branches e diff direto na UI (JGit) |
 | **Workspace único** | Editor e terminal operam na **mesma camada de arquivos** (virtio-9p) — sem sincronização, sem cópia |
@@ -58,7 +58,7 @@ Um **IDE Android completo** que une, em um único app:
 |------|:------:|--------------|
 | **0 — Fundação** | ✅ | Projeto Android (Kotlin + Compose), tema Cyber-Phantom, CI no GitHub Actions |
 | **1 — Shell da UI** | ✅ | Bottom Nav (5 itens), Home, Activity Bar, Settings com temas, Terminal dock |
-| **2 — Editor + Explorer** | ✅ | CodeMirror 6, explorer real do workspace, autosave + sessão |
+| **2 — Editor + Explorer** | ✅ | Ace (migrado do CodeMirror 6), explorer real do workspace, autosave + sessão |
 | **3 — VM + Terminal** | 🔶 | Motor QEMU pronto (T14/15/18) — faltam artefatos (binário + Phantom) e VT100 |
 | **4 — Git + Toolbox** | ⬜ | JGit, Toolbox + API Keys, backup local/cloud |
 | **5 — Polish** | ⬜ | Foreground Service, onboarding, testes no device, distribuição |
@@ -112,6 +112,8 @@ Phantom-Code/
 ├── TAREFAS-PHANTOM.md          ← Plano de tarefas (T1–T26)
 ├── Phantom-Code-Documento-Mestre-3.md ← Documento Mestre (arquitetura, D1–D21)
 ├── config/ · linux/ · workspace/ · backups/  ← Runtime (gitignored)
+├── LICENSE                        ← Licença proprietária (todos os direitos reservados)
+├── NOTICE                         ← Notas de componentes de terceiros
 └── README.md                   ← Esta página
 ```
 
@@ -162,7 +164,7 @@ git push -u origin main
 
 - ✅ **T1–T5** — Fase 0: Fundação (estrutura, Gradle, tema, CI, APK)
 - ✅ **T6–T10** — Fase 1: Shell da UI (navegação completa, temas)
-- ✅ **T11–T13** — Fase 2: Explorer real + Editor CodeMirror 6 + auto-save/sessão
+- ✅ **T11–T13** — Fase 2: Explorer real + Editor Ace (migrado do CodeMirror 6) + auto-save/sessão
 - 🔶 **T14–T18** — Fase 3: motor da VM QEMU (T14/15/18 ✅) — artefatos + VT100 pendentes
 - ⬜ **T14–T18** — Fase 3: VM QEMU + Terminal (coração do app)
 - ⬜ **T19–T22** — Fase 4: Git (JGit) + Toolbox + Backup
@@ -170,10 +172,45 @@ git push -u origin main
 
 ---
 
+## 📜 Licença & Direitos Autorais
+
+> **© 2026 VSFLima / Asgard. Todos os direitos reservados.**
+
+**Phantom-Code é software proprietário e de uso exclusivo do autor.** Não é open-source.
+
+Ao acessar este repositório público você pode **visualizar** o código, mas **não** está autorizado a:
+
+- Copiar, distribuir, modificar ou criar obras derivadas deste código (no todo ou em parte);
+- Publicar, revender ou incorporar o código, assets, temas ou documentação em outros projetos;
+- Usar a marca, identidade visual ("Cyber-Phantom", "Phantom-Code", "Dark-Code") ou qualquer ativo do projeto;
+- Extrair, reproduzir ou redistribuir os componentes de terceiros aqui empacotados fora dos termos das respectivas licenças.
+
+O código-fonte, os assets (`editor/`, `ace/`, `workers/`, `templates/`), a documentação ([Documento Mestre](Phantom-Code-Documento-Mestre-3.md), [GIT.md](GIT.md), [TAREFAS-PHANTOM.md](TAREFAS-PHANTOM.md)) e o APK gerado são protegidos por lei de direitos autorais (Lei nº 9.610/98 — Brasil).
+
+### Componentes de terceiros
+
+Os seguintes componentes são **open-source** e permanecem sob os termos das **suas próprias licenças** (BSD-3-Clause, MIT, Apache-2.0 etc. — ver `NOTICE` e os cabeçalhos de cada arquivo):
+
+| Componente | Licença |
+|---|---|
+| **Ace Editor** (`editor/ace.bundle.js`, `ace/`, workers) | BSD-3-Clause (ACE © Ajax.org B.V.) |
+| **js-beautify** (`editor_tools.bundle.js`) | MIT (Einar Lielmanis) |
+| Outros | conforme `NOTICE` |
+
+> O empacotamento no Phantom-Code **não** transfere esses direitos a terceiros nem libera o restante do código.
+
+### Contato / Autorização
+
+Qualquer uso fora da visualização requer **autorização prévia por escrito** do autor. Para licenciamento ou dúvidas:
+
+- **Autor:** VSFLima / Asgard
+
+---
+
 <div align="center">
 
-**👻 Phantom-Code** — *Projeto proprietário · uso autorizado apenas*
+**👻 Phantom-Code** — *Projeto proprietário · Todos os direitos reservados*
 
-**VSFLima / Asgard** · 🔮 Ideia → Código → APK
+**© 2026 VSFLima / Asgard** · 🔮 Ideia → Código → APK
 
 </div>

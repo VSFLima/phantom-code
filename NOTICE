@@ -1,0 +1,32 @@
+Phantom-Code — NOTICE
+================================================================
+© 2026 VSFLima / Asgard. Todos os direitos reservados.
+Projeto proprietário — licença restrita (ver LICENSE).
+
+Este produto inclui componentes de software de terceiros sob suas
+próprias licenças open-source:
+
+- Ace Editor
+  Código: editor/ace.bundle.js, editor/ace/, editor/workers/
+  Licença: BSD-3-Clause (ACE © Ajax.org B.V.)
+  https://github.com/ajaxorg/ace
+
+- js-beautify
+  Código: editor/editor_tools.bundle.js
+  Licença: MIT (Einar Lielmanis et al.)
+  https://github.com/beautify-web/js-beautify
+
+- Android Jetpack / Compose / Kotlin / Gradle / AGP
+  Licenças: Apache-2.0 (ver dependências do projeto)
+
+- JGit
+  Licença: EDL 1.0 (BSD-style) / Apache-2.0
+  https://www.eclipse.org/jgit/
+
+- QEMU (VM Linux guest, quando empacotado)
+  Licença: GPL-2.0-only (QEMU Project)
+  https://www.qemu.org/
+
+Os componentes acima permanecem sob os termos das suas respectivas
+licenças. As notas acima não concedem direitos adicionais sobre o
+restante do código do Phantom-Code, que é proprietário.
