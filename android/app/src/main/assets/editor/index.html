@@ -13,17 +13,37 @@
       overscroll-behavior: none;
     }
     #editor {
-      height: 100vh;
-      width: 100vw;
+      position: absolute;
+      inset: 0;
+      height: 100%;
+      width: 100%;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 14px;
     }
-    .cm-editor { height: 100%; }
-    .cm-editor.cm-focused { outline: none; }
+    .ace_editor { height: 100%; }
+    .ace_editor:focus { outline: none; }
+    .ace_scroller::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .ace_scroller::-webkit-scrollbar-thumb {
+      background: rgba(159, 77, 255, 0.4);
+      border-radius: 4px;
+    }
+    .ace_scroller::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .phantom-custom-selection .ace_marker-layer .ace_selection {
+      background: var(--phantom-sel, rgba(159, 77, 255, 0.35)) !important;
+    }
   </style>
 </head>
 <body>
   <div id="editor"></div>
-  <script src="editor.js"></script>
+  <script src="ace.bundle.js"></script>
+  <script src="editor_tools.bundle.js"></script>
   <script src="editor-themes.js"></script>
-  <script src="editor-actions.js"></script>
+  <script src="ace-themes.js"></script>
+  <script src="editor.js"></script>
 </body>
 </html>
