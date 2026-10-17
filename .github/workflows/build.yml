@@ -49,6 +49,16 @@ jobs:
           chmod 0755 android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
           file android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
 
+      - name: Bundle rootfs Wolfi no APK (distro embutida)
+        continue-on-error: true  # depende do asset no mirror; o app avisa se faltar
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/src/main/assets/linux
+          curl --fail --location --retry 3 \
+            "https://github.com/VSFLima/phantom-releases/releases/download/distro-wolfi/wolfi.tar.gz" \
+            -o android/app/src/main/assets/linux/wolfi.tar.gz
+          ls -la android/app/src/main/assets/linux/wolfi.tar.gz
+
       - name: Build release APK
         env:
           PHANTOM_SIGNING: "true"

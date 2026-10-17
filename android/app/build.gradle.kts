@@ -66,6 +66,12 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    androidResources {
+        // O rootfs do Wolfi chega como .tar.gz (já comprimido): não recomprimir
+        // no APK — preserva o tamanho e permite copiar em streaming (assets).
+        noCompress += "gz"
+    }
 }
 
 kotlin {

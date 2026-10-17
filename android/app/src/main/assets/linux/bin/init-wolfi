@@ -1,0 +1,40 @@
+#!/bin/sh
+# Phantom-Code — init do guest (roda JÁ DENTRO do proot, como root simulado).
+# Responsável por: PATH/HOME, DNS defensivo, hook /initrc e shell de login.
+# Argumentos extras são executados diretamente (sessões one-shot).
+set -e
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+export HOME=/root
+
+# DNS defensivo (o script host também garante antes do proot).
+if [ ! -s /etc/resolv.conf ]; then
+  printf 'nameserver 1.1.1.1\n' > /etc/resolv.conf
+fi
+
+# Silencia o aviso do linker Android dentro do guest.
+if [ ! -f /linkerconfig/ld.config.txt ]; then
+  mkdir -p /linkerconfig
+  touch /linkerconfig/ld.config.txt
+fi
+
+export PS1='\[\033[01;32m\]\u@phantom\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+
+# Hook do app: o Toolbox pode escrever /initrc (ex.: subir o phantom-agent).
+if [ -f /initrc ]; then
+  . /initrc
+fi
+if [ -f /etc/profile ]; then
+  . /etc/profile
+fi
+export PS1='\[\033[01;32m\]\u@phantom\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+
+cd "$HOME"
+
+if [ "$#" -eq 0 ]; then
+  if [ -x /bin/bash ]; then
+    exec /bin/bash
+  fi
+  exec /bin/sh
+fi
+exec "$@"

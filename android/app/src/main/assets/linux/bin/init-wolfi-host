@@ -1,0 +1,95 @@
+#!/system/bin/sh
+# Phantom-Code — arranque do guest Wolfi via PRoot (sem root).
+#
+# Executado no HOST (sh do Android) dentro de um PTY real; ao final entrega o
+# shell do guest. Env esperado (montado por ProotRuntime.kt):
+#   PHANTOM_FILES_DIR  raiz de dados do app (filesDir)
+#   PROOT              caminho do libproot.so (nativeLibraryDir)
+#   PROOT_LOADER       caminho do libloader.so
+#   PROOT_TMP_DIR      diretório gravável para o glue rootfs do proot
+set -u
+
+FILES="${PHANTOM_FILES_DIR:?PHANTOM_FILES_DIR ausente}"
+WOLFI="$FILES/linux/wolfi"
+BIN="$FILES/linux/bin"
+
+mkdir -p "$WOLFI" "$BIN" "$FILES/linux/tmp"
+
+# 1) Primeira execução: extrai o rootfs que veio embutido no APK.
+if [ ! -f "$WOLFI/etc/os-release" ]; then
+  if [ -f "$FILES/linux/wolfi.tar.gz" ]; then
+    echo "phantom: primeira inicialização — extraindo o rootfs (pode levar um minuto)..."
+    tar -xf "$FILES/linux/wolfi.tar.gz" -C "$WOLFI" || {
+      echo "phantom: falha ao extrair o rootfs (tar)." >&2
+      exit 1
+    }
+    # O tar extrai como o usuário do app: o /etc/shadow (modo 0000 no rootfs)
+    # precisa de leitura pelo dono para o guest conseguir mexer em usuários.
+    chmod u+rw "$WOLFI/etc/shadow" 2>/dev/null
+    echo "phantom: rootfs pronto."
+  else
+    echo "phantom: rootfs ausente — instale a distro no app (Toolbox)." >&2
+    exit 1
+  fi
+fi
+
+# 2) DNS: o rootfs do Wolfi não traz resolv.conf (sem isso o apk não resolve).
+if [ ! -s "$WOLFI/etc/resolv.conf" ]; then
+  printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$WOLFI/etc/resolv.conf"
+fi
+
+# 3) rm do guest: o unlink do toybox + proot não apaga árvores com segurança.
+if [ -f "$BIN/rm-wrapper" ]; then
+  cp -f "$BIN/rm-wrapper" "$WOLFI/bin/rm" 2>/dev/null && chmod 755 "$WOLFI/bin/rm" 2>/dev/null
+fi
+
+# 4) Binds: o que o guest enxerga do sistema Android e da área do app.
+ARGS="--kill-on-exit -w /"
+for m in /apex /odm /product /system /system_ext /vendor \
+         /linkerconfig/ld.config.txt /linkerconfig/com.android.art/ld.config.txt \
+         /plat_property_contexts /property_contexts; do
+  if [ -e "$m" ]; then
+    ARGS="$ARGS -b $(realpath "$m" 2>/dev/null || echo "$m")"
+  fi
+done
+
+ARGS="$ARGS -b /sdcard"
+ARGS="$ARGS -b /storage"
+ARGS="$ARGS -b /dev"
+ARGS="$ARGS -b /data"
+ARGS="$ARGS -b /dev/urandom:/dev/random"
+ARGS="$ARGS -b /proc"
+ARGS="$ARGS -b /sys"
+ARGS="$ARGS -b $FILES"
+
+# /proc/stat e /proc/vmstat do host confundem ferramentas (htop etc.):
+# expõe arquivos estáticos com formato esperado.
+if [ -f "$FILES/linux/stat" ]; then
+  ARGS="$ARGS -b $FILES/linux/stat:/proc/stat"
+fi
+if [ -f "$FILES/linux/vmstat" ]; then
+  ARGS="$ARGS -b $FILES/linux/vmstat:/proc/vmstat"
+fi
+
+if [ -e /proc/self/fd ]; then
+  ARGS="$ARGS -b /proc/self/fd:/dev/fd"
+fi
+if [ -e /proc/self/fd/0 ]; then
+  ARGS="$ARGS -b /proc/self/fd/0:/dev/stdin"
+fi
+if [ -e /proc/self/fd/1 ]; then
+  ARGS="$ARGS -b /proc/self/fd/1:/dev/stdout"
+fi
+if [ -e /proc/self/fd/2 ]; then
+  ARGS="$ARGS -b /proc/self/fd/2:/dev/stderr"
+fi
+
+# 5) /dev/shm do guest: tmpfs não monta sem root — aponta para tmp gravável.
+mkdir -p "$WOLFI/tmp" && chmod 1777 "$WOLFI/tmp"
+ARGS="$ARGS -b $WOLFI/tmp:/dev/shm"
+
+ARGS="$ARGS -r $WOLFI -0 --link2symlink --sysvipc -L"
+
+# exec: o proot substitui este shell — o pid do PTY vira o próprio proot
+# (--kill-on-exit derruba o guest inteiro quando ele sai).
+exec "$PROOT" $ARGS sh "$BIN/init-wolfi" "$@"

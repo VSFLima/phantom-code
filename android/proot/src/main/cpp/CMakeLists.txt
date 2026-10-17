@@ -302,3 +302,10 @@ if(HAS_LOADER_32BIT)
 endif()
 
 install(TARGETS proot DESTINATION bin)
+
+# ── PTY nativo (Phantom-Code) ────────────────────────────────────────────────
+# Terminal com tty real para o guest: open(/dev/ptmx) + fork + setsid +
+# TIOCSCTTY + execve. Compila como libpty.so, carregado pela ponte JNI no app
+# (PtyNative.kt). O Bionic não tem forkpty() — o caminho é manual.
+add_library(pty SHARED pty/jni_pty.c)
+target_link_libraries(pty log)

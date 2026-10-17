@@ -12,6 +12,9 @@ class VmController(context: Context) {
     val workspace = WorkspaceManager(context)
     val distros = DistroManager(context)
     val qemu = QemuManager(context, workspace, distros)
+
+    /** Motor PRoot (Wolfi nativo, sem root) — sucessor padrão do QEMU. */
+    val proot = ProotRuntime(context)
 }
 
 val LocalVm = staticCompositionLocalOf<VmController> {
