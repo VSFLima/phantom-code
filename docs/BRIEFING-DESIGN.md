@@ -2,7 +2,9 @@
 ### Documento de contexto para criação do novo Design (para uso com IA de design)
 
 > **Como usar este documento:** ele descreve o produto, o que o app faz, as telas e fluxos que já existem, os estados que o design precisa cobrir e a identidade visual atual. Use como base para construir o **documento de design novo** do app. O design atual está **fora do padrão planejado pelo dono** — este redesign é esperado e aprovado.
-> Código-fonte e Documento Mestre completos: `github.com/VSFLima/phantom-code` (público por enquanto).
+> Código-fonte: `github.com/VSFLima/phantom-code` (público por enquanto).
+>
+> ⚠️ **Arquitetura — leia antes:** o motor do app é **PRoot + distro Wolfi embutida**. Versões antigas do projeto usaram **QEMU** — foi **descontinuado** e está sendo removido. Documentos antigos do repositório (README, Documento Mestre) ainda mencionam QEMU: **ignore essas menções**. Nada no design deve representar "VM/QEMU" — o conceito atual é apenas "ambiente Linux".
 
 ---
 
@@ -38,6 +40,8 @@
 | **Terminal** | Emulador VT100 real + **PTY de verdade** (prompt, cores, `^C`, redimensionamento). Múltiplas abas independentes. |
 | **Workspace** | Uma pasta de projetos do app. Editor, Git, terminal e IA veem **os mesmos arquivos** — simultaneamente. |
 | **Background** | O ambiente pode continuar rodando em segundo plano (notificação persistente "ambiente Linux ativo"). |
+
+> Nota: o app **não usa mais QEMU** (arquitetura antiga, em remoção). O status exibido é apenas "ambiente Linux" — nada de "VM".
 
 > Um status do ambiente Linux é exibido no app (ex.: pill verde `RUNNING`). Estados possíveis: parado, subindo, rodando, erro.
 
