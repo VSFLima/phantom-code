@@ -23,6 +23,11 @@ próprias licenças open-source:
   Licença: EDL 1.0 (BSD-style) / Apache-2.0
   https://www.eclipse.org/jgit/
 
+- PRoot (motor Linux sem root — guest em espaço de usuário)
+  Código: android/proot/ → libproot.so + libloader.so (fork Termux do PRoot)
+  Licença: GPL-2.0-only
+  https://github.com/termux/proot
+
 - QEMU (VM Linux guest, quando empacotado)
   Licença: GPL-2.0-only (QEMU Project)
   https://www.qemu.org/

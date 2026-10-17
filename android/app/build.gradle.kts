@@ -93,5 +93,7 @@ dependencies {
     implementation(libs.commons.net)
     // SFTP (Editor: upload SFTP) — fork mantido do JSch
     implementation(libs.jsch)
+    // Motor PRoot nativo (libproot.so + libloader.so) — guest Linux sem root
+    implementation(project(":proot"))
     debugImplementation(libs.androidx.ui.tooling)
 }

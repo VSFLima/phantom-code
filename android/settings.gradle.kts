@@ -24,3 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "PhantomCode"
 include(":app")
+// Motor PRoot (fork Termux, GPL-2.0) — compila libproot.so + libloader.so
+// nativos no CI (NDK/CMake). Sem root: guest Linux em espaço de usuário.
+include(":proot")

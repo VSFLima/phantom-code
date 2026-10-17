@@ -26,6 +26,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install NDK (motor proot nativo)
+        run: yes | sdkmanager --install "ndk;27.0.12077973"
+
       - name: Restore signing keystore
         if: env.PHANTOM_KEYSTORE_BASE64 != ''
         run: |
