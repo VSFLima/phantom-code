@@ -11,7 +11,7 @@
 
 | # | Tarefa | O que falta | Critério de aceite |
 |---|--------|-------------|--------------------|
-| **R12** | **Polish profundo de UI** (tema no terminal + demais áreas por completo) | ⚠️ **Proibido fazer sem consultar o usuário** (lição aprendida: um polish automático foi revertido). Proposta de escopo + aprovação ANTES | Usuário aprova o escopo; visual consistente em todas as telas |
+| **R12** | **Redesign de UI** — ⚠️ **DJ informou (17/10/2026): o design atual está fora do padrão que ele planejou. Redesign completo futuro, não é polish.** | Aguardando o DJ trazer o padrão planejado (referências/direção). ⚠️ **Proibido mexer em UI sem consultar** (lição aprendida: um polish automático foi revertido). Proposta de escopo + aprovação ANTES | Design novo aplicado conforme o padrão do DJ; visual consistente em todas as telas |
 | **—** | **Apagar release órfã** `apk-20260807-2209` | Confirmar com o usuário se pode excluir a release do build de polish revertido | Release removida do GitHub Releases |
 | **T22** | **Backup cloud (WebDAV)** | Código pronto (`CloudBackupManager` + UI no Toolbox). Falta: **validar num WebDAV real** (Nextcloud/ownCloud) e marcar T22 no TAREFAS | Enviar/restaurar backup via WebDAV com as chaves do catálogo |
 | **T16** | **virtio-9p + virtio-serial — validação real** | Código pronto (montagem, workspace 9p, sockets). Validação real depende de rodar a VM no device e conferir: workspace montado no guest, console via socket, canal de controle | Workspace aparece em `/home/user/workspace` no guest; SCAN/RUN respondem |
