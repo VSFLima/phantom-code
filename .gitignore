@@ -29,3 +29,16 @@ android/editor/package-lock.json
 # ── Sistema ──────────────────────────────────────
 .DS_Store
 *.log
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+__pycache__/
+.pytest_cache/
+.cache/
+.coverage
+mysql-data/
+chromium-profile/
+.venv/
+target/
