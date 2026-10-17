@@ -50,13 +50,17 @@ jobs:
           file android/app/src/main/jniLibs/arm64-v8a/libphantom_qemu.so
 
       - name: Bundle rootfs Wolfi no APK (distro embutida)
-        continue-on-error: true  # depende do asset no mirror; o app avisa se faltar
+        continue-on-error: true  # o app avisa em runtime se o APK sair sem o rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p android/app/src/main/assets/linux
-          curl --fail --location --retry 3 \
-            "https://github.com/VSFLima/phantom-releases/releases/download/distro-wolfi/wolfi.tar.gz" \
-            -o android/app/src/main/assets/linux/wolfi.tar.gz
+          # Rootfs embutido: asset do release `distro-wolfi` DESTE repositório —
+          # o phantom-releases virou privado (27/09) e devolve 404 anônimo; aqui o
+          # token do próprio workflow baixa de dentro do repo, sem espelho público.
+          gh release download distro-wolfi -R "$GITHUB_REPOSITORY" -p wolfi.tar.gz \
+            -O android/app/src/main/assets/linux/wolfi.tar.gz --clobber
           ls -la android/app/src/main/assets/linux/wolfi.tar.gz
 
       - name: Build release APK
