@@ -59,9 +59,12 @@ jobs:
           # Rootfs embutido: asset do release `distro-wolfi` DESTE repositório —
           # o phantom-releases virou privado (27/09) e devolve 404 anônimo; aqui o
           # token do próprio workflow baixa de dentro do repo, sem espelho público.
+          # Nome SEM `.gz`: o AGP descomprime no build assets terminados em .gz
+          # (vira tar puro/maior dentro do APK). `wolfi.rootfs` preserva o gzip
+          # e o app extrai com o tar do Android (autodetecta pelo magic byte).
           gh release download distro-wolfi -R "$GITHUB_REPOSITORY" -p phantom-rootfs.tar.gz \
-            -O android/app/src/main/assets/linux/wolfi.tar.gz --clobber
-          ls -la android/app/src/main/assets/linux/wolfi.tar.gz
+            -O android/app/src/main/assets/linux/wolfi.rootfs --clobber
+          ls -la android/app/src/main/assets/linux/wolfi.rootfs
 
       - name: Build release APK
         env:

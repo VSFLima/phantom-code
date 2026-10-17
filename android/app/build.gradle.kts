@@ -68,9 +68,9 @@ android {
     }
 
     androidResources {
-        // O rootfs do Wolfi chega como .tar.gz (já comprimido): não recomprimir
-        // no APK — preserva o tamanho e permite copiar em streaming (assets).
-        noCompress += "gz"
+        // O rootfs do Wolfi (assets/linux/wolfi.rootfs — gzip por dentro) fica
+        // armazenado sem recompressão no APK: cópia em streaming no device.
+        noCompress += "rootfs"
     }
 }
 

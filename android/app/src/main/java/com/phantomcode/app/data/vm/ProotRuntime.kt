@@ -58,7 +58,7 @@ class ProotRuntime(context: Context) {
     private val binDir: File = File(linuxDir, "bin").apply { mkdirs() }
     private val tmpDir: File = File(linuxDir, "tmp").apply { mkdirs() }
     private val prootTmp: File = File(tmpDir, "proot").apply { mkdirs() }
-    private val bundleTar: File = File(linuxDir, "wolfi.tar.gz")
+    private val bundleTar: File = File(linuxDir, BUNDLE_FILE)
 
     private var pty: PtyProcess? = null
     private var fallback: Process? = null
@@ -99,7 +99,7 @@ class ProotRuntime(context: Context) {
             if (expected <= 0) return@runCatching
             if (bundleTar.exists() && bundleTar.length() == expected) return@runCatching
             appContext.assets.open(BUNDLE_ASSET).use { input ->
-                val tmp = File(linuxDir, "wolfi.tar.tmp")
+                val tmp = File(linuxDir, "$BUNDLE_FILE.tmp")
                 tmp.outputStream().use { out -> input.copyTo(out, 256 * 1024) }
                 if (bundleTar.exists()) bundleTar.delete()
                 tmp.renameTo(bundleTar)
@@ -283,8 +283,18 @@ class ProotRuntime(context: Context) {
         /** Distro padrão do motor proot. */
         const val ROOTFS_ID = "wolfi"
 
-        /** Bundle do rootfs dentro do APK (colocado pelo CI antes do Gradle). */
-        const val BUNDLE_ASSET = "linux/wolfi.tar.gz"
+        /**
+         * Bundle do rootfs dentro do APK (colocado pelo CI antes do Gradle).
+         *
+         * Nome SEM `.gz` de propósito: o AGP/aapt2 descomprime no build os assets
+         * terminados em `.gz` (o arquivo vira um tar maior e renomeado dentro do
+         * APK). O conteúdo aqui é gzip; o `tar` do Android (toybox) autodetecção
+         * pelo magic byte na extração.
+         */
+        const val BUNDLE_ASSET = "linux/wolfi.rootfs"
+
+        /** Nome do bundle já copiado para files/linux/ (o script host extrai daqui). */
+        const val BUNDLE_FILE = "wolfi.rootfs"
 
         private val SCRIPTS = listOf("init-wolfi-host", "init-wolfi", "rm-wrapper")
 

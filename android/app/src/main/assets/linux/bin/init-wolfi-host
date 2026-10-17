@@ -16,10 +16,11 @@ BIN="$FILES/linux/bin"
 mkdir -p "$WOLFI" "$BIN" "$FILES/linux/tmp"
 
 # 1) Primeira execução: extrai o rootfs que veio embutido no APK.
+#    (wolfi.rootfs = tar+gzip; o tar do Android autodetecta a compressão.)
 if [ ! -f "$WOLFI/etc/os-release" ]; then
-  if [ -f "$FILES/linux/wolfi.tar.gz" ]; then
+  if [ -f "$FILES/linux/wolfi.rootfs" ]; then
     echo "phantom: primeira inicialização — extraindo o rootfs (pode levar um minuto)..."
-    tar -xf "$FILES/linux/wolfi.tar.gz" -C "$WOLFI" || {
+    tar -xf "$FILES/linux/wolfi.rootfs" -C "$WOLFI" || {
       echo "phantom: falha ao extrair o rootfs (tar)." >&2
       exit 1
     }
