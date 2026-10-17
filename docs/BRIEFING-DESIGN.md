@@ -45,6 +45,10 @@
 
 > Um status do ambiente Linux é exibido no app (ex.: pill verde `RUNNING`). Estados possíveis: parado, subindo, rodando, erro.
 
+> **Distribuição do rootfs (regra):** enquanto o APK ficar **≤ ~150 MB**, a distro viaja **embutida** (zero download; primeiro boot 100% offline). Se passar disso, muda para **instalação na primeira ativação**: a mesma tela "Preparando seu ambiente Linux" ganha **fonte plugável** — extração do asset local **ou** download com progresso e checksum. A infra do modo download já existe: o bundle é publicado no release público `distro-wolfi` (o mesmo que o CI usa). Referência de limite absoluto: 200 MB (download inicial da Play Store). Ferramentas pesadas (CLIs de IA etc.) podem entrar **depois do boot** via Toolbox "+ Adicionar", sem engordar o APK.
+
+> **Modos de execução (direção):** padrão é **proot** — roda em qualquer aparelho, sem root, com **glibc real e binários Linux puros** (o proot traduz só a visão de kernel — paths/uid; não toca nas bibliotecas). Em aparelhos **com root**, o app pode subir em **modo nativo (chroot direto)**: bind mounts + chroot, Linux rodando direto no kernel, sem tradutor e mais rápido em I/O — detecção automática, com fallback silencioso para proot. **VM (QEMU/AVF) fica fora de escopo** (emulação lenta; virtualização nativa é restrita a apps de sistema). No design, nunca representar como "VM".
+
 **O que o usuário consegue fazer de verdade:**
 1. Criar/abrir um projeto no workspace.
 2. Editar o código no editor com syntax highlight e abas.
