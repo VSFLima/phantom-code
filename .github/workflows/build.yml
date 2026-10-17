@@ -59,7 +59,7 @@ jobs:
           # Rootfs embutido: asset do release `distro-wolfi` DESTE repositório —
           # o phantom-releases virou privado (27/09) e devolve 404 anônimo; aqui o
           # token do próprio workflow baixa de dentro do repo, sem espelho público.
-          gh release download distro-wolfi -R "$GITHUB_REPOSITORY" -p wolfi.tar.gz \
+          gh release download distro-wolfi -R "$GITHUB_REPOSITORY" -p phantom-rootfs.tar.gz \
             -O android/app/src/main/assets/linux/wolfi.tar.gz --clobber
           ls -la android/app/src/main/assets/linux/wolfi.tar.gz
 
