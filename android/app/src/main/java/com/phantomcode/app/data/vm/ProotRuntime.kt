@@ -202,7 +202,7 @@ class ProotRuntime(context: Context) {
     /** Encerra o guest: SIGKILL no grupo (o proot tem --kill-on-exit) + limpeza da aba. */
     fun stop() {
         val p = pty
-        withContextMain { terminal.closeQemuTab() } // finish() da sessão mata o grupo
+        TerminalFactory.onMain { terminal.closeQemuTab() } // finish() da sessão mata o grupo
         p?.let { runCatching { PtyNative.killTree(it.pid, PtyProcess.SIGKILL) } }
         runCatching { fallback?.destroy() }
         pty = null

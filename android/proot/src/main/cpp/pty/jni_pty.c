@@ -9,8 +9,8 @@
  * Fluxo: open(/dev/ptmx) + grantpt + unlockpt + ptsname -> fork ->
  * setsid + TIOCSCTTY + dup2(slave nos std fds) -> execve(argv[0], argv, envp).
  * O par devolvido ao Kotlin é {pid, masterFd}; o master é full-duplex.
+ * (-D_GNU_SOURCE é definido pelo CMakeLists do módulo.)
  */
-#define _GNU_SOURCE
 #include <jni.h>
 #include <android/log.h>
 #include <errno.h>
@@ -84,7 +84,7 @@ Java_com_phantomcode_app_data_vm_PtyNative_spawn(JNIEnv *env, jclass clazz,
     char *cwd = dup_jstring(env, jcwd);
     int master = -1;
     int slave = open_pty_pair(&master);
-    if (argv == NULL || argv[0] == NULL || envp == NULL && jenvp != NULL || slave < 0) {
+    if (argv == NULL || argv[0] == NULL || (envp == NULL && jenvp != NULL) || slave < 0) {
         if (slave >= 0) { close(slave); close(master); }
         free_vec(argv);
         free_vec(envp);
