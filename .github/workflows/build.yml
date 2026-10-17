@@ -39,6 +39,7 @@ jobs:
           echo "keystore restaurado ($(wc -c < android/release.keystore) bytes)"
 
       - name: Bundle QEMU nativo ARM64 no APK
+        continue-on-error: true  # temporário: mirror privado devolve 404; QEMU sai do fluxo no M5
         run: |
           set -euo pipefail
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
